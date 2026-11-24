@@ -12,6 +12,16 @@ import '../../auth/presentation/auth_controller.dart';
 import '../../media_detail/presentation/media_detail_screen.dart';
 import 'media_list_controller.dart';
 
+enum ListSortOption {
+  updatedAt('Last Updated'),
+  score('Score'),
+  title('Title (A-Z)'),
+  progress('Progress');
+
+  final String label;
+  const ListSortOption(this.label);
+}
+
 class MediaListScreen extends ConsumerStatefulWidget {
   final String type; // ANIME or MANGA
 
@@ -27,23 +37,31 @@ class MediaListScreen extends ConsumerStatefulWidget {
 class _MediaListScreenState extends ConsumerState<MediaListScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  MediaCardMode _cardMode = MediaCardMode.compact;
+  int _selectedTabIndex = 0;
+  MediaCardMode _cardMode = MediaCardMode.list; // Model 1 Neo-Card as default
   String _searchQuery = '';
-  bool _isSearching = false;
+  bool _isSearchVisible = false;
+  ListSortOption _selectedSort = ListSortOption.updatedAt;
 
+  // Reordered: Active tracking first (Watching/Reading & Rewatching/Rereading), then Planning, Completed, Paused, Dropped
   final List<String> _statuses = [
-    'CURRENT',
-    'PLANNING',
-    'COMPLETED',
-    'PAUSED',
-    'DROPPED',
-    'REPEATING',
+    'CURRENT',    // Watching / Reading
+    'REPEATING',  // Rewatching / Rereading
+    'PLANNING',   // Planning
+    'COMPLETED',  // Completed
+    'PAUSED',     // Paused
+    'DROPPED',    // Dropped
   ];
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: _statuses.length, vsync: this);
+    _tabController.addListener(() {
+      if (!_tabController.indexIsChanging && _selectedTabIndex != _tabController.index) {
+        setState(() => _selectedTabIndex = _tabController.index);
+      }
+    });
   }
 
   @override
@@ -55,37 +73,195 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
   String _getStatusLabel(String status) {
     if (widget.type == 'ANIME') {
       if (status == 'CURRENT') return 'Watching';
+      if (status == 'REPEATING') return 'Rewatching';
     } else {
       if (status == 'CURRENT') return 'Reading';
+      if (status == 'REPEATING') return 'Rereading';
     }
     return status[0] + status.substring(1).toLowerCase();
   }
 
   IconData _getLayoutIcon() {
     switch (_cardMode) {
-      case MediaCardMode.grid:
-        return Icons.view_list_rounded;
       case MediaCardMode.list:
-        return Icons.table_rows_rounded;
+        return Icons.view_headline_rounded;
       case MediaCardMode.compact:
         return Icons.grid_view_rounded;
+      case MediaCardMode.grid:
+        return Icons.table_rows_rounded;
     }
   }
 
   void _cycleLayoutMode() {
+    HapticFeedback.lightImpact();
     setState(() {
       switch (_cardMode) {
-        case MediaCardMode.grid:
-          _cardMode = MediaCardMode.list;
-          break;
         case MediaCardMode.list:
           _cardMode = MediaCardMode.compact;
           break;
         case MediaCardMode.compact:
           _cardMode = MediaCardMode.grid;
           break;
+        case MediaCardMode.grid:
+          _cardMode = MediaCardMode.list;
+          break;
       }
     });
+  }
+
+  void _showSortMenu(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.darkSurface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                  child: Text(
+                    'Sort Collection By',
+                    style: TextStyle(
+                      fontFamily: 'Overpass',
+                      fontWeight: FontWeight.w800,
+                      fontSize: 16,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+                ...ListSortOption.values.map((opt) {
+                  final isSelected = _selectedSort == opt;
+                  return ListTile(
+                    leading: Icon(
+                      isSelected ? Icons.radio_button_checked_rounded : Icons.radio_button_off_rounded,
+                      color: isSelected
+                          ? (widget.type == 'ANIME' ? AppColors.brandBlue : const Color(0xFF7C57E8))
+                          : AppColors.darkTextSecondary,
+                      size: 20,
+                    ),
+                    title: Text(
+                      opt.label,
+                      style: TextStyle(
+                        fontFamily: 'Overpass',
+                        fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                        color: isSelected ? Colors.white : AppColors.darkTextSecondary,
+                        fontSize: 14,
+                      ),
+                    ),
+                    onTap: () {
+                      setState(() => _selectedSort = opt);
+                      Navigator.pop(context);
+                    },
+                  );
+                }),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showScoreDialog(BuildContext context, Map<String, dynamic> entry, String scoreFormat) {
+    final media = entry['media'] as Map<String, dynamic>;
+    final title = TextUtil.getPreferredTitle(media['title']);
+    final currentScore = (entry['score'] as num?)?.toDouble() ?? 0.0;
+    double tempScore = currentScore;
+
+    final is10Point = scoreFormat == 'POINT_10' || scoreFormat == 'POINT_10_DECIMAL';
+    final maxScore = is10Point ? 10.0 : 100.0;
+    final divisions = is10Point ? (scoreFormat == 'POINT_10_DECIMAL' ? 100 : 10) : 100;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: AppColors.darkSurface,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text(
+            'Rate: $title',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontFamily: 'Overpass',
+              fontWeight: FontWeight.w800,
+              fontSize: 15,
+            ),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.star_rounded, color: Color(0xFFE5A158), size: 28),
+                  const SizedBox(width: 8),
+                  Text(
+                    tempScore > 0
+                        ? (is10Point
+                            ? (scoreFormat == 'POINT_10_DECIMAL'
+                                ? tempScore.toStringAsFixed(1)
+                                : tempScore.round().toString())
+                            : '${tempScore.round()}%')
+                        : 'Unrated',
+                    style: const TextStyle(
+                      fontFamily: 'Overpass',
+                      fontWeight: FontWeight.w900,
+                      fontSize: 22,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Slider(
+                value: tempScore.clamp(0.0, maxScore),
+                min: 0,
+                max: maxScore,
+                divisions: divisions,
+                activeColor: widget.type == 'ANIME' ? AppColors.brandBlue : const Color(0xFF7C57E8),
+                inactiveColor: AppColors.darkSurfaceInput,
+                onChanged: (val) {
+                  setDialogState(() => tempScore = val);
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel', style: TextStyle(color: AppColors.darkTextSecondary)),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                final provider = widget.type == 'ANIME'
+                    ? animeListControllerProvider
+                    : mangaListControllerProvider;
+                ref.read(provider.notifier).updateScore(
+                      entryId: entry['id'] as int,
+                      mediaId: media['id'] as int,
+                      score: tempScore,
+                    );
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: widget.type == 'ANIME' ? AppColors.brandBlue : const Color(0xFF7C57E8),
+                foregroundColor: widget.type == 'ANIME' ? AppColors.darkBackground : Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              child: const Text('Save Score', style: TextStyle(fontWeight: FontWeight.w800)),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -93,9 +269,14 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
     final authState = ref.watch(authControllerProvider);
     final isGuest = authState is! Authenticated;
 
+    final isAnime = widget.type == 'ANIME';
+    final accentColor = isAnime ? AppColors.brandBlue : const Color(0xFF7C57E8);
+    final listTitle = isAnime ? 'Anime List' : 'Manga List';
+
     if (isGuest) {
       return Scaffold(
-        appBar: AppBar(title: Text(widget.type == 'ANIME' ? 'Anime List' : 'Manga List')),
+        backgroundColor: AppColors.darkBackground,
+        appBar: AppBar(title: Text(listTitle)),
         body: EmptyView(
           title: 'Sign in to access your list',
           subtitle: 'Keep track of what you are watching, set scores, and update progress.',
@@ -105,7 +286,7 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
               ref.read(authControllerProvider.notifier).logout();
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.brandBlue,
+              backgroundColor: accentColor,
               foregroundColor: Colors.white,
             ),
             child: const Text('Sign In to AniList'),
@@ -115,172 +296,287 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
     }
 
     final user = authState.user;
-    final accentColor = AppColors.getProfileAccentColor(user.profileColor);
-    final provider = widget.type == 'ANIME'
-        ? animeListControllerProvider
-        : mangaListControllerProvider;
+    final scoreFormat = user.scoreFormat;
+    final provider = isAnime ? animeListControllerProvider : mangaListControllerProvider;
     final listState = ref.watch(provider);
 
-    // Compute entry count per status tab
+    // Compute entry count per status tab and total
+    int totalCount = 0;
     final Map<String, int> statusCounts = {};
     listState.whenData((lists) {
       for (final listGroup in lists) {
         final st = (listGroup['status'] as String?)?.toUpperCase() ?? '';
         final entries = (listGroup['entries'] as List?) ?? [];
         statusCounts[st] = (statusCounts[st] ?? 0) + entries.length;
+        totalCount += entries.length;
       }
     });
 
     return Scaffold(
+      backgroundColor: AppColors.darkBackground,
       appBar: AppBar(
-        title: _isSearching
-            ? TextField(
-                autofocus: true,
-                decoration: const InputDecoration(
-                  hintText: 'Filter list...',
-                  border: InputBorder.none,
-                  hintStyle: TextStyle(color: AppColors.darkTextMuted),
-                ),
-                onChanged: (val) => setState(() => _searchQuery = val),
-              )
-            : Text(
-                widget.type == 'ANIME' ? 'Anime List' : 'Manga List',
-                style: const TextStyle(
+        titleSpacing: AppSpacing.p16,
+        title: Row(
+          children: [
+            Text(
+              listTitle,
+              style: const TextStyle(
+                fontFamily: 'Overpass',
+                fontWeight: FontWeight.w900,
+                fontSize: 18,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+              decoration: BoxDecoration(
+                color: AppColors.darkSurface,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+              ),
+              child: Text(
+                '$totalCount Total',
+                style: TextStyle(
                   fontFamily: 'Overpass',
+                  fontSize: 10.5,
                   fontWeight: FontWeight.w800,
+                  color: accentColor,
                 ),
               ),
+            ),
+          ],
+        ),
         actions: [
           IconButton(
-            icon: Icon(_isSearching ? Icons.close : Icons.search_rounded),
+            icon: Icon(_isSearchVisible ? Icons.search_off_rounded : Icons.search_rounded),
+            tooltip: 'Search list',
             onPressed: () {
               setState(() {
-                _isSearching = !_isSearching;
-                if (!_isSearching) _searchQuery = '';
+                _isSearchVisible = !_isSearchVisible;
+                if (!_isSearchVisible) _searchQuery = '';
               });
             },
           ),
           IconButton(
+            icon: const Icon(Icons.sort_rounded),
+            tooltip: 'Sort by',
+            onPressed: () => _showSortMenu(context),
+          ),
+          IconButton(
             icon: Icon(_getLayoutIcon()),
-            tooltip: 'Switch layout (Grid / List / Compact)',
+            tooltip: 'Switch layout',
             onPressed: _cycleLayoutMode,
           ),
         ],
-        bottom: TabBar(
-          controller: _tabController,
-          isScrollable: true,
-          tabAlignment: TabAlignment.start,
-          indicatorColor: accentColor,
-          labelColor: accentColor,
-          unselectedLabelColor: AppColors.darkTextSecondary,
-          tabs: _statuses.map((status) {
-            final count = statusCounts[status];
-            final label = count != null
-                ? '${_getStatusLabel(status)} ($count)'
-                : _getStatusLabel(status);
-            return Tab(
-              child: Text(
-                label,
-                style: const TextStyle(
-                  fontFamily: 'Overpass',
-                  fontWeight: FontWeight.w700,
-                  fontSize: 13,
+      ),
+      body: Column(
+        children: [
+          // Recessed Search Input (Home Theme)
+          if (_isSearchVisible)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Container(
+                height: 40,
+                decoration: BoxDecoration(
+                  color: AppColors.darkSurfaceInput,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                ),
+                child: TextField(
+                  autofocus: true,
+                  style: const TextStyle(fontSize: 13, color: Colors.white),
+                  decoration: InputDecoration(
+                    hintText: 'Search $listTitle...',
+                    hintStyle: const TextStyle(color: AppColors.darkTextMuted, fontSize: 13),
+                    prefixIcon: const Icon(Icons.search_rounded, size: 18, color: AppColors.darkTextSecondary),
+                    suffixIcon: _searchQuery.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear_rounded, size: 16, color: AppColors.darkTextSecondary),
+                            onPressed: () => setState(() => _searchQuery = ''),
+                          )
+                        : null,
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                  ),
+                  onChanged: (val) => setState(() => _searchQuery = val),
                 ),
               ),
-            );
-          }).toList(),
-        ),
-      ),
-      body: listState.when(
-        loading: () => const ShimmerMediaGrid(count: 6),
-        error: (err, _) => ErrorView(
-          message: err.toString(),
-          onRetry: () => ref.read(provider.notifier).loadLists(),
-        ),
-        data: (lists) {
-          return TabBarView(
-            controller: _tabController,
-            children: _statuses.map((status) {
-              // Find matching list group
-              final listGroup = lists.firstWhere(
-                (l) => (l['status'] as String?)?.toUpperCase() == status,
-                orElse: () => {'entries': []},
-              );
+            ),
 
-              final rawEntries = (listGroup['entries'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+          // Custom Pill Status Tabs Bar (Scrollable Pill Selector)
+          Container(
+            height: 44,
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: ListView.separated(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.p16),
+              scrollDirection: Axis.horizontal,
+              itemCount: _statuses.length,
+              separatorBuilder: (context, index) => const SizedBox(width: 8),
+              itemBuilder: (context, index) {
+                final status = _statuses[index];
+                final count = statusCounts[status] ?? 0;
+                final isSelected = _selectedTabIndex == index;
+                final label = '${_getStatusLabel(status)} ($count)';
 
-              // Apply search filter
-              final entries = rawEntries.where((entry) {
-                if (_searchQuery.isEmpty) return true;
-                final title = TextUtil.getPreferredTitle(entry['media']?['title']);
-                return title.toLowerCase().contains(_searchQuery.toLowerCase());
-              }).toList();
-
-              if (entries.isEmpty) {
-                return EmptyView(
-                  title: 'No entries in ${_getStatusLabel(status)}',
-                  subtitle: 'Add anime or manga to your list to see them here.',
-                  icon: Icons.movie_filter_outlined,
-                );
-              }
-
-              return RefreshIndicator(
-                onRefresh: () => ref.read(provider.notifier).loadLists(),
-                color: accentColor,
-                backgroundColor: AppColors.darkSurface,
-                child: _buildLayout(
-                  entries,
-                  onIncrementProgress: (entryId, mediaId, currentProgress, maxCount) {
+                return GestureDetector(
+                  onTap: () {
                     HapticFeedback.lightImpact();
-                    ref.read(provider.notifier).incrementProgress(
-                          entryId: entryId,
-                          mediaId: mediaId,
-                          currentProgress: currentProgress,
-                          maxEpisodesOrChapters: maxCount,
-                        );
+                    setState(() => _selectedTabIndex = index);
+                    _tabController.animateTo(index);
                   },
-                ),
-              );
-            }).toList(),
-          );
-        },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: isSelected ? accentColor : AppColors.darkSurface,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: isSelected ? accentColor : Colors.white.withValues(alpha: 0.06),
+                      ),
+                      boxShadow: isSelected
+                          ? [
+                              BoxShadow(
+                                color: accentColor.withValues(alpha: 0.3),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ]
+                          : null,
+                    ),
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                        fontFamily: 'Overpass',
+                        fontSize: 12,
+                        fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
+                        color: isSelected
+                            ? (isAnime ? AppColors.darkBackground : Colors.white)
+                            : AppColors.darkTextSecondary,
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 6),
+
+          // Main List View
+          Expanded(
+            child: listState.when(
+              loading: () => const Padding(
+                padding: EdgeInsets.all(AppSpacing.p16),
+                child: ShimmerMediaGrid(count: 6),
+              ),
+              error: (err, _) => ErrorView(
+                message: err.toString(),
+                onRetry: () => ref.read(provider.notifier).loadLists(),
+              ),
+              data: (lists) {
+                return TabBarView(
+                  controller: _tabController,
+                  children: _statuses.map((status) {
+                    final listGroup = lists.firstWhere(
+                      (l) => (l['status'] as String?)?.toUpperCase() == status,
+                      orElse: () => {'entries': []},
+                    );
+
+                    final rawEntries = (listGroup['entries'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+
+                    // 1. Search Filter
+                    var entries = rawEntries.where((entry) {
+                      if (_searchQuery.isEmpty) return true;
+                      final title = TextUtil.getPreferredTitle(entry['media']?['title']);
+                      return title.toLowerCase().contains(_searchQuery.toLowerCase());
+                    }).toList();
+
+                    // 2. Sorting: By default sorts by updatedAt DESC (most recently updated first)
+                    entries.sort((a, b) {
+                      switch (_selectedSort) {
+                        case ListSortOption.updatedAt:
+                          final updatedCmp = (b['updatedAt'] as int? ?? 0).compareTo(a['updatedAt'] as int? ?? 0);
+                          if (updatedCmp != 0) return updatedCmp;
+                          return (b['id'] as int? ?? 0).compareTo(a['id'] as int? ?? 0);
+                        case ListSortOption.score:
+                          final scoreCmp = ((b['score'] as num?) ?? 0).compareTo((a['score'] as num?) ?? 0);
+                          if (scoreCmp != 0) return scoreCmp;
+                          return (b['updatedAt'] as int? ?? 0).compareTo(a['updatedAt'] as int? ?? 0);
+                        case ListSortOption.title:
+                          final titleA = TextUtil.getPreferredTitle(a['media']?['title']).toLowerCase();
+                          final titleB = TextUtil.getPreferredTitle(b['media']?['title']).toLowerCase();
+                          return titleA.compareTo(titleB);
+                        case ListSortOption.progress:
+                          final progCmp = (b['progress'] as int? ?? 0).compareTo(a['progress'] as int? ?? 0);
+                          if (progCmp != 0) return progCmp;
+                          return (b['updatedAt'] as int? ?? 0).compareTo(a['updatedAt'] as int? ?? 0);
+                      }
+                    });
+
+                    if (entries.isEmpty) {
+                      return EmptyView(
+                        title: 'No entries in ${_getStatusLabel(status)}',
+                        subtitle: _searchQuery.isNotEmpty
+                            ? 'No matches found for "$_searchQuery".'
+                            : 'Add items to your list to see them here.',
+                        icon: Icons.movie_filter_outlined,
+                      );
+                    }
+
+                    return RefreshIndicator(
+                      onRefresh: () => ref.read(provider.notifier).loadLists(),
+                      color: accentColor,
+                      backgroundColor: AppColors.darkSurface,
+                      child: _buildLayout(
+                        entries,
+                        status: status,
+                        accentColor: accentColor,
+                        scoreFormat: scoreFormat,
+                        onIncrementProgress: (entryId, mediaId, currentProgress, maxCount) {
+                          HapticFeedback.lightImpact();
+                          ref.read(provider.notifier).incrementProgress(
+                                entryId: entryId,
+                                mediaId: mediaId,
+                                currentProgress: currentProgress,
+                                maxEpisodesOrChapters: maxCount,
+                              );
+                        },
+                        onUpdateScore: (entry) {
+                          _showScoreDialog(context, entry, scoreFormat);
+                        },
+                      ),
+                    );
+                  }).toList(),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildLayout(
     List<Map<String, dynamic>> entries, {
+    required String status,
+    required Color accentColor,
+    required String scoreFormat,
     required void Function(int entryId, int mediaId, int currentProgress, int? maxCount)
         onIncrementProgress,
+    required void Function(Map<String, dynamic> entry) onUpdateScore,
   }) {
     switch (_cardMode) {
       case MediaCardMode.grid:
         return GridView.builder(
-          padding: const EdgeInsets.all(AppSpacing.p16),
+          padding: const EdgeInsets.fromLTRB(16, 6, 16, 80),
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 3,
             childAspectRatio: 0.58,
-            crossAxisSpacing: AppSpacing.p12,
-            mainAxisSpacing: AppSpacing.p16,
+            crossAxisSpacing: 10,
+            mainAxisSpacing: 12,
           ),
           itemCount: entries.length,
-          itemBuilder: (context, index) {
-            final entry = entries[index];
-            final media = entry['media'] as Map<String, dynamic>;
-            return MediaCard(
-              media: media,
-              mode: MediaCardMode.grid,
-              userProgress: entry['progress'] as int?,
-              onTap: () => _navigateToDetail(context, media['id']),
-            );
-          },
-        );
-
-      case MediaCardMode.list:
-        return ListView.separated(
-          padding: const EdgeInsets.all(AppSpacing.p16),
-          itemCount: entries.length,
-          separatorBuilder: (context, index) => const SizedBox(height: AppSpacing.p12),
           itemBuilder: (context, index) {
             final entry = entries[index];
             final media = entry['media'] as Map<String, dynamic>;
@@ -289,9 +585,14 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
 
             return MediaCard(
               media: media,
-              mode: MediaCardMode.list,
+              mode: MediaCardMode.grid,
+              accentColor: accentColor,
+              listStatus: status,
               userProgress: progress,
+              userScore: (entry['score'] as num?)?.toDouble(),
+              scoreFormat: scoreFormat,
               onTap: () => _navigateToDetail(context, media['id']),
+              onUpdateScore: () => onUpdateScore(entry),
               onIncrementProgress: () => onIncrementProgress(
                 entry['id'] as int,
                 media['id'] as int,
@@ -304,7 +605,7 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
 
       case MediaCardMode.compact:
         return ListView.separated(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.p16, vertical: 12),
+          padding: const EdgeInsets.fromLTRB(16, 6, 16, 80),
           itemCount: entries.length,
           separatorBuilder: (context, index) => const SizedBox(height: 6),
           itemBuilder: (context, index) {
@@ -316,8 +617,45 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
             return MediaCard(
               media: media,
               mode: MediaCardMode.compact,
+              accentColor: accentColor,
+              listStatus: status,
               userProgress: progress,
+              userScore: (entry['score'] as num?)?.toDouble(),
+              scoreFormat: scoreFormat,
               onTap: () => _navigateToDetail(context, media['id']),
+              onUpdateScore: () => onUpdateScore(entry),
+              onIncrementProgress: () => onIncrementProgress(
+                entry['id'] as int,
+                media['id'] as int,
+                progress,
+                maxCount,
+              ),
+            );
+          },
+        );
+
+      // Model 1: Neo-Card Detailed (Default)
+      case MediaCardMode.list:
+        return ListView.separated(
+          padding: const EdgeInsets.fromLTRB(16, 6, 16, 80),
+          itemCount: entries.length,
+          separatorBuilder: (context, index) => const SizedBox(height: 10),
+          itemBuilder: (context, index) {
+            final entry = entries[index];
+            final media = entry['media'] as Map<String, dynamic>;
+            final progress = entry['progress'] as int? ?? 0;
+            final maxCount = media['episodes'] as int? ?? media['chapters'] as int?;
+
+            return MediaCard(
+              media: media,
+              mode: MediaCardMode.list,
+              accentColor: accentColor,
+              listStatus: status,
+              userProgress: progress,
+              userScore: (entry['score'] as num?)?.toDouble(),
+              scoreFormat: scoreFormat,
+              onTap: () => _navigateToDetail(context, media['id']),
+              onUpdateScore: () => onUpdateScore(entry),
               onIncrementProgress: () => onIncrementProgress(
                 entry['id'] as int,
                 media['id'] as int,
