@@ -88,12 +88,12 @@ class MediaCard extends StatelessWidget {
       onTap: onTap,
       child: Container(
         decoration: BoxDecoration(
-          color: AppColors.darkSurface,
+          color: context.appSurface,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+          border: Border.all(color: context.appBorder),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.25),
+              color: context.isDark ? Colors.black.withValues(alpha: 0.25) : Colors.black.withValues(alpha: 0.04),
               blurRadius: 6,
               offset: const Offset(0, 2),
             ),
@@ -222,11 +222,11 @@ class MediaCard extends StatelessWidget {
                               title,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontFamily: 'Overpass',
                                 fontWeight: FontWeight.w800,
                                 fontSize: 13,
-                                color: Colors.white,
+                                color: context.appTextPrimary,
                               ),
                             ),
                             const SizedBox(height: 2),
@@ -237,10 +237,10 @@ class MediaCard extends StatelessWidget {
                                 if (episodes != null) '$episodes eps' else if (chapters != null) '$chapters ch',
                                 if (year != null) '$year',
                               ].join(' • '),
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontFamily: 'Overpass',
                                 fontSize: 10.5,
-                                color: AppColors.darkTextSecondary,
+                                color: context.appTextSecondary,
                               ),
                             ),
                           ],
@@ -257,16 +257,16 @@ class MediaCard extends StatelessWidget {
                                 return Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
                                   decoration: BoxDecoration(
-                                    color: AppColors.darkSurfaceInput,
+                                    color: context.appInputSurface,
                                     borderRadius: BorderRadius.circular(4),
-                                    border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+                                    border: Border.all(color: context.appBorder),
                                   ),
                                   child: Text(
                                     g,
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontFamily: 'Overpass',
                                       fontSize: 9,
-                                      color: AppColors.darkTextSecondary,
+                                      color: context.appTextSecondary,
                                     ),
                                   ),
                                 );
@@ -417,11 +417,11 @@ class MediaCard extends StatelessWidget {
                         title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontFamily: 'Overpass',
                           fontWeight: FontWeight.w800,
                           fontSize: 12.5,
-                          color: Colors.white,
+                          color: context.appTextPrimary,
                         ),
                       ),
                       const SizedBox(height: 1),
@@ -429,10 +429,10 @@ class MediaCard extends StatelessWidget {
                       // Subtitle
                       Text(
                         '$unitLabel $progress of ${totalUnits ?? '?'}',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontFamily: 'Overpass',
                           fontSize: 10.5,
-                          color: AppColors.darkTextSecondary,
+                          color: context.appTextSecondary,
                         ),
                       ),
                     ],
@@ -447,7 +447,7 @@ class MediaCard extends StatelessWidget {
                           borderRadius: BorderRadius.circular(4),
                           child: LinearProgressIndicator(
                             value: progressPercent,
-                            backgroundColor: AppColors.darkSurfaceInput,
+                            backgroundColor: context.appInputSurface,
                             valueColor: AlwaysStoppedAnimation<Color>(color),
                             minHeight: 6,
                           ),
@@ -504,9 +504,9 @@ class MediaCard extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.darkSurface,
+        color: context.appSurface,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+        border: Border.all(color: context.appBorder),
       ),
       child: ListTile(
         onTap: onTap,
@@ -525,11 +525,11 @@ class MediaCard extends StatelessWidget {
           title,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
+          style: TextStyle(
             fontFamily: 'Overpass',
             fontSize: 13,
             fontWeight: FontWeight.w700,
-            color: Colors.white,
+            color: context.appTextPrimary,
           ),
         ),
         subtitle: Row(
@@ -537,10 +537,10 @@ class MediaCard extends StatelessWidget {
             if (format != null) ...[
               Text(
                 format,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 10.5,
                   fontWeight: FontWeight.w600,
-                  color: AppColors.darkTextMuted,
+                  color: context.appTextMuted,
                 ),
               ),
               const SizedBox(width: 6),
@@ -548,10 +548,10 @@ class MediaCard extends StatelessWidget {
             if (userProgress != null)
               Text(
                 'Prog: $userProgress / ${episodes ?? '?'}',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w500,
-                  color: AppColors.darkTextSecondary,
+                  color: context.appTextSecondary,
                 ),
               ),
           ],
@@ -567,7 +567,7 @@ class MediaCard extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: userScore != null && userScore! > 0
                       ? const Color(0xFFE5A158).withValues(alpha: 0.16)
-                      : AppColors.darkSurfaceInput,
+                      : context.appInputSurface,
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Row(
@@ -576,7 +576,7 @@ class MediaCard extends StatelessWidget {
                     Icon(
                       Icons.star_rounded,
                       size: 12,
-                      color: userScore != null && userScore! > 0 ? const Color(0xFFE5A158) : AppColors.darkTextMuted,
+                      color: userScore != null && userScore! > 0 ? const Color(0xFFE5A158) : context.appTextMuted,
                     ),
                     const SizedBox(width: 2),
                     Text(
@@ -587,7 +587,7 @@ class MediaCard extends StatelessWidget {
                         fontFamily: 'Overpass',
                         fontSize: 10,
                         fontWeight: FontWeight.bold,
-                        color: userScore != null && userScore! > 0 ? const Color(0xFFE5A158) : AppColors.darkTextMuted,
+                        color: userScore != null && userScore! > 0 ? const Color(0xFFE5A158) : context.appTextMuted,
                       ),
                     ),
                   ],
@@ -730,11 +730,11 @@ class MediaCard extends StatelessWidget {
             title,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
+            style: TextStyle(
               fontFamily: 'Overpass',
               fontSize: 12,
               fontWeight: FontWeight.w700,
-              color: Colors.white,
+              color: context.appTextPrimary,
             ),
           ),
         ],

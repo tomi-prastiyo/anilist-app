@@ -3,15 +3,127 @@ import 'package:google_fonts/google_fonts.dart';
 import '../constants/app_colors.dart';
 
 enum AppThemeMode {
+  system,
+  light,
   dark,
   amoled,
-  light,
 }
 
 class AppTheme {
   AppTheme._();
 
-  static ThemeData getTheme([AppThemeMode? mode]) => darkTheme;
+  static ThemeData getTheme([AppThemeMode? mode]) {
+    if (mode == AppThemeMode.light) return lightTheme;
+    return darkTheme;
+  }
+
+  static ThemeData get lightTheme {
+    const scaffoldBg = AppColors.lightBackground; // #EDF1F5
+    const surfaceColor = AppColors.lightSurface;  // #FFFFFF
+    const cardColor = AppColors.lightCard;        // #FFFFFF
+    const borderColor = AppColors.lightBorder;    // #E2E8F0
+    const textPrimary = AppColors.lightTextPrimary;     // #263238
+    const textSecondary = AppColors.lightTextSecondary; // #516170
+
+    final baseTextTheme = ThemeData.light().textTheme;
+    final textTheme = GoogleFonts.overpassTextTheme(baseTextTheme).apply(
+      bodyColor: textPrimary,
+      displayColor: textPrimary,
+    );
+
+    return ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.light,
+      scaffoldBackgroundColor: scaffoldBg,
+      primaryColor: AppColors.brandBlue,
+      canvasColor: surfaceColor,
+      colorScheme: const ColorScheme(
+        brightness: Brightness.light,
+        primary: AppColors.brandBlue,
+        onPrimary: Colors.white,
+        secondary: AppColors.brandNavy,
+        onSecondary: Colors.white,
+        error: AppColors.statusDropped,
+        onError: Colors.white,
+        surface: surfaceColor,
+        onSurface: textPrimary,
+      ),
+      textTheme: textTheme,
+      appBarTheme: AppBarTheme(
+        backgroundColor: surfaceColor,
+        elevation: 0,
+        scrolledUnderElevation: 1,
+        centerTitle: false,
+        iconTheme: const IconThemeData(color: textPrimary),
+        titleTextStyle: textTheme.titleMedium?.copyWith(
+          color: textPrimary,
+          fontWeight: FontWeight.w800,
+          fontSize: 18,
+          fontFamily: GoogleFonts.overpass().fontFamily,
+        ),
+      ),
+      cardTheme: CardThemeData(
+        color: cardColor,
+        elevation: 0,
+        margin: EdgeInsets.zero,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+          side: const BorderSide(color: borderColor, width: 1),
+        ),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: Colors.white,
+        hintStyle: const TextStyle(color: AppColors.lightTextMuted, fontSize: 13),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: borderColor),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: borderColor),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: AppColors.brandBlue, width: 1.5),
+        ),
+      ),
+      chipTheme: ChipThemeData(
+        backgroundColor: surfaceColor,
+        side: const BorderSide(color: borderColor),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+        labelStyle: textTheme.labelSmall?.copyWith(color: textSecondary, fontWeight: FontWeight.w600),
+      ),
+      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+        backgroundColor: surfaceColor,
+        selectedItemColor: AppColors.brandBlue,
+        unselectedItemColor: textSecondary,
+        type: BottomNavigationBarType.fixed,
+        elevation: 4,
+      ),
+      dividerTheme: const DividerThemeData(
+        color: borderColor,
+        thickness: 1,
+        space: 1,
+      ),
+      bottomSheetTheme: const BottomSheetThemeData(
+        backgroundColor: surfaceColor,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        ),
+      ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: surfaceColor,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: borderColor),
+        ),
+      ),
+    );
+  }
 
   static ThemeData get darkTheme {
     const scaffoldBg = AppColors.darkBackground; // #0B1622
@@ -102,6 +214,21 @@ class AppTheme {
         color: borderColor,
         thickness: 1,
         space: 1,
+      ),
+      bottomSheetTheme: const BottomSheetThemeData(
+        backgroundColor: surfaceColor,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        ),
+      ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: surfaceColor,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: borderColor),
+        ),
       ),
     );
   }

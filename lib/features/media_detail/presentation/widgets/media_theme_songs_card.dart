@@ -61,12 +61,12 @@ class _MediaThemeSongsCardState extends State<MediaThemeSongsCard> {
 
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.darkCard,
+        color: context.appCard,
         borderRadius: AppSpacing.borderRadius16,
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        border: Border.all(color: context.appBorder),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.25),
+            color: context.isDark ? Colors.black.withValues(alpha: 0.25) : Colors.black.withValues(alpha: 0.04),
             blurRadius: 10,
             offset: const Offset(0, 3),
           ),
@@ -94,13 +94,13 @@ class _MediaThemeSongsCardState extends State<MediaThemeSongsCard> {
                       child: const Icon(Icons.music_note_rounded, size: 16, color: Colors.white),
                     ),
                     const SizedBox(width: 10),
-                    const Text(
+                    Text(
                       'Theme Songs',
                       style: TextStyle(
                         fontFamily: 'Overpass',
                         fontSize: 15,
                         fontWeight: FontWeight.w800,
-                        color: Colors.white,
+                        color: context.appTextPrimary,
                       ),
                     ),
                   ],
@@ -109,16 +109,16 @@ class _MediaThemeSongsCardState extends State<MediaThemeSongsCard> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.08),
+                      color: context.isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.05),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
                       '$totalSongs track${totalSongs > 1 ? 's' : ''}',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontFamily: 'Overpass',
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
-                        color: AppColors.darkTextSecondary,
+                        color: context.appTextSecondary,
                       ),
                     ),
                   ),
@@ -144,7 +144,7 @@ class _MediaThemeSongsCardState extends State<MediaThemeSongsCard> {
                         border: Border.all(
                           color: _selectedTab == 0
                               ? const Color(0xFF00B4D8).withValues(alpha: 0.6)
-                              : Colors.white.withValues(alpha: 0.05),
+                              : context.appBorder,
                         ),
                       ),
                       alignment: Alignment.center,
@@ -154,7 +154,7 @@ class _MediaThemeSongsCardState extends State<MediaThemeSongsCard> {
                           fontFamily: 'Overpass',
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
-                          color: _selectedTab == 0 ? const Color(0xFF00B4D8) : AppColors.darkTextSecondary,
+                          color: _selectedTab == 0 ? const Color(0xFF00B4D8) : context.appTextSecondary,
                         ),
                       ),
                     ),
@@ -174,7 +174,7 @@ class _MediaThemeSongsCardState extends State<MediaThemeSongsCard> {
                         border: Border.all(
                           color: _selectedTab == 1
                               ? const Color(0xFFE040FB).withValues(alpha: 0.6)
-                              : Colors.white.withValues(alpha: 0.05),
+                              : context.appBorder,
                         ),
                       ),
                       alignment: Alignment.center,
@@ -184,7 +184,7 @@ class _MediaThemeSongsCardState extends State<MediaThemeSongsCard> {
                           fontFamily: 'Overpass',
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
-                          color: _selectedTab == 1 ? const Color(0xFFE040FB) : AppColors.darkTextSecondary,
+                          color: _selectedTab == 1 ? const Color(0xFFE040FB) : context.appTextSecondary,
                         ),
                       ),
                     ),
@@ -214,10 +214,10 @@ class _MediaThemeSongsCardState extends State<MediaThemeSongsCard> {
               child: Center(
                 child: Text(
                   _selectedTab == 0 ? 'No opening themes found' : 'No ending themes found',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontFamily: 'Overpass',
                     fontSize: 12.5,
-                    color: AppColors.darkTextMuted,
+                    color: context.appTextMuted,
                   ),
                 ),
               ),
@@ -228,8 +228,8 @@ class _MediaThemeSongsCardState extends State<MediaThemeSongsCard> {
               physics: const NeverScrollableScrollPhysics(),
               padding: const EdgeInsets.only(left: 12, right: 12, top: 6, bottom: 12),
               itemCount: currentList.length,
-              separatorBuilder: (context, index) => const Divider(
-                color: Colors.white10,
+              separatorBuilder: (context, index) => Divider(
+                color: context.appBorder,
                 height: 12,
               ),
               itemBuilder: (context, index) {
@@ -278,11 +278,11 @@ class _MediaThemeSongsCardState extends State<MediaThemeSongsCard> {
                               name,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontFamily: 'Overpass',
                                 fontSize: 13,
                                 fontWeight: FontWeight.w700,
-                                color: Colors.white,
+                                color: context.appTextPrimary,
                               ),
                             ),
                             const SizedBox(height: 2),
@@ -290,10 +290,10 @@ class _MediaThemeSongsCardState extends State<MediaThemeSongsCard> {
                               artist,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontFamily: 'Overpass',
                                 fontSize: 11.5,
-                                color: AppColors.darkTextSecondary,
+                                color: context.appTextSecondary,
                               ),
                             ),
                           ],
@@ -312,10 +312,10 @@ class _MediaThemeSongsCardState extends State<MediaThemeSongsCard> {
                         onPressed: () => _openYouTube(name, artist),
                       ),
                       IconButton(
-                        icon: const Icon(
+                        icon: Icon(
                           Icons.copy_rounded,
                           size: 18,
-                          color: AppColors.darkTextMuted,
+                          color: context.appTextMuted,
                         ),
                         tooltip: 'Copy track info',
                         visualDensity: VisualDensity.compact,

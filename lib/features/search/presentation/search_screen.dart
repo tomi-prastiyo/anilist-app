@@ -14,6 +14,7 @@ import '../../character_staff/presentation/character_detail_screen.dart';
 import '../../character_staff/presentation/staff_detail_screen.dart';
 import '../../home/presentation/airing_schedule_screen.dart';
 import '../../media_detail/presentation/media_detail_screen.dart';
+import '../../profile/presentation/profile_screen.dart';
 import '../../seasonal/presentation/seasonal_screen.dart';
 import '../data/search_repository.dart';
 import 'widgets/search_filter_bottom_sheet.dart';
@@ -52,7 +53,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
   MediaCardMode _layoutMode = MediaCardMode.grid;
 
   SearchFilterData _filterData = SearchFilterData();
-  final List<String> _tabs = ['Anime', 'Manga', 'Characters', 'Staff'];
+  final List<String> _tabs = ['Anime', 'Manga', 'Characters', 'Staff', 'Users'];
 
   @override
   void initState() {
@@ -164,8 +165,13 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
           page: targetPage,
           search: _searchQuery.trim().isEmpty ? null : _searchQuery.trim(),
         );
-      } else {
+      } else if (activeTab == 'Staff') {
         pageData = await repo.searchStaff(
+          page: targetPage,
+          search: _searchQuery.trim().isEmpty ? null : _searchQuery.trim(),
+        );
+      } else {
+        pageData = await repo.searchUsers(
           page: targetPage,
           search: _searchQuery.trim().isEmpty ? null : _searchQuery.trim(),
         );
@@ -182,8 +188,10 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
         newItems = (pageData['media'] as List?)?.cast<Map<String, dynamic>>() ?? [];
       } else if (activeTab == 'Characters') {
         newItems = (pageData['characters'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-      } else {
+      } else if (activeTab == 'Staff') {
         newItems = (pageData['staff'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+      } else {
+        newItems = (pageData['users'] as List?)?.cast<Map<String, dynamic>>() ?? [];
       }
 
       // Cache page 1 for instant back-navigation with deep list copy
@@ -248,8 +256,10 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
       case 2:
         return const Color(0xFFE5A158); // Characters: Gold
       case 3:
-      default:
         return const Color(0xFF46C07B); // Staff: Green
+      case 4:
+      default:
+        return const Color(0xFFE84D88); // Users: Pink
     }
   }
 
@@ -260,27 +270,27 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
     final activeAccent = _getTabAccentColor(_selectedTabIndex);
 
     return Scaffold(
-      backgroundColor: AppColors.darkBackground,
+      backgroundColor: context.appBackground,
       appBar: AppBar(
         titleSpacing: AppSpacing.p16,
         title: Row(
           children: [
-            const Text(
+            Text(
               'Search',
               style: TextStyle(
                 fontFamily: 'Overpass',
                 fontWeight: FontWeight.w900,
                 fontSize: 18,
-                color: Colors.white,
+                color: context.appTextPrimary,
               ),
             ),
             const SizedBox(width: 8),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
               decoration: BoxDecoration(
-                color: AppColors.darkSurface,
+                color: context.appSurface,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+                border: Border.all(color: context.appBorder),
               ),
               child: Text(
                 'AniList',
@@ -362,21 +372,21 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
             child: Container(
               height: 40,
               decoration: BoxDecoration(
-                color: AppColors.darkSurfaceInput,
+                color: context.appInputSurface,
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                border: Border.all(color: context.appBorder),
               ),
               child: TextField(
                 controller: _searchController,
                 onChanged: _onSearchChanged,
-                style: const TextStyle(fontSize: 13, color: Colors.white, fontFamily: 'Overpass'),
+                style: TextStyle(fontSize: 13, color: context.appTextPrimary, fontFamily: 'Overpass'),
                 decoration: InputDecoration(
                   hintText: 'Search anime, manga, characters, staff...',
-                  hintStyle: const TextStyle(color: AppColors.darkTextMuted, fontSize: 13, fontFamily: 'Overpass'),
+                  hintStyle: TextStyle(color: context.appTextMuted, fontSize: 13, fontFamily: 'Overpass'),
                   prefixIcon: Icon(Icons.search_rounded, size: 18, color: activeAccent),
                   suffixIcon: _searchController.text.isNotEmpty
                       ? IconButton(
-                          icon: const Icon(Icons.close_rounded, size: 16, color: AppColors.darkTextSecondary),
+                          icon: Icon(Icons.close_rounded, size: 16, color: context.appTextSecondary),
                           onPressed: () {
                             _searchController.clear();
                             _onSearchChanged('');
@@ -419,10 +429,10 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
                     padding: const EdgeInsets.symmetric(horizontal: 14),
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      color: isSelected ? tabColor : AppColors.darkSurface,
+                      color: isSelected ? tabColor : context.appSurface,
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
-                        color: isSelected ? tabColor : Colors.white.withValues(alpha: 0.06),
+                        color: isSelected ? tabColor : context.appBorder,
                       ),
                       boxShadow: isSelected
                           ? [
@@ -441,8 +451,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
                         fontSize: 12,
                         fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
                         color: isSelected
-                            ? (index == 0 || index == 2 ? AppColors.darkBackground : Colors.white)
-                            : AppColors.darkTextSecondary,
+                            ? Colors.white
+                            : context.appTextSecondary,
                       ),
                     ),
                   ),
@@ -496,7 +506,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
         await _performSearch(reset: true);
       },
       color: activeAccent,
-      backgroundColor: AppColors.darkSurface,
+      backgroundColor: context.appSurface,
       child: ListView(
         controller: _scrollController,
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 80),
@@ -561,6 +571,82 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
               separatorBuilder: (context, index) => const SizedBox(height: 8),
               itemBuilder: (context, index) {
                 final item = _results[index];
+
+                // 1. Users Tab
+                if (_selectedTabIndex == 4) {
+                  final name = item['name'] as String? ?? 'Unknown';
+                  final avatar = item['avatar']?['medium'] as String? ?? item['avatar']?['large'] as String?;
+                  final about = item['about'] as String?;
+                  final cleanAbout = about?.replaceAll(RegExp(r'<[^>]*>|[\r\n]+'), ' ').trim();
+
+                  return InkWell(
+                    onTap: () {
+                      final id = item['id'] as int?;
+                      if (id != null) {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (context) => ProfileScreen(userId: id, userName: name),
+                          ),
+                        );
+                      }
+                    },
+                    borderRadius: BorderRadius.circular(10),
+                    child: Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: context.appSurface,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: context.appBorder),
+                      ),
+                      child: Row(
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(25),
+                            child: AppNetworkImage(
+                              imageUrl: avatar,
+                              width: 50,
+                              height: 50,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  name,
+                                  style: TextStyle(
+                                    fontFamily: 'Overpass',
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 14,
+                                    color: context.appTextPrimary,
+                                  ),
+                                ),
+                                if (cleanAbout != null && cleanAbout.isNotEmpty) ...[
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    cleanAbout,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontFamily: 'Overpass',
+                                      color: context.appTextSecondary,
+                                      fontSize: 11.5,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                          Icon(Icons.chevron_right_rounded, size: 20, color: context.appTextMuted),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+
+                // 2. Characters & Staff Tabs
                 final name = item['name']?['userPreferred'] ?? item['name']?['full'] ?? 'Unknown';
                 final nativeName = item['name']?['native'] as String?;
                 final image = item['image']?['medium'] as String?;
@@ -585,9 +671,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
                   child: Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: AppColors.darkSurface,
+                      color: context.appSurface,
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+                      border: Border.all(color: context.appBorder),
                     ),
                     child: Row(
                       children: [
@@ -607,20 +693,20 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
                             children: [
                               Text(
                                 name,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontFamily: 'Overpass',
                                   fontWeight: FontWeight.w800,
                                   fontSize: 13.5,
-                                  color: Colors.white,
+                                  color: context.appTextPrimary,
                                 ),
                               ),
                               if (nativeName != null && nativeName.isNotEmpty) ...[
                                 const SizedBox(height: 1),
                                 Text(
                                   nativeName,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontFamily: 'Overpass',
-                                    color: AppColors.darkTextMuted,
+                                    color: context.appTextMuted,
                                     fontSize: 11,
                                   ),
                                 ),
@@ -629,9 +715,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
                                 const SizedBox(height: 2),
                                 Text(
                                   occupations,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontFamily: 'Overpass',
-                                    color: AppColors.darkTextSecondary,
+                                    color: context.appTextSecondary,
                                     fontSize: 11,
                                   ),
                                 ),
@@ -639,7 +725,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
                             ],
                           ),
                         ),
-                        const Icon(Icons.chevron_right_rounded, size: 20, color: AppColors.darkTextMuted),
+                        Icon(Icons.chevron_right_rounded, size: 20, color: context.appTextMuted),
                       ],
                     ),
                   ),

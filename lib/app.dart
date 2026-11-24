@@ -15,10 +15,18 @@ class AniListApp extends ConsumerWidget {
     final themeMode = ref.watch(themeModeProvider);
     final authState = ref.watch(authControllerProvider);
 
+    final flutterThemeMode = switch (themeMode) {
+      AppThemeMode.light => ThemeMode.light,
+      AppThemeMode.dark || AppThemeMode.amoled => ThemeMode.dark,
+      AppThemeMode.system => ThemeMode.system,
+    };
+
     return MaterialApp(
       title: 'AniList',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.getTheme(themeMode),
+      theme: AppTheme.lightTheme,
+      darkTheme: AppTheme.darkTheme,
+      themeMode: flutterThemeMode,
       home: switch (authState) {
         AuthLoading() || AuthInitial() => const Scaffold(
             body: Center(

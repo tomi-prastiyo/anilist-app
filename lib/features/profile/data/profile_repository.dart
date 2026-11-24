@@ -174,6 +174,7 @@ class ProfileRepository {
             large
             medium
           }
+          bannerImage
           about(asHtml: false)
           isFollowing
           isFollower
@@ -197,6 +198,7 @@ class ProfileRepository {
             large
             medium
           }
+          bannerImage
           about(asHtml: false)
           isFollowing
           isFollower

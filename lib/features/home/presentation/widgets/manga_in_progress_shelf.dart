@@ -56,11 +56,11 @@ class MangaInProgressShelf extends ConsumerWidget {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      const Text(
+                      Text(
                         'MANGA IN PROGRESS',
                         style: TextStyle(
                           fontFamily: 'Overpass',
-                          color: Colors.white,
+                          color: context.appTextPrimary,
                           fontSize: 12,
                           fontWeight: FontWeight.w800,
                           letterSpacing: 0.6,
@@ -125,7 +125,7 @@ class MangaInProgressShelf extends ConsumerWidget {
                   return Container(
                     width: 260,
                     decoration: BoxDecoration(
-                      color: AppColors.darkSurface,
+                      color: context.appSurface,
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
                       boxShadow: [
@@ -191,20 +191,20 @@ class MangaInProgressShelf extends ConsumerWidget {
                                       title,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontFamily: 'Overpass',
                                         fontWeight: FontWeight.w800,
                                         fontSize: 12,
-                                        color: Colors.white,
+                                        color: context.appTextPrimary,
                                       ),
                                     ),
                                     const SizedBox(height: 1),
                                     Text(
                                       'Chapter $progress of ${totalChapters ?? '?'}',
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontFamily: 'Overpass',
                                         fontSize: 10.5,
-                                        color: AppColors.darkTextSecondary,
+                                        color: context.appTextSecondary,
                                       ),
                                     ),
                                   ],
@@ -224,7 +224,7 @@ class MangaInProgressShelf extends ConsumerWidget {
                                           borderRadius: BorderRadius.circular(4),
                                           child: LinearProgressIndicator(
                                             value: progressPercent,
-                                            backgroundColor: AppColors.darkSurfaceInput,
+                                            backgroundColor: context.appInputSurface,
                                             valueColor: const AlwaysStoppedAnimation<Color>(_mangaPurple),
                                             minHeight: 6,
                                           ),

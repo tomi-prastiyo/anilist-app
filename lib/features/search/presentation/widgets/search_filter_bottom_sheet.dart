@@ -133,8 +133,8 @@ class _SearchFilterBottomSheetState extends State<SearchFilterBottomSheet> {
     return Container(
       height: MediaQuery.of(context).size.height * 0.85,
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-      decoration: const BoxDecoration(
-        color: AppColors.darkSurface,
+      decoration: BoxDecoration(
+        color: context.appSurface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(AppSpacing.r24)),
       ),
       child: Column(
@@ -144,7 +144,7 @@ class _SearchFilterBottomSheetState extends State<SearchFilterBottomSheet> {
             width: 40,
             height: 4,
             decoration: BoxDecoration(
-              color: AppColors.darkBorder,
+              color: context.appBorder,
               borderRadius: AppSpacing.borderRadiusFull,
             ),
           ),
@@ -167,19 +167,19 @@ class _SearchFilterBottomSheetState extends State<SearchFilterBottomSheet> {
             child: ListView(
               children: [
                 // 1. Sort Option
-                const Text('Sort By', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.darkTextSecondary)),
+                Text('Sort By', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: context.appTextSecondary)),
                 const SizedBox(height: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   decoration: BoxDecoration(
-                    color: AppColors.darkCard,
+                    color: context.appCard,
                     borderRadius: AppSpacing.borderRadius8,
-                    border: Border.all(color: AppColors.darkBorder),
+                    border: Border.all(color: context.appBorder),
                   ),
                   child: DropdownButtonHideUnderline(
                     child: DropdownButton<String>(
                       value: _sortBy,
-                      dropdownColor: AppColors.darkSurface,
+                      dropdownColor: context.appSurface,
                       isExpanded: true,
                       items: _sortOptions.entries.map((e) {
                         return DropdownMenuItem(value: e.key, child: Text(e.value, style: const TextStyle(fontSize: 13)));
@@ -195,11 +195,11 @@ class _SearchFilterBottomSheetState extends State<SearchFilterBottomSheet> {
                 // 2. Genres with 3-state chips (Neutral, Include, Exclude)
                 Row(
                   children: [
-                    const Text('Genres', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.darkTextSecondary)),
+                    Text('Genres', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: context.appTextSecondary)),
                     const Spacer(),
-                    const Text(
+                    Text(
                       'Tap: Include ✓ / Exclude ✕',
-                      style: TextStyle(fontSize: 11, color: AppColors.darkTextMuted),
+                      style: TextStyle(fontSize: 11, color: context.appTextMuted),
                     ),
                   ],
                 ),
@@ -209,9 +209,9 @@ class _SearchFilterBottomSheetState extends State<SearchFilterBottomSheet> {
                   runSpacing: 6,
                   children: _allGenres.map((genre) {
                     final state = _genres[genre] ?? GenreFilterState.neutral;
-                    Color bgColor = AppColors.darkCard;
-                    Color borderColor = AppColors.darkBorder;
-                    Color textColor = AppColors.darkTextSecondary;
+                    Color bgColor = context.appCard;
+                    Color borderColor = context.appBorder;
+                    Color textColor = context.appTextSecondary;
                     IconData? icon;
 
                     if (state == GenreFilterState.included) {
@@ -253,7 +253,7 @@ class _SearchFilterBottomSheetState extends State<SearchFilterBottomSheet> {
                 const SizedBox(height: 20),
 
                 // 3. Format Multi-select
-                const Text('Format', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.darkTextSecondary)),
+                Text('Format', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: context.appTextSecondary)),
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
@@ -266,7 +266,7 @@ class _SearchFilterBottomSheetState extends State<SearchFilterBottomSheet> {
                       selectedColor: AppColors.brandBlue,
                       checkmarkColor: Colors.white,
                       labelStyle: TextStyle(
-                        color: isSelected ? Colors.white : AppColors.darkTextSecondary,
+                        color: isSelected ? Colors.white : context.appTextSecondary,
                         fontSize: 12,
                       ),
                       onSelected: (val) {
@@ -284,7 +284,7 @@ class _SearchFilterBottomSheetState extends State<SearchFilterBottomSheet> {
                 const SizedBox(height: 20),
 
                 // 4. Status Multi-select
-                const Text('Airing Status', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.darkTextSecondary)),
+                Text('Airing Status', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: context.appTextSecondary)),
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
@@ -297,7 +297,7 @@ class _SearchFilterBottomSheetState extends State<SearchFilterBottomSheet> {
                       selectedColor: AppColors.brandBlue,
                       checkmarkColor: Colors.white,
                       labelStyle: TextStyle(
-                        color: isSelected ? Colors.white : AppColors.darkTextSecondary,
+                        color: isSelected ? Colors.white : context.appTextSecondary,
                         fontSize: 12,
                       ),
                       onSelected: (val) {

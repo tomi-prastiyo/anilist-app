@@ -103,13 +103,13 @@ class _MediaEditorBottomSheetState extends ConsumerState<MediaEditorBottomSheet>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: AppColors.darkSurface,
+        backgroundColor: context.appSurface,
         title: const Text('Delete from list?'),
         content: const Text('Are you sure you want to remove this from your list?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel', style: TextStyle(color: AppColors.darkTextSecondary)),
+            child: Text('Cancel', style: TextStyle(color: context.appTextSecondary)),
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(context).pop(true),
@@ -158,8 +158,8 @@ class _MediaEditorBottomSheetState extends ConsumerState<MediaEditorBottomSheet>
         top: AppSpacing.p20,
         bottom: MediaQuery.of(context).viewInsets.bottom + AppSpacing.p20,
       ),
-      decoration: const BoxDecoration(
-        color: AppColors.darkSurface,
+      decoration: BoxDecoration(
+        color: context.appSurface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(AppSpacing.r24)),
       ),
       child: SingleChildScrollView(
@@ -173,7 +173,7 @@ class _MediaEditorBottomSheetState extends ConsumerState<MediaEditorBottomSheet>
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: AppColors.darkBorder,
+                  color: context.appBorder,
                   borderRadius: AppSpacing.borderRadiusFull,
                 ),
               ),
@@ -197,9 +197,9 @@ class _MediaEditorBottomSheetState extends ConsumerState<MediaEditorBottomSheet>
             const SizedBox(height: AppSpacing.p16),
 
             // Status Selector
-            const Text(
+            Text(
               'Status',
-              style: TextStyle(fontSize: 13, color: AppColors.darkTextSecondary, fontWeight: FontWeight.w600),
+              style: TextStyle(fontSize: 13, color: context.appTextSecondary, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 8),
             Wrap(
@@ -212,7 +212,7 @@ class _MediaEditorBottomSheetState extends ConsumerState<MediaEditorBottomSheet>
                   selected: isSelected,
                   selectedColor: AppColors.brandBlue,
                   labelStyle: TextStyle(
-                    color: isSelected ? Colors.white : AppColors.darkTextSecondary,
+                    color: isSelected ? Colors.white : context.appTextSecondary,
                     fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
                     fontSize: 12,
                   ),
@@ -233,7 +233,7 @@ class _MediaEditorBottomSheetState extends ConsumerState<MediaEditorBottomSheet>
                   children: [
                     Text(
                       widget.mediaType == 'ANIME' ? 'Episodes Watched' : 'Chapters Read',
-                      style: const TextStyle(fontSize: 13, color: AppColors.darkTextSecondary, fontWeight: FontWeight.w600),
+                      style: TextStyle(fontSize: 13, color: context.appTextSecondary, fontWeight: FontWeight.w600),
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -272,9 +272,9 @@ class _MediaEditorBottomSheetState extends ConsumerState<MediaEditorBottomSheet>
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
+                Text(
                   'Score',
-                  style: TextStyle(fontSize: 13, color: AppColors.darkTextSecondary, fontWeight: FontWeight.w600),
+                  style: TextStyle(fontSize: 13, color: context.appTextSecondary, fontWeight: FontWeight.w600),
                 ),
                 Text(
                   _score > 0 ? '${_score.round()} / 100' : 'No score',
@@ -288,27 +288,27 @@ class _MediaEditorBottomSheetState extends ConsumerState<MediaEditorBottomSheet>
               max: 100,
               divisions: 100,
               activeColor: AppColors.brandBlue,
-              inactiveColor: AppColors.darkBorder,
+              inactiveColor: context.appBorder,
               onChanged: (val) => setState(() => _score = val),
             ),
             const SizedBox(height: AppSpacing.p16),
 
             // Notes
-            const Text(
+            Text(
               'Personal Notes',
-              style: TextStyle(fontSize: 13, color: AppColors.darkTextSecondary, fontWeight: FontWeight.w600),
+              style: TextStyle(fontSize: 13, color: context.appTextSecondary, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 8),
             TextField(
               controller: _notesController,
               decoration: InputDecoration(
                 hintText: 'Add private notes...',
-                hintStyle: const TextStyle(color: AppColors.darkTextMuted, fontSize: 13),
+                hintStyle: TextStyle(color: context.appTextMuted, fontSize: 13),
                 filled: true,
-                fillColor: AppColors.darkCard,
+                fillColor: context.appCard,
                 border: OutlineInputBorder(
                   borderRadius: AppSpacing.borderRadius8,
-                  borderSide: const BorderSide(color: AppColors.darkBorder),
+                  borderSide: BorderSide(color: context.appBorder),
                 ),
               ),
               maxLines: 2,

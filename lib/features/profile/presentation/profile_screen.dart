@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
+import '../../../core/widgets/anilist_bio_widget.dart';
 import '../../../shared/cards/media_card.dart';
 import '../../../shared/feedback/empty_view.dart';
 import '../../../shared/feedback/error_view.dart';
@@ -43,10 +44,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
   int _followingCount = 0;
   int _followersCount = 0;
   bool _isFollowing = false;
+  bool _isFollower = false;
 
   String _statsMode = 'ANIME'; // 'ANIME', 'MANGA'
   String _favFilter = 'ALL'; // 'ALL', 'ANIME', 'MANGA', 'CHARACTERS', 'STAFF'
-  bool _isBioExpanded = false;
 
   @override
   void initState() {
@@ -117,6 +118,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
         setState(() {
           _userProfile = profile;
           _isFollowing = profile['isFollowing'] as bool? ?? false;
+          _isFollower = profile['isFollower'] as bool? ?? false;
           _followingCount = counts['following'] ?? 0;
           _followersCount = counts['followers'] ?? 0;
           _isLoading = false;
@@ -186,7 +188,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     // Unauthenticated viewing own profile
     if (isOwn && !isAuthenticated) {
       return Scaffold(
-        backgroundColor: AppColors.darkBackground,
+        backgroundColor: context.appBackground,
         appBar: AppBar(title: const Text('Profile')),
         body: EmptyView(
           title: 'Sign in to see your profile',
@@ -207,7 +209,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
 
     if (_errorMessage != null && _userProfile == null) {
       return Scaffold(
-        backgroundColor: AppColors.darkBackground,
+        backgroundColor: context.appBackground,
         appBar: AppBar(title: const Text('Profile')),
         body: ErrorView(
           message: _errorMessage!,
@@ -256,19 +258,19 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     final favStaff = (favs?['staff']?['nodes'] as List?)?.cast<Map<String, dynamic>>() ?? [];
 
     return Scaffold(
-      backgroundColor: AppColors.darkBackground,
+      backgroundColor: context.appBackground,
       body: NestedScrollView(
         headerSliverBuilder: (context, innerBoxIsScrolled) => [
           SliverAppBar(
             expandedHeight: 225,
             pinned: true,
-            backgroundColor: AppColors.darkBackground,
+            backgroundColor: context.appBackground,
             leading: !isOwn
                 ? IconButton(
                     icon: Container(
                       padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
-                        color: AppColors.darkBackground.withValues(alpha: 0.6),
+                        color: Colors.black.withValues(alpha: 0.5),
                         shape: BoxShape.circle,
                         border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
                       ),
@@ -283,7 +285,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                       icon: Container(
                         padding: const EdgeInsets.all(6),
                         decoration: BoxDecoration(
-                          color: AppColors.darkBackground.withValues(alpha: 0.6),
+                          color: Colors.black.withValues(alpha: 0.5),
                           shape: BoxShape.circle,
                           border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
                         ),
@@ -299,7 +301,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                       icon: Container(
                         padding: const EdgeInsets.all(6),
                         decoration: BoxDecoration(
-                          color: AppColors.darkBackground.withValues(alpha: 0.6),
+                          color: Colors.black.withValues(alpha: 0.5),
                           shape: BoxShape.circle,
                           border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
                         ),
@@ -339,9 +341,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                         end: Alignment.bottomCenter,
                         colors: [
                           Colors.transparent,
-                          AppColors.darkBackground.withValues(alpha: 0.2),
-                          AppColors.darkBackground.withValues(alpha: 0.7),
-                          AppColors.darkBackground,
+                          Colors.black.withValues(alpha: 0.2),
+                          Colors.black.withValues(alpha: 0.6),
+                          Colors.black.withValues(alpha: 0.85),
                         ],
                         stops: const [0.0, 0.4, 0.75, 1.0],
                       ),
@@ -356,27 +358,30 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        // Portrait Rectangular Avatar (AniList Authentic: 76x96, 10px radius)
+                        // Circular Pop-out Avatar
                         Container(
-                          width: 76,
-                          height: 96,
+                          width: 86,
+                          height: 86,
                           decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: AppColors.darkSurface, width: 3),
-                            color: AppColors.darkSurface,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: context.appSurface, width: 3.5),
+                            color: context.appSurface,
                             boxShadow: [
                               BoxShadow(
                                 color: Colors.black.withValues(alpha: 0.6),
-                                blurRadius: 12,
+                                blurRadius: 14,
                                 offset: const Offset(0, 4),
+                              ),
+                              BoxShadow(
+                                color: accentColor.withValues(alpha: 0.35),
+                                blurRadius: 10,
                               ),
                             ],
                           ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(7),
+                          child: ClipOval(
                             child: userAvatar != null
                                 ? AppNetworkImage(imageUrl: userAvatar, fit: BoxFit.cover)
-                                : const Icon(Icons.person, size: 36, color: AppColors.darkTextSecondary),
+                                : const Icon(Icons.person, size: 40, color: AppColors.darkTextSecondary),
                           ),
                         ),
                         const SizedBox(width: 14),
@@ -396,7 +401,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                                       overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(
                                         fontFamily: 'Overpass',
-                                        fontSize: 21,
+                                        fontSize: 20,
                                         fontWeight: FontWeight.w900,
                                         color: Colors.white,
                                         shadows: [
@@ -414,7 +419,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                                         duration: const Duration(milliseconds: 200),
                                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
                                         decoration: BoxDecoration(
-                                          color: _isFollowing ? AppColors.darkSurface : accentColor,
+                                          color: _isFollowing ? context.appSurface : accentColor,
                                           borderRadius: BorderRadius.circular(16),
                                           border: Border.all(
                                             color: _isFollowing ? accentColor : Colors.transparent,
@@ -433,13 +438,17 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                                           mainAxisSize: MainAxisSize.min,
                                           children: [
                                             Icon(
-                                              _isFollowing ? Icons.check_rounded : Icons.add_rounded,
+                                              _isFollowing
+                                                  ? Icons.check_rounded
+                                                  : (_isFollower ? Icons.sync_alt_rounded : Icons.person_add_rounded),
                                               size: 13,
                                               color: _isFollowing ? accentColor : Colors.white,
                                             ),
                                             const SizedBox(width: 4),
                                             Text(
-                                              _isFollowing ? 'Following' : 'Follow',
+                                              _isFollowing
+                                                  ? 'Following'
+                                                  : (_isFollower ? 'Follow Back' : 'Follow'),
                                               style: TextStyle(
                                                 fontFamily: 'Overpass',
                                                 fontSize: 11.5,
@@ -454,17 +463,97 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                                   ],
                                 ],
                               ),
-                              const SizedBox(height: 4),
+                              const SizedBox(height: 5),
 
-                              // AniList Member Badge
-                              Row(
+                              // Relation Badges (Mutual / Follows you / Following) & AniList Member Badge
+                              Wrap(
+                                spacing: 6,
+                                runSpacing: 4,
+                                crossAxisAlignment: WrapCrossAlignment.center,
                                 children: [
+                                  if (!isOwn && isAuthenticated) ...[
+                                    if (_isFollowing && _isFollower)
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.scoreHigh.withValues(alpha: 0.18),
+                                          borderRadius: BorderRadius.circular(10),
+                                          border: Border.all(color: AppColors.scoreHigh.withValues(alpha: 0.6)),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(Icons.sync_alt_rounded, size: 11, color: AppColors.scoreHigh),
+                                            SizedBox(width: 4),
+                                            Text(
+                                              'Mutual',
+                                              style: TextStyle(
+                                                fontFamily: 'Overpass',
+                                                fontSize: 10.5,
+                                                fontWeight: FontWeight.w800,
+                                                color: AppColors.scoreHigh,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      )
+                                    else if (_isFollower && !_isFollowing)
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.brandBlue.withValues(alpha: 0.18),
+                                          borderRadius: BorderRadius.circular(10),
+                                          border: Border.all(color: AppColors.brandBlue.withValues(alpha: 0.6)),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(Icons.south_west_rounded, size: 10, color: AppColors.brandBlue),
+                                            SizedBox(width: 4),
+                                            Text(
+                                              'Follows you',
+                                              style: TextStyle(
+                                                fontFamily: 'Overpass',
+                                                fontSize: 10.5,
+                                                fontWeight: FontWeight.w800,
+                                                color: AppColors.brandBlue,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      )
+                                    else if (_isFollowing && !_isFollower)
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                                        decoration: BoxDecoration(
+                                          color: Colors.black.withValues(alpha: 0.45),
+                                          borderRadius: BorderRadius.circular(10),
+                                          border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(Icons.north_east_rounded, size: 10, color: Colors.white70),
+                                            SizedBox(width: 4),
+                                            Text(
+                                              'Following',
+                                              style: TextStyle(
+                                                fontFamily: 'Overpass',
+                                                fontSize: 10.5,
+                                                fontWeight: FontWeight.w700,
+                                                color: Colors.white70,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                  ],
                                   Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
                                     decoration: BoxDecoration(
-                                      color: AppColors.darkSurface.withValues(alpha: 0.8),
+                                      color: Colors.black.withValues(alpha: 0.45),
                                       borderRadius: BorderRadius.circular(10),
-                                      border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                                      border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
                                     ),
                                     child: Row(
                                       mainAxisSize: MainAxisSize.min,
@@ -482,9 +571,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                                           'AniList Member',
                                           style: TextStyle(
                                             fontFamily: 'Overpass',
-                                            fontSize: 11,
+                                            fontSize: 10.5,
                                             fontWeight: FontWeight.w700,
-                                            color: AppColors.darkTextSecondary,
+                                            color: Colors.white70,
                                           ),
                                         ),
                                       ],
@@ -503,30 +592,30 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                                     child: Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                       decoration: BoxDecoration(
-                                        color: Colors.white.withValues(alpha: 0.05),
+                                        color: Colors.black.withValues(alpha: 0.45),
                                         borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+                                        border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
                                       ),
                                       child: Row(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
                                           Text(
                                             '$_followingCount',
-                                            style: const TextStyle(
+                                            style: TextStyle(
                                               fontFamily: 'Overpass',
                                               fontSize: 12.5,
                                               fontWeight: FontWeight.w800,
                                               color: Colors.white,
                                             ),
                                           ),
-                                          const SizedBox(width: 4),
-                                          const Text(
+                                          SizedBox(width: 4),
+                                          Text(
                                             'Following',
                                             style: TextStyle(
                                               fontFamily: 'Overpass',
                                               fontSize: 11.5,
                                               fontWeight: FontWeight.w600,
-                                              color: AppColors.darkTextSecondary,
+                                              color: Colors.white70,
                                             ),
                                           ),
                                         ],
@@ -540,30 +629,30 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                                     child: Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                       decoration: BoxDecoration(
-                                        color: Colors.white.withValues(alpha: 0.05),
+                                        color: Colors.black.withValues(alpha: 0.45),
                                         borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+                                        border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
                                       ),
                                       child: Row(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
                                           Text(
                                             '$_followersCount',
-                                            style: const TextStyle(
+                                            style: TextStyle(
                                               fontFamily: 'Overpass',
                                               fontSize: 12.5,
                                               fontWeight: FontWeight.w800,
                                               color: Colors.white,
                                             ),
                                           ),
-                                          const SizedBox(width: 4),
-                                          const Text(
+                                          SizedBox(width: 4),
+                                          Text(
                                             'Followers',
                                             style: TextStyle(
                                               fontFamily: 'Overpass',
                                               fontSize: 11.5,
                                               fontWeight: FontWeight.w600,
-                                              color: AppColors.darkTextSecondary,
+                                              color: Colors.white70,
                                             ),
                                           ),
                                         ],
@@ -598,7 +687,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
             : RefreshIndicator(
                 onRefresh: _loadProfile,
                 color: accentColor,
-                backgroundColor: AppColors.darkSurface,
+                backgroundColor: context.appSurface,
                 child: TabBarView(
                   controller: _tabController,
                   children: [
@@ -623,6 +712,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                       mangaScores: mangaScores,
                       mangaGenres: mangaGenres,
                       accentColor: accentColor,
+                      isOwn: isOwn,
                     ),
 
                     // Tab 2: Favorites
@@ -642,65 +732,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                   ],
                 ),
               ),
-      ),
-    );
-  }
-
-  Widget _buildAboutCard(String about, Color accentColor) {
-    final isLong = about.length > 200;
-    final text = (!isLong || _isBioExpanded) ? about : '${about.substring(0, 200)}...';
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.darkSurface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.info_outline_rounded, size: 15, color: accentColor),
-              const SizedBox(width: 6),
-              const Text(
-                'About',
-                style: TextStyle(
-                  fontFamily: 'Overpass',
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                  color: Colors.white,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            text,
-            style: const TextStyle(
-              fontFamily: 'Overpass',
-              fontSize: 12.5,
-              height: 1.45,
-              color: AppColors.darkTextPrimary,
-            ),
-          ),
-          if (isLong) ...[
-            const SizedBox(height: 6),
-            GestureDetector(
-              onTap: () => setState(() => _isBioExpanded = !_isBioExpanded),
-              child: Text(
-                _isBioExpanded ? 'Show Less' : 'Read More',
-                style: TextStyle(
-                  fontFamily: 'Overpass',
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w700,
-                  color: accentColor,
-                ),
-              ),
-            ),
-          ],
-        ],
       ),
     );
   }
@@ -725,13 +756,17 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     required List<Map<String, dynamic>> mangaScores,
     required List<Map<String, dynamic>> mangaGenres,
     required Color accentColor,
+    required bool isOwn,
   }) {
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.p16),
       children: [
-        // 1. Expandable About Bio Card (if present)
-        if (about != null && about.trim().isNotEmpty)
-          _buildAboutCard(about, accentColor),
+        // 1. Expandable About Bio Card
+        AniListBioWidget(
+          bio: about,
+          accentColor: accentColor,
+          isOwn: isOwn,
+        ),
 
         // 2. Segmented Pill Switch: Anime Stats vs Manga Stats
         Center(
@@ -740,9 +775,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
             height: 36,
             padding: const EdgeInsets.all(3),
             decoration: BoxDecoration(
-              color: AppColors.darkSurface,
+              color: context.appSurface,
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+              border: Border.all(color: context.appBorder),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -774,7 +809,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                         Icon(
                           Icons.tv_rounded,
                           size: 14,
-                          color: _statsMode == 'ANIME' ? Colors.white : AppColors.darkTextSecondary,
+                          color: _statsMode == 'ANIME' ? Colors.white : context.appTextSecondary,
                         ),
                         const SizedBox(width: 6),
                         Text(
@@ -783,7 +818,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                             fontFamily: 'Overpass',
                             fontSize: 12,
                             fontWeight: FontWeight.w800,
-                            color: _statsMode == 'ANIME' ? Colors.white : AppColors.darkTextSecondary,
+                            color: _statsMode == 'ANIME' ? Colors.white : context.appTextSecondary,
                           ),
                         ),
                       ],
@@ -817,7 +852,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                         Icon(
                           Icons.menu_book_rounded,
                           size: 14,
-                          color: _statsMode == 'MANGA' ? Colors.white : AppColors.darkTextSecondary,
+                          color: _statsMode == 'MANGA' ? Colors.white : context.appTextSecondary,
                         ),
                         const SizedBox(width: 6),
                         Text(
@@ -826,7 +861,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                             fontFamily: 'Overpass',
                             fontSize: 12,
                             fontWeight: FontWeight.w800,
-                            color: _statsMode == 'MANGA' ? Colors.white : AppColors.darkTextSecondary,
+                            color: _statsMode == 'MANGA' ? Colors.white : context.appTextSecondary,
                           ),
                         ),
                       ],
@@ -961,9 +996,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(AppSpacing.p16),
       decoration: BoxDecoration(
-        color: AppColors.darkSurface,
+        color: context.appSurface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+        border: Border.all(color: context.appBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -979,23 +1014,23 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                 child: Icon(Icons.donut_small_rounded, size: 16, color: accentColor),
               ),
               const SizedBox(width: 8),
-              const Text(
+              Text(
                 'Status Distribution',
                 style: TextStyle(
                   fontFamily: 'Overpass',
                   fontSize: 15,
                   fontWeight: FontWeight.w800,
-                  color: Colors.white,
+                  color: context.appTextPrimary,
                 ),
               ),
               const Spacer(),
               Text(
                 '$total entries',
-                style: const TextStyle(
+                style: TextStyle(
                   fontFamily: 'Overpass',
                   fontSize: 11.5,
                   fontWeight: FontWeight.w700,
-                  color: AppColors.darkTextSecondary,
+                  color: context.appTextSecondary,
                 ),
               ),
             ],
@@ -1049,11 +1084,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                   const SizedBox(width: 5),
                   Text(
                     '$label ($cnt • $pct%)',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontFamily: 'Overpass',
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
-                      color: AppColors.darkTextSecondary,
+                      color: context.appTextSecondary,
                     ),
                   ),
                 ],
@@ -1074,9 +1109,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(AppSpacing.p16),
       decoration: BoxDecoration(
-        color: AppColors.darkSurface,
+        color: context.appSurface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+        border: Border.all(color: context.appBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1095,13 +1130,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                     child: Icon(Icons.bar_chart_rounded, size: 16, color: accentColor),
                   ),
                   const SizedBox(width: 8),
-                  const Text(
+                  Text(
                     'Score Distribution',
                     style: TextStyle(
                       fontFamily: 'Overpass',
                       fontSize: 15,
                       fontWeight: FontWeight.w800,
-                      color: Colors.white,
+                      color: context.appTextPrimary,
                     ),
                   ),
                 ],
@@ -1164,11 +1199,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                             padding: const EdgeInsets.only(top: 6),
                             child: Text(
                               '${scoreList[idx]['score']}',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontFamily: 'Overpass',
                                 fontSize: 10,
                                 fontWeight: FontWeight.w700,
-                                color: AppColors.darkTextSecondary,
+                                color: context.appTextSecondary,
                               ),
                             ),
                           );
@@ -1238,9 +1273,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(AppSpacing.p16),
       decoration: BoxDecoration(
-        color: AppColors.darkSurface,
+        color: context.appSurface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+        border: Border.all(color: context.appBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1256,13 +1291,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                 child: Icon(Icons.pie_chart_outline_rounded, size: 16, color: accentColor),
               ),
               const SizedBox(width: 8),
-              const Text(
+              Text(
                 'Format Breakdown',
                 style: TextStyle(
                   fontFamily: 'Overpass',
                   fontSize: 15,
                   fontWeight: FontWeight.w800,
-                  color: Colors.white,
+                  color: context.appTextPrimary,
                 ),
               ),
             ],
@@ -1296,20 +1331,20 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                     children: [
                       Text(
                         '$totalCount',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontFamily: 'Overpass',
                           fontSize: 18,
                           fontWeight: FontWeight.w900,
-                          color: Colors.white,
+                          color: context.appTextPrimary,
                         ),
                       ),
-                      const Text(
+                      Text(
                         'TITLES',
                         style: TextStyle(
                           fontFamily: 'Overpass',
                           fontSize: 9.5,
                           fontWeight: FontWeight.w700,
-                          color: AppColors.darkTextSecondary,
+                          color: context.appTextSecondary,
                           letterSpacing: 0.5,
                         ),
                       ),
@@ -1345,11 +1380,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                   const SizedBox(width: 5),
                   Text(
                     '$format ($cnt • $pct%)',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontFamily: 'Overpass',
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
-                      color: AppColors.darkTextSecondary,
+                      color: context.appTextSecondary,
                     ),
                   ),
                 ],
@@ -1368,9 +1403,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(AppSpacing.p16),
       decoration: BoxDecoration(
-        color: AppColors.darkSurface,
+        color: context.appSurface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+        border: Border.all(color: context.appBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1386,13 +1421,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                 child: Icon(Icons.category_rounded, size: 16, color: accentColor),
               ),
               const SizedBox(width: 8),
-              const Text(
+              Text(
                 'Top Genres',
                 style: TextStyle(
                   fontFamily: 'Overpass',
                   fontSize: 15,
                   fontWeight: FontWeight.w800,
-                  color: Colors.white,
+                  color: context.appTextPrimary,
                 ),
               ),
             ],
@@ -1413,18 +1448,18 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                     children: [
                       Text(
                         genre,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontFamily: 'Overpass',
                           fontSize: 12.5,
                           fontWeight: FontWeight.w600,
-                          color: AppColors.darkTextPrimary,
+                          color: context.appTextPrimary,
                         ),
                       ),
                       Text(
                         '$cnt entries',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 11,
-                          color: AppColors.darkTextSecondary,
+                          color: context.appTextSecondary,
                         ),
                       ),
                     ],
@@ -1434,7 +1469,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                     borderRadius: BorderRadius.circular(3),
                     child: LinearProgressIndicator(
                       value: progress,
-                      backgroundColor: AppColors.darkBorder,
+                      backgroundColor: context.appBorder,
                       color: accentColor,
                       minHeight: 6,
                     ),
@@ -1536,10 +1571,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
         decoration: BoxDecoration(
-          color: isSelected ? accentColor.withValues(alpha: 0.2) : AppColors.darkSurface,
+          color: isSelected ? accentColor.withValues(alpha: 0.2) : context.appSurface,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isSelected ? accentColor : Colors.white.withValues(alpha: 0.08),
+            color: isSelected ? accentColor : context.appBorder,
           ),
         ),
         child: Text(
@@ -1548,7 +1583,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
             fontFamily: 'Overpass',
             fontSize: 12,
             fontWeight: FontWeight.w700,
-            color: isSelected ? accentColor : AppColors.darkTextSecondary,
+            color: isSelected ? accentColor : context.appTextSecondary,
           ),
         ),
       ),
@@ -1564,11 +1599,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
           children: [
             Text(
               title,
-              style: const TextStyle(
+              style: TextStyle(
                 fontFamily: 'Overpass',
                 fontSize: 16,
                 fontWeight: FontWeight.w800,
-                color: Colors.white,
+                color: context.appTextPrimary,
               ),
             ),
             GestureDetector(
@@ -1631,11 +1666,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
           children: [
             Text(
               title,
-              style: const TextStyle(
+              style: TextStyle(
                 fontFamily: 'Overpass',
                 fontSize: 16,
                 fontWeight: FontWeight.w800,
-                color: Colors.white,
+                color: context.appTextPrimary,
               ),
             ),
             GestureDetector(
@@ -1689,11 +1724,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         textAlign: TextAlign.center,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontFamily: 'Overpass',
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
-                          color: AppColors.darkTextPrimary,
+                          color: context.appTextPrimary,
                         ),
                       ),
                     ),
@@ -1715,7 +1750,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
         child: Center(
           child: Text(
             emptyMessage,
-            style: const TextStyle(fontFamily: 'Overpass', color: AppColors.darkTextSecondary),
+            style: TextStyle(fontFamily: 'Overpass', color: context.appTextSecondary),
           ),
         ),
       );
@@ -1756,7 +1791,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
         child: Center(
           child: Text(
             emptyMessage,
-            style: const TextStyle(fontFamily: 'Overpass', color: AppColors.darkTextSecondary),
+            style: TextStyle(fontFamily: 'Overpass', color: context.appTextSecondary),
           ),
         ),
       );
@@ -1794,9 +1829,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
           },
           child: Container(
             decoration: BoxDecoration(
-              color: AppColors.darkSurface,
+              color: context.appSurface,
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+              border: Border.all(color: context.appBorder),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.center,
@@ -1806,7 +1841,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                     borderRadius: const BorderRadius.vertical(top: Radius.circular(10)),
                     child: image != null
                         ? AppNetworkImage(imageUrl: image, fit: BoxFit.cover, width: double.infinity)
-                        : const Center(child: Icon(Icons.person, color: AppColors.darkTextSecondary)),
+                        : Icon(Icons.person, color: context.appTextSecondary),
                   ),
                 ),
                 Padding(
@@ -1818,11 +1853,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         textAlign: TextAlign.center,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontFamily: 'Overpass',
                           fontSize: 11,
                           fontWeight: FontWeight.w700,
-                          color: Colors.white,
+                          color: context.appTextPrimary,
                         ),
                       ),
                       if (occupations.isNotEmpty) ...[
@@ -1831,10 +1866,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                           occupations.first,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontFamily: 'Overpass',
                             fontSize: 9.5,
-                            color: AppColors.darkTextSecondary,
+                            color: context.appTextSecondary,
                           ),
                         ),
                       ],
@@ -1855,7 +1890,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.p12),
         decoration: BoxDecoration(
-          color: AppColors.darkSurface,
+          color: context.appSurface,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: effectiveColor.withValues(alpha: 0.16)),
           boxShadow: [
@@ -1880,21 +1915,21 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
             const SizedBox(height: 8),
             Text(
               value,
-              style: const TextStyle(
+              style: TextStyle(
                 fontFamily: 'Overpass',
                 fontSize: 17,
                 fontWeight: FontWeight.w900,
-                color: Colors.white,
+                color: context.appTextPrimary,
               ),
             ),
             const SizedBox(height: 2),
             Text(
               label,
-              style: const TextStyle(
+              style: TextStyle(
                 fontFamily: 'Overpass',
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
-                color: AppColors.darkTextSecondary,
+                color: context.appTextSecondary,
               ),
             ),
           ],
@@ -1923,18 +1958,18 @@ class _ProfilePillTabsDelegate extends SliverPersistentHeaderDelegate {
   @override
   Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
     return Container(
-      color: AppColors.darkBackground,
+      color: context.appBackground,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       child: AnimatedBuilder(
         animation: tabController,
         builder: (context, _) {
           return Row(
             children: [
-              _buildPill(0, 'Stats', Icons.bar_chart_rounded),
+              _buildPill(context, 0, 'Stats', Icons.bar_chart_rounded),
               const SizedBox(width: 8),
-              _buildPill(1, 'Favorites', Icons.favorite_rounded),
+              _buildPill(context, 1, 'Favorites', Icons.favorite_rounded),
               const SizedBox(width: 8),
-              _buildPill(2, isOwnProfile ? 'My Activity' : 'Activity', Icons.history_rounded),
+              _buildPill(context, 2, isOwnProfile ? 'My Activity' : 'Activity', Icons.history_rounded),
             ],
           );
         },
@@ -1942,7 +1977,7 @@ class _ProfilePillTabsDelegate extends SliverPersistentHeaderDelegate {
     );
   }
 
-  Widget _buildPill(int index, String title, IconData icon) {
+  Widget _buildPill(BuildContext context, int index, String title, IconData icon) {
     final isSelected = tabController.index == index;
     return Expanded(
       child: GestureDetector(
@@ -1954,10 +1989,10 @@ class _ProfilePillTabsDelegate extends SliverPersistentHeaderDelegate {
           duration: const Duration(milliseconds: 200),
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: isSelected ? accentColor : AppColors.darkSurface,
+            color: isSelected ? accentColor : context.appSurface,
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
-              color: isSelected ? accentColor : Colors.white.withValues(alpha: 0.06),
+              color: isSelected ? accentColor : context.appBorder,
             ),
             boxShadow: isSelected
                 ? [
@@ -1975,7 +2010,7 @@ class _ProfilePillTabsDelegate extends SliverPersistentHeaderDelegate {
               Icon(
                 icon,
                 size: 14,
-                color: isSelected ? Colors.white : AppColors.darkTextSecondary,
+                color: isSelected ? Colors.white : context.appTextSecondary,
               ),
               const SizedBox(width: 5),
               Text(
@@ -1986,7 +2021,7 @@ class _ProfilePillTabsDelegate extends SliverPersistentHeaderDelegate {
                   fontFamily: 'Overpass',
                   fontSize: 12,
                   fontWeight: FontWeight.w800,
-                  color: isSelected ? Colors.white : AppColors.darkTextSecondary,
+                  color: isSelected ? Colors.white : context.appTextSecondary,
                 ),
               ),
             ],

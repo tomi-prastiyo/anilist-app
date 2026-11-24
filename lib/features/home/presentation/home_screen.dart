@@ -58,19 +58,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   children: [
                     Text(
                       'Hello, $userName 👋',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontFamily: 'Overpass',
                         fontSize: 16,
                         fontWeight: FontWeight.w800,
-                        color: Colors.white,
+                        color: context.appTextPrimary,
                       ),
                     ),
                     Text(
                       user != null ? 'Track your anime & manga' : 'Browsing as Guest',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontFamily: 'Overpass',
                         fontSize: 11.5,
-                        color: AppColors.darkTextSecondary,
+                        color: context.appTextSecondary,
                       ),
                     ),
                   ],
@@ -145,7 +145,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ]);
             },
             color: AppColors.brandBlue,
-            backgroundColor: AppColors.darkSurface,
+            backgroundColor: context.appSurface,
             child: ListView(
               padding: const EdgeInsets.only(top: 8, bottom: 90),
               children: [

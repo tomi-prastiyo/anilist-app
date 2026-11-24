@@ -74,7 +74,7 @@ class _AiringScheduleScreenState extends ConsumerState<AiringScheduleScreen> {
     final selectedDate = _days[_selectedDayIndex];
 
     return Scaffold(
-      backgroundColor: AppColors.darkBackground,
+      backgroundColor: context.appBackground,
       appBar: AppBar(
         title: const Text(
           'Airing Schedule',
@@ -90,7 +90,7 @@ class _AiringScheduleScreenState extends ConsumerState<AiringScheduleScreen> {
           // 7-day horizontal selector strip
           Container(
             padding: const EdgeInsets.symmetric(vertical: 10),
-            color: AppColors.darkBackground,
+            color: context.appBackground,
             child: SizedBox(
               height: 60,
               child: ListView.separated(
@@ -110,12 +110,12 @@ class _AiringScheduleScreenState extends ConsumerState<AiringScheduleScreen> {
                       duration: const Duration(milliseconds: 200),
                       width: 72,
                       decoration: BoxDecoration(
-                        color: isSelected ? AppColors.brandBlue : AppColors.darkSurface,
+                        color: isSelected ? AppColors.brandBlue : context.appSurface,
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
                           color: isSelected
                               ? AppColors.brandBlue
-                              : Colors.white.withValues(alpha: 0.06),
+                              : context.appBorder,
                         ),
                         boxShadow: isSelected
                             ? [
@@ -136,7 +136,7 @@ class _AiringScheduleScreenState extends ConsumerState<AiringScheduleScreen> {
                               fontFamily: 'Overpass',
                               fontSize: 12,
                               fontWeight: FontWeight.w800,
-                              color: isSelected ? AppColors.darkBackground : Colors.white,
+                              color: isSelected ? Colors.white : context.appTextPrimary,
                             ),
                           ),
                           const SizedBox(height: 2),
@@ -147,8 +147,8 @@ class _AiringScheduleScreenState extends ConsumerState<AiringScheduleScreen> {
                               fontSize: 10.5,
                               fontWeight: FontWeight.w600,
                               color: isSelected
-                                  ? AppColors.darkBackground.withValues(alpha: 0.8)
-                                  : AppColors.darkTextSecondary,
+                                  ? context.appBackground.withValues(alpha: 0.8)
+                                  : context.appTextSecondary,
                             ),
                           ),
                         ],
@@ -168,11 +168,11 @@ class _AiringScheduleScreenState extends ConsumerState<AiringScheduleScreen> {
               children: [
                 Text(
                   DateFormat('EEEE, MMMM d, yyyy').format(selectedDate),
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontFamily: 'Overpass',
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
-                    color: AppColors.darkTextSecondary,
+                    color: context.appTextSecondary,
                   ),
                 ),
                 Text(
@@ -236,9 +236,9 @@ class _AiringScheduleScreenState extends ConsumerState<AiringScheduleScreen> {
                             child: Container(
                               padding: const EdgeInsets.all(10),
                               decoration: BoxDecoration(
-                                color: AppColors.darkSurface,
+                                color: context.appSurface,
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+                                border: Border.all(color: context.appBorder),
                                 boxShadow: [
                                   BoxShadow(
                                     color: Colors.black.withValues(alpha: 0.2),
@@ -273,7 +273,7 @@ class _AiringScheduleScreenState extends ConsumerState<AiringScheduleScreen> {
                                               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                               decoration: BoxDecoration(
                                                 color: isAired
-                                                    ? AppColors.darkSurfaceInput
+                                                    ? context.appInputSurface
                                                     : AppColors.statusBehind.withValues(alpha: 0.2),
                                                 borderRadius: BorderRadius.circular(4),
                                               ),
@@ -283,18 +283,18 @@ class _AiringScheduleScreenState extends ConsumerState<AiringScheduleScreen> {
                                                   fontFamily: 'Overpass',
                                                   fontSize: 9.5,
                                                   fontWeight: FontWeight.w800,
-                                                  color: isAired ? AppColors.darkTextSecondary : AppColors.statusBehind,
+                                                  color: isAired ? context.appTextSecondary : AppColors.statusBehind,
                                                 ),
                                               ),
                                             ),
                                             const SizedBox(width: 6),
                                             Text(
                                               exactTime,
-                                              style: const TextStyle(
+                                              style: TextStyle(
                                                 fontFamily: 'Overpass',
                                                 fontSize: 10,
                                                 fontWeight: FontWeight.w700,
-                                                color: AppColors.darkTextMuted,
+                                                color: context.appTextMuted,
                                               ),
                                             ),
                                           ],
@@ -306,11 +306,11 @@ class _AiringScheduleScreenState extends ConsumerState<AiringScheduleScreen> {
                                           title,
                                           maxLines: 2,
                                           overflow: TextOverflow.ellipsis,
-                                          style: const TextStyle(
+                                          style: TextStyle(
                                             fontFamily: 'Overpass',
                                             fontWeight: FontWeight.w800,
                                             fontSize: 13,
-                                            color: Colors.white,
+                                            color: context.appTextPrimary,
                                           ),
                                         ),
                                         const SizedBox(height: 3),
@@ -320,10 +320,10 @@ class _AiringScheduleScreenState extends ConsumerState<AiringScheduleScreen> {
                                           'Episode $episode • $format${genres.isNotEmpty ? ' • ${genres.take(2).join(', ')}' : ''}',
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
-                                          style: const TextStyle(
+                                          style: TextStyle(
                                             fontFamily: 'Overpass',
                                             fontSize: 10.5,
-                                            color: AppColors.darkTextSecondary,
+                                            color: context.appTextSecondary,
                                           ),
                                         ),
                                       ],

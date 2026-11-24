@@ -112,6 +112,27 @@ class SearchRepository {
     }
   ''';
 
+  static const String searchUserQuery = r'''
+    query SearchUserQuery($page: Int, $perPage: Int, $search: String) {
+      Page(page: $page, perPage: $perPage) {
+        pageInfo {
+          currentPage
+          hasNextPage
+        }
+        users(search: $search) {
+          id
+          name
+          about
+          avatar {
+            large
+            medium
+          }
+          bannerImage
+        }
+      }
+    }
+  ''';
+
   Future<Map<String, dynamic>> searchMedia({
     required int page,
     int perPage = 20,
@@ -175,6 +196,24 @@ class SearchRepository {
 
     final response = await _apiClient.postGraphQL(
       query: searchStaffQuery,
+      variables: vars,
+    );
+    return response['Page'] as Map<String, dynamic>? ?? {};
+  }
+
+  Future<Map<String, dynamic>> searchUsers({
+    required int page,
+    int perPage = 20,
+    String? search,
+  }) async {
+    final Map<String, dynamic> vars = {
+      'page': page,
+      'perPage': perPage,
+    };
+    if (search != null && search.isNotEmpty) vars['search'] = search;
+
+    final response = await _apiClient.postGraphQL(
+      query: searchUserQuery,
       variables: vars,
     );
     return response['Page'] as Map<String, dynamic>? ?? {};

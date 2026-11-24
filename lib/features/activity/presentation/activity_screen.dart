@@ -12,6 +12,7 @@ import '../../media_detail/presentation/media_detail_screen.dart';
 import '../../profile/presentation/profile_screen.dart';
 import '../data/activity_repository.dart';
 import 'widgets/activity_comments_bottom_sheet.dart';
+import 'widgets/activity_likes_bottom_sheet.dart';
 
 class ActivityScreen extends ConsumerStatefulWidget {
   final int? userId;
@@ -141,12 +142,38 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
         activityUserName: user?['name'] as String?,
         activityUserAvatar: user?['avatar']?['medium'] as String?,
         activityTitle: title,
+        media: media,
+        activityStatus: activity['status'] as String?,
+        activityProgress: activity['progress'] != null ? '${activity['progress']}' : null,
         initialReplyCount: activity['replyCount'] as int? ?? 0,
         onReplyAdded: () {
           setState(() {
             activity['replyCount'] = (activity['replyCount'] as int? ?? 0) + 1;
           });
         },
+      ),
+    );
+  }
+
+  void _openLikes(Map<String, dynamic> activity) {
+    final id = activity['id'] as int?;
+    if (id == null) return;
+    final user = activity['user'] as Map<String, dynamic>?;
+    final media = activity['media'] as Map<String, dynamic>?;
+    final rawLikes = activity['likes'] as List?;
+    final initialLikes = rawLikes?.cast<Map<String, dynamic>>() ?? [];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => ActivityLikesBottomSheet(
+        activityId: id,
+        media: media,
+        activityStatus: activity['status'] as String?,
+        activityProgress: activity['progress'] != null ? '${activity['progress']}' : null,
+        activityUserName: user?['name'] as String?,
+        initialLikes: initialLikes,
       ),
     );
   }
@@ -175,7 +202,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
         : RefreshIndicator(
             onRefresh: () => _load(page: 1),
             color: accentColor,
-            backgroundColor: AppColors.darkSurface,
+            backgroundColor: context.appSurface,
             child: _activities.isEmpty
                 ? EmptyView(
                     title: widget.userId != null
@@ -199,26 +226,69 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                   )
                 : ListView.separated(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    itemCount: _activities.length + (_hasNextPage ? 1 : 0),
+                    itemCount: _activities.length + (_hasNextPage || _activities.isNotEmpty ? 1 : 0),
                     separatorBuilder: (context, index) => const SizedBox(height: 10),
                     itemBuilder: (context, index) {
                       if (index == _activities.length) {
-                        if (!_isLoadingMore && _hasNextPage) {
-                          _load(page: _currentPage + 1, reset: false);
-                        }
-                        return Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
+                        if (_hasNextPage) {
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
                             child: SizedBox(
-                              width: 22,
-                              height: 22,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2.2,
-                                color: accentColor,
+                              width: double.infinity,
+                              child: OutlinedButton(
+                                onPressed: _isLoadingMore
+                                    ? null
+                                    : () => _load(page: _currentPage + 1, reset: false),
+                                style: OutlinedButton.styleFrom(
+                                  backgroundColor: context.appSurface,
+                                  side: BorderSide(color: accentColor.withValues(alpha: 0.3)),
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                ),
+                                child: _isLoadingMore
+                                    ? SizedBox(
+                                        width: 18,
+                                        height: 18,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: accentColor,
+                                        ),
+                                      )
+                                    : Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Icon(Icons.expand_more_rounded, size: 18, color: accentColor),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            'Load More Activities',
+                                            style: TextStyle(
+                                              fontFamily: 'Overpass',
+                                              fontSize: 12.5,
+                                              fontWeight: FontWeight.w700,
+                                              color: accentColor,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
                               ),
                             ),
-                          ),
-                        );
+                          );
+                        } else {
+                          return Center(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              child: Text(
+                                'No more activities ✨',
+                                style: TextStyle(
+                                  fontFamily: 'Overpass',
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: context.appTextSecondary.withValues(alpha: 0.6),
+                                ),
+                              ),
+                            ),
+                          );
+                        }
                       }
 
                       final item = _activities[index];
@@ -236,7 +306,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                       return Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: AppColors.darkSurface,
+                          color: context.appSurface,
                           borderRadius: BorderRadius.circular(10),
                           border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
                         ),
@@ -262,19 +332,19 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                                               children: [
                                                 TextSpan(
                                                   text: userName,
-                                                  style: const TextStyle(
+                                                  style: TextStyle(
                                                     fontFamily: 'Overpass',
                                                     fontWeight: FontWeight.w800,
                                                     fontSize: 13.5,
-                                                    color: Colors.white,
+                                                    color: context.appTextPrimary,
                                                   ),
                                                 ),
                                                 if (!isText) ...[
                                                   TextSpan(
                                                     text: ' ${item['status'] ?? 'updated'}',
-                                                    style: const TextStyle(
+                                                    style: TextStyle(
                                                       fontSize: 12,
-                                                      color: AppColors.darkTextSecondary,
+                                                      color: context.appTextSecondary,
                                                     ),
                                                   ),
                                                   if (item['progress'] != null)
@@ -294,9 +364,9 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                                           ),
                                           Text(
                                             DateUtil.timeAgo(createdAt),
-                                            style: const TextStyle(
+                                            style: TextStyle(
                                               fontSize: 10.5,
-                                              color: AppColors.darkTextMuted,
+                                              color: context.appTextMuted,
                                             ),
                                           ),
                                         ],
@@ -312,10 +382,10 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                               const SizedBox(height: 8),
                               Text(
                                 item['text'] as String? ?? '',
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 13,
                                   height: 1.4,
-                                  color: AppColors.darkTextPrimary,
+                                  color: context.appTextPrimary,
                                 ),
                               ),
                             ] else if (item['media'] != null) ...[
@@ -335,7 +405,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                                 child: Container(
                                   padding: const EdgeInsets.all(8),
                                   decoration: BoxDecoration(
-                                    color: AppColors.darkBackground,
+                                    color: context.appBackground,
                                     borderRadius: BorderRadius.circular(6),
                                     border: Border.all(color: Colors.white.withValues(alpha: 0.04)),
                                   ),
@@ -353,11 +423,11 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                                           item['media']['title']?['userPreferred'] ?? '',
                                           maxLines: 2,
                                           overflow: TextOverflow.ellipsis,
-                                          style: const TextStyle(
+                                          style: TextStyle(
                                             fontFamily: 'Overpass',
                                             fontWeight: FontWeight.w700,
                                             fontSize: 12.5,
-                                            color: Colors.white,
+                                            color: context.appTextPrimary,
                                           ),
                                         ),
                                       ),
@@ -371,35 +441,44 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                             const SizedBox(height: 10),
                             Row(
                               children: [
-                                InkWell(
-                                  onTap: () => _toggleLike(index),
-                                  borderRadius: BorderRadius.circular(6),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: isLiked
-                                          ? AppColors.statusBehind.withValues(alpha: 0.12)
-                                          : Colors.white.withValues(alpha: 0.03),
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        Icon(
-                                          isLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                                          size: 16,
-                                          color: isLiked ? AppColors.statusBehind : AppColors.darkTextSecondary,
-                                        ),
-                                        const SizedBox(width: 5),
-                                        Text(
-                                          '$likeCount',
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.bold,
-                                            color: isLiked ? AppColors.statusBehind : AppColors.darkTextSecondary,
+                                Container(
+                                  decoration: BoxDecoration(
+                                    color: isLiked
+                                        ? AppColors.statusBehind.withValues(alpha: 0.12)
+                                        : Colors.white.withValues(alpha: 0.03),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      InkWell(
+                                        onTap: () => _toggleLike(index),
+                                        borderRadius: const BorderRadius.horizontal(left: Radius.circular(6)),
+                                        child: Padding(
+                                          padding: const EdgeInsets.fromLTRB(8, 4, 4, 4),
+                                          child: Icon(
+                                            isLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                                            size: 16,
+                                            color: isLiked ? AppColors.statusBehind : context.appTextSecondary,
                                           ),
                                         ),
-                                      ],
-                                    ),
+                                      ),
+                                      InkWell(
+                                        onTap: () => _openLikes(item),
+                                        borderRadius: const BorderRadius.horizontal(right: Radius.circular(6)),
+                                        child: Padding(
+                                          padding: const EdgeInsets.fromLTRB(2, 4, 8, 4),
+                                          child: Text(
+                                            '$likeCount',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.bold,
+                                              color: isLiked ? AppColors.statusBehind : context.appTextSecondary,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                                 const SizedBox(width: 8),
@@ -412,18 +491,18 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                       child: Row(
                                         children: [
-                                          const Icon(
+                                          Icon(
                                             Icons.chat_bubble_outline_rounded,
                                             size: 15,
-                                            color: AppColors.darkTextSecondary,
+                                            color: context.appTextSecondary,
                                           ),
                                           const SizedBox(width: 4),
                                           Text(
                                             replyCount > 0 ? '$replyCount' : 'Reply',
-                                            style: const TextStyle(
+                                            style: TextStyle(
                                               fontSize: 12,
                                               fontWeight: FontWeight.w600,
-                                              color: AppColors.darkTextSecondary,
+                                              color: context.appTextSecondary,
                                             ),
                                           ),
                                         ],
@@ -446,7 +525,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
     }
 
     return Scaffold(
-      backgroundColor: AppColors.darkBackground,
+      backgroundColor: context.appBackground,
       appBar: AppBar(
         title: const Text(
           'Activity',
@@ -464,7 +543,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
               height: 38,
               padding: const EdgeInsets.all(3),
               decoration: BoxDecoration(
-                color: AppColors.darkSurfaceInput,
+                color: context.appInputSurface,
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
               ),
@@ -480,7 +559,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                       },
                       child: Container(
                         decoration: BoxDecoration(
-                          color: _isFollowing ? AppColors.darkSurface : Colors.transparent,
+                          color: _isFollowing ? context.appSurface : Colors.transparent,
                           borderRadius: BorderRadius.circular(6),
                           boxShadow: _isFollowing
                               ? [
@@ -499,7 +578,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                             fontFamily: 'Overpass',
                             fontSize: 12.5,
                             fontWeight: FontWeight.w700,
-                            color: _isFollowing ? Colors.white : AppColors.darkTextSecondary,
+                            color: _isFollowing ? Colors.white : context.appTextSecondary,
                           ),
                         ),
                       ),
@@ -515,7 +594,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                       },
                       child: Container(
                         decoration: BoxDecoration(
-                          color: !_isFollowing ? AppColors.darkSurface : Colors.transparent,
+                          color: !_isFollowing ? context.appSurface : Colors.transparent,
                           borderRadius: BorderRadius.circular(6),
                           boxShadow: !_isFollowing
                               ? [
@@ -534,7 +613,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                             fontFamily: 'Overpass',
                             fontSize: 12.5,
                             fontWeight: FontWeight.w700,
-                            color: !_isFollowing ? Colors.white : AppColors.darkTextSecondary,
+                            color: !_isFollowing ? Colors.white : context.appTextSecondary,
                           ),
                         ),
                       ),

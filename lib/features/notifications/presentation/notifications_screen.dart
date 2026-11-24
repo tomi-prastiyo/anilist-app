@@ -10,6 +10,7 @@ import '../../../shared/feedback/shimmer_loading.dart';
 import '../../../shared/image/app_avatar.dart';
 import '../../../shared/image/app_network_image.dart';
 import '../../activity/presentation/widgets/activity_comments_bottom_sheet.dart';
+import '../../activity/presentation/widgets/activity_likes_bottom_sheet.dart';
 import '../../media_detail/presentation/media_detail_screen.dart';
 import '../../profile/presentation/profile_screen.dart';
 import '../data/notifications_repository.dart';
@@ -125,8 +126,29 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       return;
     }
 
-    // 3. Activity Notifications -> Open Activity Comments Bottom Sheet or User Profile
+    // 3. Activity Notifications -> Open Activity Likes or Comments Bottom Sheet
     if (activityId != null) {
+      final activityObj = notif['activity'] as Map<String, dynamic>?;
+      final activityMedia = media ?? (activityObj?['media'] as Map<String, dynamic>?);
+      final activityStatus = activityObj?['status'] as String?;
+      final activityProgress = activityObj?['progress'] != null ? '${activityObj!['progress']}' : null;
+
+      if (type.contains('ActivityLike')) {
+        showModalBottomSheet(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          builder: (context) => ActivityLikesBottomSheet(
+            activityId: activityId,
+            media: activityMedia,
+            activityStatus: activityStatus,
+            activityProgress: activityProgress,
+            activityUserName: user?['name'] as String?,
+          ),
+        );
+        return;
+      }
+
       showModalBottomSheet(
         context: context,
         isScrollControlled: true,
@@ -135,6 +157,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
           activityId: activityId,
           activityUserName: user?['name'] as String?,
           activityUserAvatar: user?['avatar']?['medium'] as String?,
+          media: activityMedia,
+          activityStatus: activityStatus,
+          activityProgress: activityProgress,
           initialReplyCount: 0,
         ),
       );
@@ -183,21 +208,21 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     final followCount = _notifications.where((n) => (n['__typename'] as String? ?? '').contains('Following')).length;
 
     return Scaffold(
-      backgroundColor: AppColors.darkBackground,
+      backgroundColor: context.appBackground,
       appBar: AppBar(
-        backgroundColor: AppColors.darkBackground,
+        backgroundColor: context.appBackground,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+          icon: Icon(Icons.arrow_back_rounded, color: context.appTextPrimary),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: const Text(
+        title: Text(
           'Notifications',
           style: TextStyle(
             fontFamily: 'Overpass',
             fontWeight: FontWeight.w800,
             fontSize: 19,
-            color: Colors.white,
+            color: context.appTextPrimary,
           ),
         ),
       ),
@@ -237,7 +262,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                     : RefreshIndicator(
                         onRefresh: _load,
                         color: AppColors.brandBlue,
-                        backgroundColor: AppColors.darkSurface,
+                        backgroundColor: context.appSurface,
                         child: ListView.separated(
                           controller: _scrollController,
                           physics: const AlwaysScrollableScrollPhysics(),
@@ -270,7 +295,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                                     fontFamily: 'Overpass',
                                     fontSize: 12,
                                     fontWeight: FontWeight.w600,
-                                    color: AppColors.darkTextSecondary.withValues(alpha: 0.6),
+                                    color: context.appTextSecondary.withValues(alpha: 0.6),
                                   ),
                                 ),
                               );
@@ -296,10 +321,10 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 7),
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.brandBlue.withValues(alpha: 0.2) : AppColors.darkCard,
+          color: isSelected ? AppColors.brandBlue.withValues(alpha: 0.2) : context.appCard,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isSelected ? AppColors.brandBlue : Colors.white.withValues(alpha: 0.08),
+            color: isSelected ? AppColors.brandBlue : context.appBorder,
           ),
         ),
         child: Text(
@@ -308,7 +333,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
             fontFamily: 'Overpass',
             fontSize: 12,
             fontWeight: FontWeight.w700,
-            color: isSelected ? AppColors.brandBlue : AppColors.darkTextSecondary,
+            color: isSelected ? AppColors.brandBlue : context.appTextSecondary,
           ),
         ),
       ),
@@ -321,8 +346,8 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     final user = notif['user'] as Map<String, dynamic>?;
     final userName = user?['name'] as String? ?? 'Someone';
     final userAvatar = user?['avatar']?['medium'] as String?;
-    final media = notif['media'] as Map<String, dynamic>?;
-    final mediaTitle = media?['title']?['userPreferred'] ?? media?['title']?['romaji'] ?? 'Anime';
+    final media = (notif['media'] as Map<String, dynamic>?) ?? (notif['activity']?['media'] as Map<String, dynamic>?);
+    final mediaTitle = media?['title']?['userPreferred'] ?? media?['title']?['romaji'] ?? media?['title']?['english'] ?? 'Anime';
     final mediaCover = media?['coverImage']?['medium'] as String?;
     final contextText = notif['context'] as String? ?? '';
 
@@ -342,12 +367,16 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       badgeColor = const Color(0xFF00B4D8);
     } else if (type.contains('Like')) {
       highlightPrefix = userName;
-      primaryText = contextText.isNotEmpty ? ' $contextText' : ' liked your activity';
+      primaryText = media != null
+          ? ' liked your activity on $mediaTitle'
+          : (contextText.isNotEmpty ? ' $contextText' : ' liked your activity');
       badgeIcon = Icons.favorite_rounded;
       badgeColor = AppColors.favoritePink;
     } else if (type.contains('Reply')) {
       highlightPrefix = userName;
-      primaryText = contextText.isNotEmpty ? ' $contextText' : ' replied to your activity';
+      primaryText = media != null
+          ? ' replied to your activity on $mediaTitle'
+          : (contextText.isNotEmpty ? ' $contextText' : ' replied to your activity');
       badgeIcon = Icons.chat_bubble_rounded;
       badgeColor = AppColors.brandBlue;
     } else if (type.contains('Mention')) {
@@ -398,12 +427,12 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         child: Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: AppColors.darkCard,
+            color: context.appCard,
             borderRadius: AppSpacing.borderRadius12,
-            border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+            border: Border.all(color: context.appBorder),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.2),
+                color: Colors.black.withValues(alpha: context.isDark ? 0.2 : 0.05),
                 blurRadius: 6,
                 offset: const Offset(0, 2),
               ),
@@ -436,7 +465,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                       child: Container(
                         padding: const EdgeInsets.all(3),
                         decoration: BoxDecoration(
-                          color: AppColors.darkCard,
+                          color: context.appCard,
                           shape: BoxShape.circle,
                         ),
                         child: Container(
@@ -467,20 +496,20 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                         children: [
                           TextSpan(
                             text: highlightPrefix,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontFamily: 'Overpass',
                               fontSize: 13,
                               fontWeight: FontWeight.w800,
-                              color: Colors.white,
+                              color: context.appTextPrimary,
                             ),
                           ),
                           TextSpan(
                             text: primaryText,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontFamily: 'Overpass',
                               fontSize: 13,
                               fontWeight: FontWeight.w500,
-                              color: AppColors.darkTextSecondary,
+                              color: context.appTextSecondary,
                             ),
                           ),
                         ],
@@ -489,18 +518,18 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                     const SizedBox(height: 4),
                     Text(
                       time,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontFamily: 'Overpass',
                         fontSize: 11,
-                        color: AppColors.darkTextMuted,
+                        color: context.appTextMuted,
                       ),
                     ),
                   ],
                 ),
               ),
 
-              // Trailing Media Thumbnail (for Airing notifications)
-              if (isAiring && mediaCover != null) ...[
+              // Trailing Media Thumbnail (if media is associated)
+              if (mediaCover != null) ...[
                 const SizedBox(width: 10),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(6),
@@ -511,10 +540,10 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                   ),
                 ),
               ] else ...[
-                const Icon(
+                Icon(
                   Icons.chevron_right_rounded,
                   size: 18,
-                  color: AppColors.darkTextMuted,
+                  color: context.appTextMuted,
                 ),
               ],
             ],

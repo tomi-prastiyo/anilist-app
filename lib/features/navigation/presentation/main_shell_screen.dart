@@ -27,13 +27,13 @@ class _MainShellScreenState extends State<MainShellScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.darkBackground,
+      backgroundColor: context.appBackground,
       body: IndexedStack(
         index: _currentIndex,
         children: _screens,
       ),
       bottomNavigationBar: Container(
-        color: AppColors.darkBackground,
+        color: context.appBackground,
         child: SafeArea(
           top: false,
           child: Padding(
@@ -41,17 +41,20 @@ class _MainShellScreenState extends State<MainShellScreen> {
             child: Container(
               height: 60,
               decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Color(0xFF172334),
-                    Color(0xFF121B28),
-                  ],
-                ),
+                color: context.isDark ? null : Colors.white,
+                gradient: context.isDark
+                    ? const LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Color(0xFF172334),
+                          Color(0xFF121B28),
+                        ],
+                      )
+                    : null,
                 borderRadius: BorderRadius.circular(24),
                 border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.09),
+                  color: context.isDark ? Colors.white.withValues(alpha: 0.09) : AppColors.lightBorder,
                 ),
                 boxShadow: [
                   BoxShadow(
@@ -114,7 +117,7 @@ class _MainShellScreenState extends State<MainShellScreen> {
                 isSelected ? activeIcon : outlineIcon,
                 key: ValueKey<bool>(isSelected),
                 size: 21,
-                color: isSelected ? AppColors.brandBlue : AppColors.darkTextSecondary,
+                color: isSelected ? AppColors.brandBlue : context.appTextSecondary,
               ),
             ),
             const SizedBox(height: 2),

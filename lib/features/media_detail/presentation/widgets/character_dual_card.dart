@@ -30,16 +30,16 @@ class CharacterDualCard extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.darkCard,
+        color: context.appCard,
         borderRadius: AppSpacing.borderRadius12,
         border: Border.all(
           color: isMain
               ? const Color(0xFFFFB703).withValues(alpha: 0.25)
-              : Colors.white.withValues(alpha: 0.06),
+              : context.appBorder,
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.2),
+            color: context.isDark ? Colors.black.withValues(alpha: 0.2) : Colors.black.withValues(alpha: 0.04),
             blurRadius: 6,
             offset: const Offset(0, 2),
           ),
@@ -75,11 +75,11 @@ class CharacterDualCard extends StatelessWidget {
                             charName,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontFamily: 'Overpass',
                               fontSize: 12.5,
                               fontWeight: FontWeight.w700,
-                              color: Colors.white,
+                              color: context.appTextPrimary,
                             ),
                           ),
                           const SizedBox(height: 3),
@@ -88,7 +88,7 @@ class CharacterDualCard extends StatelessWidget {
                             decoration: BoxDecoration(
                               color: isMain
                                   ? const Color(0xFFFFB703).withValues(alpha: 0.15)
-                                  : Colors.white.withValues(alpha: 0.08),
+                                  : (context.isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.05)),
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(
@@ -97,7 +97,7 @@ class CharacterDualCard extends StatelessWidget {
                                 fontFamily: 'Overpass',
                                 fontSize: 9.5,
                                 fontWeight: FontWeight.w800,
-                                color: isMain ? const Color(0xFFFFB703) : AppColors.darkTextSecondary,
+                                color: isMain ? const Color(0xFFFFB703) : context.appTextSecondary,
                               ),
                             ),
                           ),
@@ -114,7 +114,7 @@ class CharacterDualCard extends StatelessWidget {
           Container(
             width: 1,
             height: 40,
-            color: Colors.white.withValues(alpha: 0.08),
+            color: context.appBorder,
           ),
 
           // Right: Voice Actor (Seiyuu)
@@ -145,11 +145,11 @@ class CharacterDualCard extends StatelessWidget {
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   textAlign: TextAlign.right,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontFamily: 'Overpass',
                                     fontSize: 12.5,
                                     fontWeight: FontWeight.w600,
-                                    color: Colors.white,
+                                    color: context.appTextPrimary,
                                   ),
                                 ),
                                 const SizedBox(height: 3),
@@ -178,12 +178,12 @@ class CharacterDualCard extends StatelessWidget {
                       )
                     : Container(
                         alignment: Alignment.center,
-                        child: const Text(
+                        child: Text(
                           'No VA listed',
                           style: TextStyle(
                             fontFamily: 'Overpass',
                             fontSize: 11,
-                            color: AppColors.darkTextMuted,
+                            color: context.appTextMuted,
                           ),
                         ),
                       ),

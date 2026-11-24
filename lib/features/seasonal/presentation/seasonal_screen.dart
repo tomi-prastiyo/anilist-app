@@ -114,27 +114,27 @@ class _SeasonalScreenState extends ConsumerState<SeasonalScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.darkBackground,
+      backgroundColor: context.appBackground,
       appBar: AppBar(
         titleSpacing: AppSpacing.p16,
         title: Row(
           children: [
-            const Text(
+            Text(
               'Seasonal Chart',
               style: TextStyle(
                 fontFamily: 'Overpass',
                 fontWeight: FontWeight.w900,
                 fontSize: 18,
-                color: Colors.white,
+                color: context.appTextPrimary,
               ),
             ),
             const SizedBox(width: 8),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
               decoration: BoxDecoration(
-                color: AppColors.darkSurface,
+                color: context.appSurface,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+                border: Border.all(color: context.appBorder),
               ),
               child: Text(
                 '$_selectedSeason $_selectedYear',
@@ -159,26 +159,26 @@ class _SeasonalScreenState extends ConsumerState<SeasonalScreen> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12),
                     decoration: BoxDecoration(
-                      color: AppColors.darkSurfaceInput,
+                      color: context.appInputSurface,
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                      border: Border.all(color: context.appBorder),
                     ),
                     child: DropdownButtonHideUnderline(
                       child: DropdownButton<String>(
                         value: _selectedSeason,
-                        dropdownColor: AppColors.darkSurface,
+                        dropdownColor: context.appSurface,
                         isExpanded: true,
-                        icon: const Icon(Icons.arrow_drop_down_rounded, color: AppColors.darkTextSecondary),
+                        icon: Icon(Icons.arrow_drop_down_rounded, color: context.appTextSecondary),
                         items: _seasons.map((s) {
                           return DropdownMenuItem(
                             value: s,
                             child: Text(
                               s,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontFamily: 'Overpass',
                                 fontSize: 13,
                                 fontWeight: FontWeight.w700,
-                                color: Colors.white,
+                                color: context.appTextPrimary,
                               ),
                             ),
                           );
@@ -201,25 +201,25 @@ class _SeasonalScreenState extends ConsumerState<SeasonalScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   decoration: BoxDecoration(
-                    color: AppColors.darkSurfaceInput,
+                    color: context.appInputSurface,
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                    border: Border.all(color: context.appBorder),
                   ),
                   child: DropdownButtonHideUnderline(
                     child: DropdownButton<int>(
                       value: _selectedYear,
-                      dropdownColor: AppColors.darkSurface,
-                      icon: const Icon(Icons.arrow_drop_down_rounded, color: AppColors.darkTextSecondary),
+                      dropdownColor: context.appSurface,
+                      icon: Icon(Icons.arrow_drop_down_rounded, color: context.appTextSecondary),
                       items: _years.map((y) {
                         return DropdownMenuItem(
                           value: y,
                           child: Text(
                             '$y',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontFamily: 'Overpass',
                               fontSize: 13,
                               fontWeight: FontWeight.w700,
-                              color: Colors.white,
+                              color: context.appTextPrimary,
                             ),
                           ),
                         );
@@ -252,7 +252,7 @@ class _SeasonalScreenState extends ConsumerState<SeasonalScreen> {
               : RefreshIndicator(
                   onRefresh: () => _loadSeasonalMedia(reset: true),
                   color: AppColors.brandBlue,
-                  backgroundColor: AppColors.darkSurface,
+                  backgroundColor: context.appSurface,
                   child: CustomScrollView(
                     controller: _scrollController,
                     physics: const AlwaysScrollableScrollPhysics(),

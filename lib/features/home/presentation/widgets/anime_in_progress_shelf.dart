@@ -54,11 +54,11 @@ class AnimeInProgressShelf extends ConsumerWidget {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      const Text(
+                      Text(
                         'ANIME IN PROGRESS',
                         style: TextStyle(
                           fontFamily: 'Overpass',
-                          color: Colors.white,
+                          color: context.appTextPrimary,
                           fontSize: 12,
                           fontWeight: FontWeight.w800,
                           letterSpacing: 0.6,
@@ -133,7 +133,7 @@ class AnimeInProgressShelf extends ConsumerWidget {
                   return Container(
                     width: 260,
                     decoration: BoxDecoration(
-                      color: AppColors.darkSurface,
+                      color: context.appSurface,
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
                       boxShadow: [
@@ -218,20 +218,20 @@ class AnimeInProgressShelf extends ConsumerWidget {
                                       title,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontFamily: 'Overpass',
                                         fontWeight: FontWeight.w800,
                                         fontSize: 12,
-                                        color: Colors.white,
+                                        color: context.appTextPrimary,
                                       ),
                                     ),
                                     const SizedBox(height: 1),
                                     Text(
                                       'Episode $progress of ${totalEpisodes ?? '?'}',
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontFamily: 'Overpass',
                                         fontSize: 10.5,
-                                        color: AppColors.darkTextSecondary,
+                                        color: context.appTextSecondary,
                                       ),
                                     ),
                                   ],
@@ -251,7 +251,7 @@ class AnimeInProgressShelf extends ConsumerWidget {
                                           borderRadius: BorderRadius.circular(4),
                                           child: LinearProgressIndicator(
                                             value: progressPercent,
-                                            backgroundColor: AppColors.darkSurfaceInput,
+                                            backgroundColor: context.appInputSurface,
                                             valueColor: const AlwaysStoppedAnimation<Color>(AppColors.brandBlue),
                                             minHeight: 6,
                                           ),

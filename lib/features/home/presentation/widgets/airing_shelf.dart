@@ -36,11 +36,11 @@ class AiringShelf extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  const Text(
+                  Text(
                     'AIRING TODAY & SOON',
                     style: TextStyle(
                       fontFamily: 'Overpass',
-                      color: Colors.white,
+                      color: context.appTextPrimary,
                       fontSize: 12,
                       fontWeight: FontWeight.w800,
                       letterSpacing: 0.6,
@@ -106,7 +106,7 @@ class AiringShelf extends StatelessWidget {
                 child: Container(
                   width: 130,
                   decoration: BoxDecoration(
-                    color: AppColors.darkSurface,
+                    color: context.appSurface,
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
                   ),
@@ -163,20 +163,20 @@ class AiringShelf extends StatelessWidget {
                         title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontFamily: 'Overpass',
                           fontWeight: FontWeight.w700,
                           fontSize: 11.5,
-                          color: Colors.white,
+                          color: context.appTextPrimary,
                         ),
                       ),
                       const SizedBox(height: 1),
                       Text(
                         'Episode $episode Airing',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontFamily: 'Overpass',
                           fontSize: 10,
-                          color: AppColors.darkTextSecondary,
+                          color: context.appTextSecondary,
                         ),
                       ),
                     ],

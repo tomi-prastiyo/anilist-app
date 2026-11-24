@@ -35,7 +35,6 @@ class MediaMutualFriendsCard extends StatelessWidget {
   String _formatStatusLabel(Map<String, dynamic> item) {
     final status = (item['status'] as String? ?? '').toUpperCase();
     final progress = item['progress'] as int? ?? 0;
-    final score = (item['score'] as num?)?.toDouble() ?? 0.0;
 
     switch (status) {
       case 'CURRENT':
@@ -45,7 +44,7 @@ class MediaMutualFriendsCard extends StatelessWidget {
           return progress > 0 ? 'Reading • Ch $progress' : 'Reading';
         }
       case 'COMPLETED':
-        return score > 0 ? 'Completed • ${score.toStringAsFixed(0)}%' : 'Completed';
+        return 'Completed';
       case 'PLANNING':
         return 'Planning';
       case 'PAUSED':
@@ -65,12 +64,12 @@ class MediaMutualFriendsCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(AppSpacing.p16),
       decoration: BoxDecoration(
-        color: AppColors.darkCard,
+        color: context.appCard,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.07)),
+        border: Border.all(color: context.appBorder),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.25),
+            color: context.isDark ? Colors.black.withValues(alpha: 0.25) : Colors.black.withValues(alpha: 0.04),
             blurRadius: 8,
             offset: const Offset(0, 3),
           ),
@@ -98,13 +97,13 @@ class MediaMutualFriendsCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  const Text(
+                  Text(
                     'Following Activity',
                     style: TextStyle(
                       fontFamily: 'Overpass',
                       fontSize: 15,
                       fontWeight: FontWeight.w800,
-                      color: Colors.white,
+                      color: context.appTextPrimary,
                     ),
                   ),
                 ],
@@ -145,9 +144,10 @@ class MediaMutualFriendsCard extends StatelessWidget {
                 final avatarUrl = user?['avatar']?['medium'] as String?;
                 final statusColor = _getStatusColor(friend['status'] as String?);
                 final statusLabel = _formatStatusLabel(friend);
+                final score = (friend['score'] as num?)?.toDouble() ?? 0.0;
 
                 return Material(
-                  color: AppColors.darkSurface,
+                  color: context.appSurface,
                   borderRadius: BorderRadius.circular(10),
                   child: InkWell(
                     borderRadius: BorderRadius.circular(10),
@@ -165,7 +165,7 @@ class MediaMutualFriendsCard extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+                        border: Border.all(color: context.appBorder),
                       ),
                       child: Row(
                         children: [
@@ -182,7 +182,7 @@ class MediaMutualFriendsCard extends StatelessWidget {
                                   decoration: BoxDecoration(
                                     color: statusColor,
                                     shape: BoxShape.circle,
-                                    border: Border.all(color: AppColors.darkSurface, width: 2),
+                                    border: Border.all(color: context.appSurface, width: 2),
                                   ),
                                 ),
                               ),
@@ -197,29 +197,62 @@ class MediaMutualFriendsCard extends StatelessWidget {
                                 userName,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontFamily: 'Overpass',
                                   fontSize: 13,
                                   fontWeight: FontWeight.w700,
-                                  color: Colors.white,
+                                  color: context.appTextPrimary,
                                 ),
                               ),
-                              const SizedBox(height: 2),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: statusColor.withValues(alpha: 0.14),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Text(
-                                  statusLabel,
-                                  style: TextStyle(
-                                    fontFamily: 'Overpass',
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w700,
-                                    color: statusColor,
+                              const SizedBox(height: 3),
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: statusColor.withValues(alpha: 0.14),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      statusLabel,
+                                      style: TextStyle(
+                                        fontFamily: 'Overpass',
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w700,
+                                        color: statusColor,
+                                      ),
+                                    ),
                                   ),
-                                ),
+                                  if (score > 0) ...[
+                                    const SizedBox(width: 5),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFF59E0B).withValues(alpha: 0.16),
+                                        borderRadius: BorderRadius.circular(4),
+                                        border: Border.all(
+                                          color: const Color(0xFFF59E0B).withValues(alpha: 0.4),
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Icon(Icons.star_rounded, size: 10, color: Color(0xFFF59E0B)),
+                                          const SizedBox(width: 2),
+                                          Text(
+                                            score > 10 ? '${score.toInt()}%' : score.toStringAsFixed(1),
+                                            style: const TextStyle(
+                                              fontFamily: 'Overpass',
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.w800,
+                                              color: Color(0xFFF59E0B),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ],
                               ),
                             ],
                           ),

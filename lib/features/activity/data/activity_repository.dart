@@ -34,6 +34,15 @@ class ActivityRepository {
                 medium
               }
             }
+            likes {
+              id
+              name
+              avatar {
+                medium
+              }
+              isFollowing
+              isFollower
+            }
           }
           ... on ListActivity {
             id
@@ -52,12 +61,25 @@ class ActivityRepository {
             }
             media {
               id
+              type
               title {
                 userPreferred
+                romaji
+                english
               }
               coverImage {
                 medium
+                large
               }
+            }
+            likes {
+              id
+              name
+              avatar {
+                medium
+              }
+              isFollowing
+              isFollower
             }
           }
         }
@@ -114,6 +136,76 @@ class ActivityRepository {
     mutation ToggleLikeMutation($id: Int, $type: LikeableType) {
       ToggleLikeV2(id: $id, type: $type) {
         __typename
+      }
+    }
+  ''';
+
+  static const String activityDetailQuery = r'''
+    query ActivityDetailQuery($id: Int) {
+      Activity(id: $id) {
+        __typename
+        ... on ListActivity {
+          id
+          status
+          progress
+          createdAt
+          replyCount
+          likeCount
+          isLiked
+          user {
+            id
+            name
+            avatar {
+              medium
+            }
+          }
+          media {
+            id
+            type
+            title {
+              userPreferred
+              romaji
+              english
+            }
+            coverImage {
+              medium
+              large
+            }
+          }
+          likes {
+            id
+            name
+            avatar {
+              medium
+            }
+            isFollowing
+            isFollower
+          }
+        }
+        ... on TextActivity {
+          id
+          text(asHtml: false)
+          createdAt
+          replyCount
+          likeCount
+          isLiked
+          user {
+            id
+            name
+            avatar {
+              medium
+            }
+          }
+          likes {
+            id
+            name
+            avatar {
+              medium
+            }
+            isFollowing
+            isFollower
+          }
+        }
       }
     }
   ''';
@@ -191,6 +283,14 @@ class ActivityRepository {
       },
     );
     return response['SaveActivityReply'] as Map<String, dynamic>? ?? {};
+  }
+
+  Future<Map<String, dynamic>?> fetchActivityDetail(int activityId) async {
+    final response = await _apiClient.postGraphQL(
+      query: activityDetailQuery,
+      variables: {'id': activityId},
+    );
+    return response['Activity'] as Map<String, dynamic>?;
   }
 
   Future<void> toggleReplyLike(int replyId) async {

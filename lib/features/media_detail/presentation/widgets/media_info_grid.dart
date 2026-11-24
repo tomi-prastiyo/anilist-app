@@ -93,12 +93,12 @@ class MediaInfoGrid extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.darkCard,
+        color: context.appCard,
         borderRadius: AppSpacing.borderRadius16,
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        border: Border.all(color: context.appBorder),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.2),
+            color: context.isDark ? Colors.black.withValues(alpha: 0.2) : Colors.black.withValues(alpha: 0.04),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -152,10 +152,10 @@ class MediaInfoGrid extends StatelessWidget {
                     children: [
                       Text(
                         item['label']!,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontFamily: 'Overpass',
                           fontSize: 11,
-                          color: AppColors.darkTextMuted,
+                          color: context.appTextMuted,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -164,11 +164,11 @@ class MediaInfoGrid extends StatelessWidget {
                         item['value']!,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontFamily: 'Overpass',
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
-                          color: Colors.white,
+                          color: context.appTextPrimary,
                         ),
                       ),
                     ],

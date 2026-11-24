@@ -117,7 +117,7 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
   void _showSortMenu(BuildContext context) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: AppColors.darkSurface,
+      backgroundColor: context.appSurface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -129,15 +129,15 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                   child: Text(
                     'Sort Collection By',
                     style: TextStyle(
                       fontFamily: 'Overpass',
                       fontWeight: FontWeight.w800,
                       fontSize: 16,
-                      color: Colors.white,
+                      color: context.appTextPrimary,
                     ),
                   ),
                 ),
@@ -148,7 +148,7 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
                       isSelected ? Icons.radio_button_checked_rounded : Icons.radio_button_off_rounded,
                       color: isSelected
                           ? (widget.type == 'ANIME' ? AppColors.brandBlue : const Color(0xFF7C57E8))
-                          : AppColors.darkTextSecondary,
+                          : context.appTextSecondary,
                       size: 20,
                     ),
                     title: Text(
@@ -156,7 +156,9 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
                       style: TextStyle(
                         fontFamily: 'Overpass',
                         fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                        color: isSelected ? Colors.white : AppColors.darkTextSecondary,
+                        color: isSelected
+                            ? (widget.type == 'ANIME' ? AppColors.brandBlue : const Color(0xFF7C57E8))
+                            : context.appTextPrimary,
                         fontSize: 14,
                       ),
                     ),
@@ -188,7 +190,7 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          backgroundColor: AppColors.darkSurface,
+          backgroundColor: context.appSurface,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: Text(
             'Rate: $title',
@@ -232,7 +234,7 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
                 max: maxScore,
                 divisions: divisions,
                 activeColor: widget.type == 'ANIME' ? AppColors.brandBlue : const Color(0xFF7C57E8),
-                inactiveColor: AppColors.darkSurfaceInput,
+                inactiveColor: context.appInputSurface,
                 onChanged: (val) {
                   setDialogState(() => tempScore = val);
                 },
@@ -242,7 +244,7 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel', style: TextStyle(color: AppColors.darkTextSecondary)),
+              child: Text('Cancel', style: TextStyle(color: context.appTextSecondary)),
             ),
             ElevatedButton(
               onPressed: () {
@@ -258,7 +260,7 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: widget.type == 'ANIME' ? AppColors.brandBlue : const Color(0xFF7C57E8),
-                foregroundColor: widget.type == 'ANIME' ? AppColors.darkBackground : Colors.white,
+                foregroundColor: widget.type == 'ANIME' ? context.appBackground : Colors.white,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
               child: const Text('Save Score', style: TextStyle(fontWeight: FontWeight.w800)),
@@ -280,7 +282,7 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
 
     if (isGuest) {
       return Scaffold(
-        backgroundColor: AppColors.darkBackground,
+        backgroundColor: context.appBackground,
         appBar: AppBar(title: Text(listTitle)),
         body: EmptyView(
           title: 'Sign in to access your list',
@@ -318,27 +320,27 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
     });
 
     return Scaffold(
-      backgroundColor: AppColors.darkBackground,
+      backgroundColor: context.appBackground,
       appBar: AppBar(
         titleSpacing: AppSpacing.p16,
         title: Row(
           children: [
             Text(
               listTitle,
-              style: const TextStyle(
+              style: TextStyle(
                 fontFamily: 'Overpass',
                 fontWeight: FontWeight.w900,
                 fontSize: 18,
-                color: Colors.white,
+                color: context.appTextPrimary,
               ),
             ),
             const SizedBox(width: 8),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
               decoration: BoxDecoration(
-                color: AppColors.darkSurface,
+                color: context.appSurface,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+                border: Border.all(color: context.appBorder),
               ),
               child: Text(
                 '$totalCount Total',
@@ -388,21 +390,21 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
               child: Container(
                 height: 40,
                 decoration: BoxDecoration(
-                  color: AppColors.darkSurfaceInput,
+                  color: context.appInputSurface,
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                  border: Border.all(color: context.appBorder),
                 ),
                 child: TextField(
                   controller: _searchController,
                   autofocus: true,
-                  style: const TextStyle(fontSize: 13, color: Colors.white),
+                  style: TextStyle(fontSize: 13, color: context.appTextPrimary),
                   decoration: InputDecoration(
                     hintText: 'Search $listTitle...',
-                    hintStyle: const TextStyle(color: AppColors.darkTextMuted, fontSize: 13),
-                    prefixIcon: const Icon(Icons.search_rounded, size: 18, color: AppColors.darkTextSecondary),
+                    hintStyle: TextStyle(color: context.appTextMuted, fontSize: 13),
+                    prefixIcon: Icon(Icons.search_rounded, size: 18, color: context.appTextSecondary),
                     suffixIcon: _searchQuery.isNotEmpty
                         ? IconButton(
-                            icon: const Icon(Icons.clear_rounded, size: 16, color: AppColors.darkTextSecondary),
+                            icon: Icon(Icons.clear_rounded, size: 16, color: context.appTextSecondary),
                             onPressed: () {
                               _searchDebounce?.cancel();
                               _searchController.clear();
@@ -448,7 +450,7 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      color: isSelected ? accentColor : AppColors.darkSurface,
+                      color: isSelected ? accentColor : context.appSurface,
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
                         color: isSelected ? accentColor : Colors.white.withValues(alpha: 0.08),
@@ -473,8 +475,8 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
                             fontSize: 12,
                             fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
                             color: isSelected
-                                ? (isAnime ? AppColors.darkBackground : Colors.white)
-                                : Colors.white70,
+                                ? (isAnime ? context.appBackground : Colors.white)
+                                : context.appTextSecondary,
                           ),
                         ),
                         const SizedBox(width: 6),
@@ -485,7 +487,7 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
                                 ? (isAnime
                                     ? Colors.black.withValues(alpha: 0.18)
                                     : Colors.white.withValues(alpha: 0.25))
-                                : Colors.white.withValues(alpha: 0.08),
+                                : (context.isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.06)),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
@@ -495,8 +497,8 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
                               fontSize: 10,
                               fontWeight: FontWeight.w800,
                               color: isSelected
-                                  ? (isAnime ? AppColors.darkBackground : Colors.white)
-                                  : AppColors.darkTextSecondary,
+                                  ? (isAnime ? context.appBackground : Colors.white)
+                                  : context.appTextSecondary,
                             ),
                           ),
                         ),
@@ -573,7 +575,7 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
                     return RefreshIndicator(
                       onRefresh: () => ref.read(provider.notifier).loadLists(),
                       color: accentColor,
-                      backgroundColor: AppColors.darkSurface,
+                      backgroundColor: context.appSurface,
                       child: _buildLayout(
                         entries,
                         status: status,

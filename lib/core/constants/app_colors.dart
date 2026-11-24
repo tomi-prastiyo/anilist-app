@@ -84,4 +84,37 @@ class AppColors {
         return brandBlue;
     }
   }
+
+  // Dynamic Theme-Aware Helpers
+  static Color background(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark ? darkBackground : lightBackground;
+  static Color surface(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark ? darkSurface : lightSurface;
+  static Color card(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark ? darkCard : lightCard;
+  static Color border(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark ? const Color(0x14FFFFFF) : lightBorder;
+  static Color textPrimary(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark ? darkTextPrimary : lightTextPrimary;
+  static Color textSecondary(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark ? darkTextSecondary : lightTextSecondary;
+  static Color textMuted(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark ? darkTextMuted : lightTextMuted;
+  static Color inputSurface(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark ? darkSurfaceInput : Colors.white;
 }
+
+/// Convenience extension on [BuildContext] for clean, responsive theming.
+extension ThemeContext on BuildContext {
+  bool get isDark => Theme.of(this).brightness == Brightness.dark;
+
+  Color get appBackground => isDark ? AppColors.darkBackground : AppColors.lightBackground;
+  Color get appSurface => isDark ? AppColors.darkSurface : AppColors.lightSurface;
+  Color get appCard => isDark ? AppColors.darkCard : AppColors.lightCard;
+  Color get appBorder => isDark ? const Color(0x14FFFFFF) : AppColors.lightBorder;
+  Color get appTextPrimary => isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary;
+  Color get appTextSecondary => isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary;
+  Color get appTextMuted => isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted;
+  Color get appInputSurface => isDark ? AppColors.darkSurfaceInput : Colors.white;
+}
+

@@ -173,9 +173,9 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(
-        backgroundColor: AppColors.darkBackground,
-        body: Center(
+      return Scaffold(
+        backgroundColor: context.appBackground,
+        body: const Center(
           child: CircularProgressIndicator(color: AppColors.brandBlue),
         ),
       );
@@ -183,8 +183,8 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
 
     if (_errorMessage != null) {
       return Scaffold(
-        backgroundColor: AppColors.darkBackground,
-        appBar: AppBar(backgroundColor: AppColors.darkBackground),
+        backgroundColor: context.appBackground,
+        appBar: AppBar(backgroundColor: context.appBackground),
         body: ErrorView(message: _errorMessage!, onRetry: _loadMedia),
       );
     }
@@ -202,13 +202,13 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
     final isAuthenticated = authState is Authenticated;
 
     return Scaffold(
-      backgroundColor: AppColors.darkBackground,
+      backgroundColor: context.appBackground,
       body: NestedScrollView(
         headerSliverBuilder: (context, innerBoxIsScrolled) => [
           SliverAppBar(
             expandedHeight: 270,
             pinned: true,
-            backgroundColor: AppColors.darkSurface,
+            backgroundColor: context.appSurface,
             leading: IconButton(
               icon: Container(
                 padding: const EdgeInsets.all(7),
@@ -254,8 +254,8 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
                         end: Alignment.bottomCenter,
                         colors: [
                           Colors.transparent,
-                          AppColors.darkBackground.withValues(alpha: 0.75),
-                          AppColors.darkBackground,
+                          context.appBackground.withValues(alpha: 0.75),
+                          context.appBackground,
                         ],
                       ),
                     ),
@@ -284,13 +284,29 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
                                 title,
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontFamily: 'Overpass',
                                   fontSize: 18,
                                   fontWeight: FontWeight.w800,
-                                  color: Colors.white,
+                                  color: context.appTextPrimary,
                                 ),
                               ),
+                              if ((media['title']?['english'] as String?) != null &&
+                                  (media['title']?['english'] as String).isNotEmpty &&
+                                  media['title']?['english'] != title) ...[
+                                const SizedBox(height: 2),
+                                Text(
+                                  media['title']['english'] as String,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontFamily: 'Overpass',
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: context.appTextSecondary,
+                                  ),
+                                ),
+                              ],
                               const SizedBox(height: 6),
                               Wrap(
                                 spacing: 6,
@@ -346,7 +362,7 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
                 indicatorColor: AppColors.brandBlue,
                 indicatorWeight: 3,
                 labelColor: AppColors.brandBlue,
-                unselectedLabelColor: AppColors.darkTextSecondary,
+                unselectedLabelColor: context.appTextSecondary,
                 labelStyle: const TextStyle(fontFamily: 'Overpass', fontWeight: FontWeight.w800, fontSize: 13.5),
                 unselectedLabelStyle: const TextStyle(fontFamily: 'Overpass', fontWeight: FontWeight.w600, fontSize: 13.5),
                 tabs: const [
@@ -379,6 +395,11 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
     final externalLinks = (media['externalLinks'] as List?)?.cast<Map<String, dynamic>>() ?? [];
     final recNodes = (media['recommendations']?['nodes'] as List?)?.cast<Map<String, dynamic>>() ?? [];
     final title = TextUtil.getPreferredTitle(media['title']);
+    final titleObj = media['title'] as Map<String, dynamic>?;
+    final romajiTitle = titleObj?['romaji'] as String?;
+    final englishTitle = titleObj?['english'] as String?;
+    final nativeTitle = titleObj?['native'] as String?;
+    final synonyms = (media['synonyms'] as List?)?.cast<String>() ?? [];
 
     // Synopsis truncation logic
     final isLongSynopsis = rawDescription.length > 250;
@@ -398,13 +419,13 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
+              Text(
                 'Synopsis',
                 style: TextStyle(
                   fontFamily: 'Overpass',
                   fontSize: 16,
                   fontWeight: FontWeight.w800,
-                  color: Colors.white,
+                  color: context.appTextPrimary,
                 ),
               ),
               if (isLongSynopsis)
@@ -412,7 +433,7 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
                   onTap: () => setState(() => _isSynopsisExpanded = !_isSynopsisExpanded),
                   child: Text(
                     _isSynopsisExpanded ? 'Show Less' : 'Read More',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontFamily: 'Overpass',
                       fontSize: 12.5,
                       fontWeight: FontWeight.w700,
@@ -426,10 +447,10 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
           MarkdownBody(
             data: displayDescription,
             styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
-              p: const TextStyle(
+              p: TextStyle(
                 fontFamily: 'Overpass',
                 fontSize: 13.5,
-                color: AppColors.darkTextSecondary,
+                color: context.appTextSecondary,
                 height: 1.5,
               ),
             ),
@@ -438,18 +459,26 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
         ],
 
         // Media Info Grid (Structured 2-column details)
-        const Text(
+        Text(
           'Information',
           style: TextStyle(
             fontFamily: 'Overpass',
             fontSize: 16,
             fontWeight: FontWeight.w800,
-            color: Colors.white,
+            color: context.appTextPrimary,
           ),
         ),
         const SizedBox(height: 10),
         MediaInfoGrid(media: media),
         const SizedBox(height: 18),
+
+        // Alternative Titles Section (All Versions: Romaji, English, Native, Synonyms)
+        _buildTitlesCard(
+          romaji: romajiTitle,
+          english: englishTitle,
+          native: nativeTitle,
+          synonyms: synonyms,
+        ),
 
         // Opening & Ending Theme Songs (for Anime)
         if (isAnime) ...[
@@ -465,13 +494,13 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
 
         // Tags with percentage rank
         if (tags.isNotEmpty) ...[
-          const Text(
+          Text(
             'Tags',
             style: TextStyle(
               fontFamily: 'Overpass',
               fontSize: 16,
               fontWeight: FontWeight.w800,
-              color: Colors.white,
+              color: context.appTextPrimary,
             ),
           ),
           const SizedBox(height: 10),
@@ -488,12 +517,12 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
                 decoration: BoxDecoration(
                   color: isSpoiler
                       ? AppColors.statusDropped.withValues(alpha: 0.15)
-                      : AppColors.darkCard,
+                      : context.appCard,
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
                     color: isSpoiler
                         ? AppColors.statusDropped.withValues(alpha: 0.4)
-                        : Colors.white.withValues(alpha: 0.08),
+                        : context.appBorder,
                   ),
                 ),
                 child: Row(
@@ -505,7 +534,7 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
                         fontFamily: 'Overpass',
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color: isSpoiler ? AppColors.statusDropped : Colors.white,
+                        color: isSpoiler ? AppColors.statusDropped : context.appTextPrimary,
                       ),
                     ),
                     const SizedBox(width: 6),
@@ -528,13 +557,13 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
 
         // External Links
         if (externalLinks.isNotEmpty) ...[
-          const Text(
+          Text(
             'External Links',
             style: TextStyle(
               fontFamily: 'Overpass',
               fontSize: 16,
               fontWeight: FontWeight.w800,
-              color: Colors.white,
+              color: context.appTextPrimary,
             ),
           ),
           const SizedBox(height: 10),
@@ -550,9 +579,9 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                   decoration: BoxDecoration(
-                    color: AppColors.darkCard,
+                    color: context.appCard,
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                    border: Border.all(color: context.appBorder),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -561,11 +590,11 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
                       const SizedBox(width: 6),
                       Text(
                         site,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontFamily: 'Overpass',
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
-                          color: Colors.white,
+                          color: context.appTextPrimary,
                         ),
                       ),
                     ],
@@ -579,13 +608,13 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
 
         // Recommendations Carousel
         if (recNodes.isNotEmpty) ...[
-          const Text(
+          Text(
             'Community Recommendations',
             style: TextStyle(
               fontFamily: 'Overpass',
               fontSize: 16,
               fontWeight: FontWeight.w800,
-              color: Colors.white,
+              color: context.appTextPrimary,
             ),
           ),
           const SizedBox(height: 10),
@@ -619,7 +648,7 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Stack(
-                          children: [
+                           children: [
                             AppNetworkImage(
                               imageUrl: recCover,
                               width: 105,
@@ -654,11 +683,11 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
                           recTitle,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontFamily: 'Overpass',
                             fontSize: 11.5,
                             fontWeight: FontWeight.w700,
-                            color: Colors.white,
+                            color: context.appTextPrimary,
                           ),
                         ),
                       ],
@@ -677,10 +706,10 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
   Widget _buildCharactersTab(Map<String, dynamic> media) {
     final edges = (media['characters']?['edges'] as List?)?.cast<Map<String, dynamic>>() ?? [];
     if (edges.isEmpty) {
-      return const Center(
+      return Center(
         child: Text(
           'No character information available.',
-          style: TextStyle(fontFamily: 'Overpass', color: AppColors.darkTextSecondary),
+          style: TextStyle(fontFamily: 'Overpass', color: context.appTextSecondary),
         ),
       );
     }
@@ -742,10 +771,10 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.brandBlue.withValues(alpha: 0.2) : AppColors.darkCard,
+          color: isSelected ? AppColors.brandBlue.withValues(alpha: 0.2) : context.appCard,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isSelected ? AppColors.brandBlue : Colors.white.withValues(alpha: 0.08),
+            color: isSelected ? AppColors.brandBlue : context.appBorder,
           ),
         ),
         child: Text(
@@ -754,7 +783,7 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
             fontFamily: 'Overpass',
             fontSize: 11.5,
             fontWeight: FontWeight.w700,
-            color: isSelected ? AppColors.brandBlue : AppColors.darkTextSecondary,
+            color: isSelected ? AppColors.brandBlue : context.appTextSecondary,
           ),
         ),
       ),
@@ -764,10 +793,10 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
   Widget _buildStaffTab(Map<String, dynamic> media) {
     final staffEdges = (media['staff']?['edges'] as List?)?.cast<Map<String, dynamic>>() ?? [];
     if (staffEdges.isEmpty) {
-      return const Center(
+      return Center(
         child: Text(
           'No staff information available.',
-          style: TextStyle(fontFamily: 'Overpass', color: AppColors.darkTextSecondary),
+          style: TextStyle(fontFamily: 'Overpass', color: context.appTextSecondary),
         ),
       );
     }
@@ -798,12 +827,12 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
           child: Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: AppColors.darkCard,
+              color: context.appCard,
               borderRadius: AppSpacing.borderRadius12,
-              border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+              border: Border.all(color: context.appBorder),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.15),
+                  color: context.isDark ? Colors.black.withValues(alpha: 0.15) : Colors.black.withValues(alpha: 0.04),
                   blurRadius: 4,
                   offset: const Offset(0, 1),
                 ),
@@ -819,11 +848,11 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
                     children: [
                       Text(
                         name,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontFamily: 'Overpass',
                           fontWeight: FontWeight.w700,
                           fontSize: 13.5,
-                          color: Colors.white,
+                          color: context.appTextPrimary,
                         ),
                       ),
                       const SizedBox(height: 3),
@@ -848,7 +877,7 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
                     ],
                   ),
                 ),
-                const Icon(Icons.chevron_right_rounded, size: 18, color: AppColors.darkTextMuted),
+                Icon(Icons.chevron_right_rounded, size: 18, color: context.appTextMuted),
               ],
             ),
           ),
@@ -860,10 +889,10 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
   Widget _buildRelationsTab(Map<String, dynamic> media) {
     final relations = (media['relations']?['edges'] as List?)?.cast<Map<String, dynamic>>() ?? [];
     if (relations.isEmpty) {
-      return const Center(
+      return Center(
         child: Text(
           'No relations found.',
-          style: TextStyle(fontFamily: 'Overpass', color: AppColors.darkTextSecondary),
+          style: TextStyle(fontFamily: 'Overpass', color: context.appTextSecondary),
         ),
       );
     }
@@ -896,12 +925,12 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
           child: Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: AppColors.darkCard,
+              color: context.appCard,
               borderRadius: AppSpacing.borderRadius12,
-              border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+              border: Border.all(color: context.appBorder),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.15),
+                  color: context.isDark ? Colors.black.withValues(alpha: 0.15) : Colors.black.withValues(alpha: 0.04),
                   blurRadius: 4,
                   offset: const Offset(0, 1),
                 ),
@@ -941,11 +970,11 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
                         relTitle,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontFamily: 'Overpass',
                           fontWeight: FontWeight.w700,
                           fontSize: 13.5,
-                          color: Colors.white,
+                          color: context.appTextPrimary,
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -959,12 +988,143 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
                     ],
                   ),
                 ),
-                const Icon(Icons.chevron_right_rounded, size: 20, color: AppColors.darkTextMuted),
+                Icon(Icons.chevron_right_rounded, size: 20, color: context.appTextMuted),
               ],
             ),
           ),
         );
       },
+    );
+  }
+
+  Widget _buildTitlesCard({
+    String? romaji,
+    String? english,
+    String? native,
+    List<String> synonyms = const [],
+  }) {
+    final hasTitles = (romaji != null && romaji.isNotEmpty) ||
+        (english != null && english.isNotEmpty) ||
+        (native != null && native.isNotEmpty) ||
+        synonyms.isNotEmpty;
+    if (!hasTitles) return const SizedBox.shrink();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 18),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: context.appCard,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: context.appBorder),
+        boxShadow: [
+          BoxShadow(
+            color: context.isDark ? Colors.black.withValues(alpha: 0.2) : Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: AppColors.brandBlue.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.translate_rounded, size: 16, color: AppColors.brandBlue),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Alternative Titles',
+                style: TextStyle(
+                  fontFamily: 'Overpass',
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  color: context.appTextPrimary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (romaji != null && romaji.isNotEmpty)
+            _buildTitleRow('Romaji', romaji),
+          if (english != null && english.isNotEmpty)
+            _buildTitleRow('English', english),
+          if (native != null && native.isNotEmpty)
+            _buildTitleRow('Native', native),
+          if (synonyms.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Synonyms',
+              style: TextStyle(
+                fontFamily: 'Overpass',
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: context.appTextSecondary,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: synonyms.map((syn) => Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: context.appSurface,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: context.appBorder),
+                ),
+                child: Text(
+                  syn,
+                  style: TextStyle(
+                    fontFamily: 'Overpass',
+                    fontSize: 11.5,
+                    color: context.appTextPrimary,
+                  ),
+                ),
+              )).toList(),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTitleRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 70,
+            child: Text(
+              label,
+              style: TextStyle(
+                fontFamily: 'Overpass',
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: context.appTextSecondary,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: TextStyle(
+                fontFamily: 'Overpass',
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+                color: context.appTextPrimary,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -982,7 +1142,7 @@ class _SliverTabBarDelegate extends SliverPersistentHeaderDelegate {
   @override
   Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
     return Container(
-      color: AppColors.darkBackground,
+      color: context.appBackground,
       child: tabBar,
     );
   }

@@ -68,6 +68,31 @@ class NotificationsRepository {
                 medium
               }
             }
+            activity {
+              __typename
+              ... on ListActivity {
+                id
+                status
+                progress
+                media {
+                  id
+                  type
+                  title {
+                    userPreferred
+                    romaji
+                    english
+                  }
+                  coverImage {
+                    medium
+                    large
+                  }
+                }
+              }
+              ... on TextActivity {
+                id
+                text
+              }
+            }
           }
           ... on ActivityReplyNotification {
             id
@@ -81,6 +106,31 @@ class NotificationsRepository {
               name
               avatar {
                 medium
+              }
+            }
+            activity {
+              __typename
+              ... on ListActivity {
+                id
+                status
+                progress
+                media {
+                  id
+                  type
+                  title {
+                    userPreferred
+                    romaji
+                    english
+                  }
+                  coverImage {
+                    medium
+                    large
+                  }
+                }
+              }
+              ... on TextActivity {
+                id
+                text
               }
             }
           }

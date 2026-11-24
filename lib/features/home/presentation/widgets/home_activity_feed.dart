@@ -9,6 +9,7 @@ import '../../../../shared/image/app_avatar.dart';
 import '../../../../shared/image/app_network_image.dart';
 import '../../../activity/data/activity_repository.dart';
 import '../../../activity/presentation/widgets/activity_comments_bottom_sheet.dart';
+import '../../../activity/presentation/widgets/activity_likes_bottom_sheet.dart';
 import '../../../auth/presentation/auth_controller.dart';
 import '../../../media_detail/presentation/media_detail_screen.dart';
 import '../../../profile/presentation/profile_screen.dart';
@@ -129,12 +130,38 @@ class HomeActivityFeedState extends ConsumerState<HomeActivityFeed> {
         activityUserName: user?['name'] as String?,
         activityUserAvatar: user?['avatar']?['medium'] as String?,
         activityTitle: title,
+        media: media,
+        activityStatus: item['status'] as String?,
+        activityProgress: item['progress'] != null ? '${item['progress']}' : null,
         initialReplyCount: item['replyCount'] as int? ?? 0,
         onReplyAdded: () {
           setState(() {
             item['replyCount'] = (item['replyCount'] as int? ?? 0) + 1;
           });
         },
+      ),
+    );
+  }
+
+  void _openLikes(Map<String, dynamic> item) {
+    final id = item['id'] as int?;
+    if (id == null) return;
+    final user = item['user'] as Map<String, dynamic>?;
+    final media = item['media'] as Map<String, dynamic>?;
+    final rawLikes = item['likes'] as List?;
+    final initialLikes = rawLikes?.cast<Map<String, dynamic>>() ?? [];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => ActivityLikesBottomSheet(
+        activityId: id,
+        media: media,
+        activityStatus: item['status'] as String?,
+        activityProgress: item['progress'] != null ? '${item['progress']}' : null,
+        activityUserName: user?['name'] as String?,
+        initialLikes: initialLikes,
       ),
     );
   }
@@ -155,11 +182,11 @@ class HomeActivityFeedState extends ConsumerState<HomeActivityFeed> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
+              Text(
                 'COMMUNITY ACTIVITY',
                 style: TextStyle(
                   fontFamily: 'Overpass',
-                  color: Colors.white,
+                  color: context.appTextPrimary,
                   fontSize: 12,
                   fontWeight: FontWeight.w800,
                   letterSpacing: 0.6,
@@ -171,9 +198,9 @@ class HomeActivityFeedState extends ConsumerState<HomeActivityFeed> {
                 height: 30,
                 padding: const EdgeInsets.all(2.5),
                 decoration: BoxDecoration(
-                  color: AppColors.darkSurfaceInput,
+                  color: context.appInputSurface,
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+                  border: Border.all(color: context.appBorder),
                 ),
                 child: Row(
                   children: [
@@ -187,12 +214,12 @@ class HomeActivityFeedState extends ConsumerState<HomeActivityFeed> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10),
                         decoration: BoxDecoration(
-                          color: _isFollowing ? AppColors.darkSurface : Colors.transparent,
+                          color: _isFollowing ? context.appSurface : Colors.transparent,
                           borderRadius: BorderRadius.circular(6),
                           boxShadow: _isFollowing
                               ? [
                                   BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.3),
+                                    color: Colors.black.withValues(alpha: context.isDark ? 0.3 : 0.08),
                                     blurRadius: 4,
                                     offset: const Offset(0, 1),
                                   )
@@ -206,7 +233,7 @@ class HomeActivityFeedState extends ConsumerState<HomeActivityFeed> {
                             fontFamily: 'Overpass',
                             fontSize: 11,
                             fontWeight: FontWeight.w700,
-                            color: _isFollowing ? Colors.white : AppColors.darkTextSecondary,
+                            color: _isFollowing ? context.appTextPrimary : context.appTextSecondary,
                           ),
                         ),
                       ),
@@ -221,12 +248,12 @@ class HomeActivityFeedState extends ConsumerState<HomeActivityFeed> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10),
                         decoration: BoxDecoration(
-                          color: !_isFollowing ? AppColors.darkSurface : Colors.transparent,
+                          color: !_isFollowing ? context.appSurface : Colors.transparent,
                           borderRadius: BorderRadius.circular(6),
                           boxShadow: !_isFollowing
                               ? [
                                   BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.3),
+                                    color: Colors.black.withValues(alpha: context.isDark ? 0.3 : 0.08),
                                     blurRadius: 4,
                                     offset: const Offset(0, 1),
                                   )
@@ -240,7 +267,7 @@ class HomeActivityFeedState extends ConsumerState<HomeActivityFeed> {
                             fontFamily: 'Overpass',
                             fontSize: 11,
                             fontWeight: FontWeight.w700,
-                            color: !_isFollowing ? Colors.white : AppColors.darkTextSecondary,
+                            color: !_isFollowing ? context.appTextPrimary : context.appTextSecondary,
                           ),
                         ),
                       ),
@@ -265,7 +292,7 @@ class HomeActivityFeedState extends ConsumerState<HomeActivityFeed> {
             child: Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: AppColors.darkSurface,
+                color: context.appSurface,
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
               ),
@@ -275,10 +302,10 @@ class HomeActivityFeedState extends ConsumerState<HomeActivityFeed> {
                     ? 'No activity from followed users yet.\nTry switching to Global above!'
                     : 'No global activity found.',
                 textAlign: TextAlign.center,
-                style: const TextStyle(
+                style: TextStyle(
                   fontFamily: 'Overpass',
                   fontSize: 12,
-                  color: AppColors.darkTextSecondary,
+                  color: context.appTextSecondary,
                 ),
               ),
             ),
@@ -306,7 +333,7 @@ class HomeActivityFeedState extends ConsumerState<HomeActivityFeed> {
               return Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: AppColors.darkSurface,
+                  color: context.appSurface,
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
                   boxShadow: [
@@ -355,10 +382,10 @@ class HomeActivityFeedState extends ConsumerState<HomeActivityFeed> {
                                         if (!isText) ...[
                                           TextSpan(
                                             text: ' ${item['status'] ?? 'updated'}',
-                                            style: const TextStyle(
+                                            style: TextStyle(
                                               fontFamily: 'Overpass',
                                               fontSize: 12,
-                                              color: AppColors.darkTextSecondary,
+                                              color: context.appTextSecondary,
                                             ),
                                           ),
                                           if (item['progress'] != null)
@@ -380,10 +407,10 @@ class HomeActivityFeedState extends ConsumerState<HomeActivityFeed> {
                                   const SizedBox(height: 1),
                                   Text(
                                     DateUtil.timeAgo(createdAt),
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontFamily: 'Overpass',
                                       fontSize: 10,
-                                      color: AppColors.darkTextMuted,
+                                      color: context.appTextMuted,
                                     ),
                                   ),
                                 ],
@@ -399,11 +426,11 @@ class HomeActivityFeedState extends ConsumerState<HomeActivityFeed> {
                       const SizedBox(height: 8),
                       Text(
                         item['text'] as String? ?? '',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontFamily: 'Overpass',
                           fontSize: 12.5,
                           height: 1.35,
-                          color: AppColors.darkTextPrimary,
+                          color: context.appTextPrimary,
                         ),
                       ),
                     ] else if (item['media'] != null) ...[
@@ -422,7 +449,7 @@ class HomeActivityFeedState extends ConsumerState<HomeActivityFeed> {
                         child: Container(
                           padding: const EdgeInsets.all(7),
                           decoration: BoxDecoration(
-                            color: AppColors.darkBackground,
+                            color: context.appBackground,
                             borderRadius: BorderRadius.circular(6),
                             border: Border.all(color: Colors.white.withValues(alpha: 0.04)),
                           ),
@@ -443,11 +470,11 @@ class HomeActivityFeedState extends ConsumerState<HomeActivityFeed> {
                                   item['media']['title']?['userPreferred'] ?? '',
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontFamily: 'Overpass',
                                     fontWeight: FontWeight.w700,
                                     fontSize: 12,
-                                    color: Colors.white,
+                                    color: context.appTextPrimary,
                                   ),
                                 ),
                               ),
@@ -462,32 +489,39 @@ class HomeActivityFeedState extends ConsumerState<HomeActivityFeed> {
                     // Action row: Functional Like + Read-Only Comment Icon
                     Row(
                       children: [
-                        // Functional Like Button
-                        InkWell(
-                          onTap: () => _toggleLike(index),
-                          borderRadius: BorderRadius.circular(4),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                            child: Row(
-                              children: [
-                                Icon(
+                        // Functional Like + View Likes Counter
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            InkWell(
+                              onTap: () => _toggleLike(index),
+                              borderRadius: BorderRadius.circular(4),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                child: Icon(
                                   isLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
                                   size: 15,
-                                  color: isLiked ? AppColors.statusBehind : AppColors.darkTextSecondary,
+                                  color: isLiked ? AppColors.statusBehind : context.appTextSecondary,
                                 ),
-                                const SizedBox(width: 4),
-                                Text(
+                              ),
+                            ),
+                            InkWell(
+                              onTap: () => _openLikes(item),
+                              borderRadius: BorderRadius.circular(4),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                child: Text(
                                   '$likeCount',
                                   style: TextStyle(
                                     fontFamily: 'Overpass',
                                     fontSize: 11,
                                     fontWeight: FontWeight.w700,
-                                    color: isLiked ? AppColors.statusBehind : AppColors.darkTextSecondary,
+                                    color: isLiked ? AppColors.statusBehind : context.appTextSecondary,
                                   ),
                                 ),
-                              ],
+                              ),
                             ),
-                          ),
+                          ],
                         ),
                         const SizedBox(width: 14),
 
@@ -499,19 +533,19 @@ class HomeActivityFeedState extends ConsumerState<HomeActivityFeed> {
                             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                             child: Row(
                               children: [
-                                const Icon(
+                                Icon(
                                   Icons.chat_bubble_outline_rounded,
                                   size: 14,
-                                  color: AppColors.darkTextSecondary,
+                                  color: context.appTextSecondary,
                                 ),
                                 const SizedBox(width: 4),
                                 Text(
                                   '$replyCount',
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontFamily: 'Overpass',
                                     fontSize: 11,
                                     fontWeight: FontWeight.w600,
-                                    color: AppColors.darkTextSecondary,
+                                    color: context.appTextSecondary,
                                   ),
                                 ),
                               ],
@@ -534,7 +568,7 @@ class HomeActivityFeedState extends ConsumerState<HomeActivityFeed> {
                     child: OutlinedButton(
                       onPressed: _isLoadingMore ? null : _loadMoreActivities,
                       style: OutlinedButton.styleFrom(
-                        backgroundColor: AppColors.darkSurface,
+                        backgroundColor: context.appSurface,
                         side: BorderSide(color: accentColor.withValues(alpha: 0.3)),
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -575,7 +609,7 @@ class HomeActivityFeedState extends ConsumerState<HomeActivityFeed> {
                           fontFamily: 'Overpass',
                           fontSize: 11.5,
                           fontWeight: FontWeight.w600,
-                          color: AppColors.darkTextSecondary.withValues(alpha: 0.6),
+                          color: context.appTextSecondary.withValues(alpha: 0.6),
                         ),
                       ),
                     ),
