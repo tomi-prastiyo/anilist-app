@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
-import '../../../core/utils/date_util.dart';
 import '../../../core/utils/text_util.dart';
 import '../../../shared/badges/format_chip.dart';
 import '../../../shared/badges/score_badge.dart';
@@ -12,10 +13,13 @@ import '../../../shared/feedback/error_view.dart';
 import '../../../shared/image/app_avatar.dart';
 import '../../../shared/image/app_network_image.dart';
 import '../../auth/presentation/auth_controller.dart';
-import '../../character_staff/presentation/character_detail_screen.dart';
 import '../../character_staff/presentation/staff_detail_screen.dart';
 import '../../media_editor/presentation/media_editor_bottom_sheet.dart';
 import '../data/media_detail_repository.dart';
+import 'widgets/character_dual_card.dart';
+import 'widgets/media_info_grid.dart';
+import 'widgets/media_mutual_friends_card.dart';
+import 'widgets/media_theme_songs_card.dart';
 
 class MediaDetailScreen extends ConsumerStatefulWidget {
   final int mediaId;
@@ -36,6 +40,19 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
   bool _isLoading = true;
   String? _errorMessage;
   bool _isFavourite = false;
+
+  // Themes state
+  Map<String, List<Map<String, dynamic>>> _themes = {
+    'openings': [],
+    'endings': [],
+    'insertSongs': [],
+  };
+  bool _isLoadingThemes = false;
+
+  // UI state
+  bool _isSynopsisExpanded = false;
+  String _characterFilter = 'ALL'; // 'ALL', 'MAIN', 'SUPPORTING'
+  List<Map<String, dynamic>> _followingFriends = [];
 
   @override
   void initState() {
@@ -59,20 +76,52 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
     try {
       final repo = ref.read(mediaDetailRepositoryProvider);
       final data = await repo.fetchMediaDetail(widget.mediaId);
-      setState(() {
-        _mediaData = data;
-        _isFavourite = data['isFavourite'] as bool? ?? false;
-        _isLoading = false;
-      });
+      final friends = await repo.fetchFollowingMediaList(widget.mediaId);
+      if (mounted) {
+        setState(() {
+          _mediaData = data;
+          _isFavourite = data['isFavourite'] as bool? ?? false;
+          _followingFriends = friends;
+          _isLoading = false;
+        });
+
+        // If anime, asynchronously load theme songs in background
+        final type = data['type'] as String?;
+        if (type == 'ANIME') {
+          _loadThemes(data['id'] as int, TextUtil.getPreferredTitle(data['title']));
+        }
+      }
     } catch (e) {
-      setState(() {
-        _errorMessage = e.toString();
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _errorMessage = e.toString();
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _loadThemes(int anilistId, String title) async {
+    setState(() => _isLoadingThemes = true);
+    try {
+      final repo = ref.read(mediaDetailRepositoryProvider);
+      final themes = await repo.fetchMediaThemes(
+        anilistId: anilistId,
+        queryTitle: title,
+      );
+      if (mounted) {
+        setState(() {
+          _themes = themes;
+          _isLoadingThemes = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isLoadingThemes = false);
     }
   }
 
   Future<void> _toggleFavourite() async {
+    HapticFeedback.lightImpact();
     final type = _mediaData?['type'] as String?;
     setState(() => _isFavourite = !_isFavourite);
     try {
@@ -83,7 +132,7 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
       );
     } catch (e) {
       // Revert if error
-      setState(() => _isFavourite = !_isFavourite);
+      if (mounted) setState(() => _isFavourite = !_isFavourite);
     }
   }
 
@@ -108,10 +157,24 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
     );
   }
 
+  String _formatEntryStatus(String? status) {
+    if (status == null) return '';
+    return status[0] + status.substring(1).toLowerCase();
+  }
+
+  Future<void> _launchExternalUrl(String url) async {
+    HapticFeedback.lightImpact();
+    final uri = Uri.parse(url);
+    try {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {}
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
       return const Scaffold(
+        backgroundColor: AppColors.darkBackground,
         body: Center(
           child: CircularProgressIndicator(color: AppColors.brandBlue),
         ),
@@ -120,7 +183,8 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
 
     if (_errorMessage != null) {
       return Scaffold(
-        appBar: AppBar(),
+        backgroundColor: AppColors.darkBackground,
+        appBar: AppBar(backgroundColor: AppColors.darkBackground),
         body: ErrorView(message: _errorMessage!, onRetry: _loadMedia),
       );
     }
@@ -138,16 +202,18 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
     final isAuthenticated = authState is Authenticated;
 
     return Scaffold(
+      backgroundColor: AppColors.darkBackground,
       body: NestedScrollView(
         headerSliverBuilder: (context, innerBoxIsScrolled) => [
           SliverAppBar(
-            expandedHeight: 260,
+            expandedHeight: 270,
             pinned: true,
+            backgroundColor: AppColors.darkSurface,
             leading: IconButton(
               icon: Container(
-                padding: const EdgeInsets.all(6),
+                padding: const EdgeInsets.all(7),
                 decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.5),
+                  color: Colors.black.withValues(alpha: 0.6),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(Icons.arrow_back_rounded, color: Colors.white, size: 20),
@@ -158,9 +224,9 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
               if (isAuthenticated)
                 IconButton(
                   icon: Container(
-                    padding: const EdgeInsets.all(6),
+                    padding: const EdgeInsets.all(7),
                     decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.5),
+                      color: Colors.black.withValues(alpha: 0.6),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
@@ -188,7 +254,7 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
                         end: Alignment.bottomCenter,
                         colors: [
                           Colors.transparent,
-                          AppColors.darkBackground.withValues(alpha: 0.7),
+                          AppColors.darkBackground.withValues(alpha: 0.75),
                           AppColors.darkBackground,
                         ],
                       ),
@@ -204,8 +270,8 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
                       children: [
                         AppNetworkImage(
                           imageUrl: coverUrl,
-                          width: 85,
-                          height: 120,
+                          width: 86,
+                          height: 124,
                           borderRadius: AppSpacing.borderRadius8,
                         ),
                         const SizedBox(width: 14),
@@ -219,6 +285,7 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
+                                  fontFamily: 'Overpass',
                                   fontSize: 18,
                                   fontWeight: FontWeight.w800,
                                   color: Colors.white,
@@ -277,8 +344,11 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
               TabBar(
                 controller: _tabController,
                 indicatorColor: AppColors.brandBlue,
+                indicatorWeight: 3,
                 labelColor: AppColors.brandBlue,
                 unselectedLabelColor: AppColors.darkTextSecondary,
+                labelStyle: const TextStyle(fontFamily: 'Overpass', fontWeight: FontWeight.w800, fontSize: 13.5),
+                unselectedLabelStyle: const TextStyle(fontFamily: 'Overpass', fontWeight: FontWeight.w600, fontSize: 13.5),
                 tabs: const [
                   Tab(text: 'Overview'),
                   Tab(text: 'Characters'),
@@ -302,193 +372,483 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
     );
   }
 
-  String _formatEntryStatus(String? status) {
-    if (status == null) return '';
-    return status[0] + status.substring(1).toLowerCase();
-  }
-
   Widget _buildOverviewTab(Map<String, dynamic> media) {
-    final description = TextUtil.stripHtml(media['description'] as String?);
-    final genres = (media['genres'] as List?)?.cast<String>() ?? [];
-    final startDate = DateUtil.formatFuzzyDate(media['startDate'] as Map<String, dynamic>?);
-    final season = media['season'] as String?;
-    final seasonYear = media['seasonYear'] as int?;
-    final episodes = media['episodes'] as int?;
-    final duration = media['duration'] as int?;
+    final rawDescription = TextUtil.stripHtml(media['description'] as String?);
+    final isAnime = media['type'] == 'ANIME';
+    final tags = (media['tags'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+    final externalLinks = (media['externalLinks'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+    final recNodes = (media['recommendations']?['nodes'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+    final title = TextUtil.getPreferredTitle(media['title']);
+
+    // Synopsis truncation logic
+    final isLongSynopsis = rawDescription.length > 250;
+    final displayDescription = (!isLongSynopsis || _isSynopsisExpanded)
+        ? rawDescription
+        : '${rawDescription.substring(0, 250)}...';
 
     return ListView(
-      padding: const EdgeInsets.all(AppSpacing.p16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       children: [
-        if (description.isNotEmpty) ...[
-          const Text(
-            'Synopsis',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+        // Mutual Friends Activity
+        if (_followingFriends.isNotEmpty)
+          MediaMutualFriendsCard(friends: _followingFriends, isAnime: isAnime),
+
+        // Synopsis Section
+        if (rawDescription.isNotEmpty) ...[
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Synopsis',
+                style: TextStyle(
+                  fontFamily: 'Overpass',
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white,
+                ),
+              ),
+              if (isLongSynopsis)
+                GestureDetector(
+                  onTap: () => setState(() => _isSynopsisExpanded = !_isSynopsisExpanded),
+                  child: Text(
+                    _isSynopsisExpanded ? 'Show Less' : 'Read More',
+                    style: const TextStyle(
+                      fontFamily: 'Overpass',
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.brandBlue,
+                    ),
+                  ),
+                ),
+            ],
           ),
           const SizedBox(height: 8),
           MarkdownBody(
-            data: description,
+            data: displayDescription,
             styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
-              p: const TextStyle(fontSize: 14, color: AppColors.darkTextSecondary, height: 1.5),
+              p: const TextStyle(
+                fontFamily: 'Overpass',
+                fontSize: 13.5,
+                color: AppColors.darkTextSecondary,
+                height: 1.5,
+              ),
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 18),
         ],
+
+        // Media Info Grid (Structured 2-column details)
         const Text(
           'Information',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+          style: TextStyle(
+            fontFamily: 'Overpass',
+            fontSize: 16,
+            fontWeight: FontWeight.w800,
+            color: Colors.white,
+          ),
         ),
         const SizedBox(height: 10),
-        Container(
-          padding: const EdgeInsets.all(AppSpacing.p16),
-          decoration: BoxDecoration(
-            color: AppColors.darkCard,
-            borderRadius: AppSpacing.borderRadius12,
-            border: Border.all(color: AppColors.darkBorder),
+        MediaInfoGrid(media: media),
+        const SizedBox(height: 18),
+
+        // Opening & Ending Theme Songs (for Anime)
+        if (isAnime) ...[
+          MediaThemeSongsCard(
+            animeTitle: title,
+            openings: _themes['openings'] ?? [],
+            endings: _themes['endings'] ?? [],
+            insertSongs: _themes['insertSongs'] ?? [],
+            isLoading: _isLoadingThemes,
           ),
-          child: Column(
+          const SizedBox(height: 18),
+        ],
+
+        // Tags with percentage rank
+        if (tags.isNotEmpty) ...[
+          const Text(
+            'Tags',
+            style: TextStyle(
+              fontFamily: 'Overpass',
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: tags.take(12).map((tag) {
+              final name = tag['name'] as String? ?? '';
+              final rank = tag['rank'] as int? ?? 0;
+              final isSpoiler = tag['isMediaSpoiler'] as bool? ?? false;
+
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: isSpoiler
+                      ? AppColors.statusDropped.withValues(alpha: 0.15)
+                      : AppColors.darkCard,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: isSpoiler
+                        ? AppColors.statusDropped.withValues(alpha: 0.4)
+                        : Colors.white.withValues(alpha: 0.08),
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      name,
+                      style: TextStyle(
+                        fontFamily: 'Overpass',
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: isSpoiler ? AppColors.statusDropped : Colors.white,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      '$rank%',
+                      style: const TextStyle(
+                        fontFamily: 'Overpass',
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.brandBlue,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 18),
+        ],
+
+        // External Links
+        if (externalLinks.isNotEmpty) ...[
+          const Text(
+            'External Links',
+            style: TextStyle(
+              fontFamily: 'Overpass',
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: externalLinks.map((link) {
+              final site = link['site'] as String? ?? 'Link';
+              final url = link['url'] as String? ?? '';
+              return InkWell(
+                onTap: url.isNotEmpty ? () => _launchExternalUrl(url) : null,
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: AppColors.darkCard,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.open_in_new_rounded, size: 13, color: AppColors.brandBlue),
+                      const SizedBox(width: 6),
+                      Text(
+                        site,
+                        style: const TextStyle(
+                          fontFamily: 'Overpass',
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 18),
+        ],
+
+        // Recommendations Carousel
+        if (recNodes.isNotEmpty) ...[
+          const Text(
+            'Community Recommendations',
+            style: TextStyle(
+              fontFamily: 'Overpass',
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            height: 175,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: recNodes.length,
+              separatorBuilder: (context, index) => const SizedBox(width: 10),
+              itemBuilder: (context, index) {
+                final recMedia = recNodes[index]['mediaRecommendation'] as Map<String, dynamic>?;
+                if (recMedia == null) return const SizedBox.shrink();
+                final recId = recMedia['id'] as int?;
+                final recTitle = TextUtil.getPreferredTitle(recMedia['title']);
+                final recCover = recMedia['coverImage']?['medium'] as String?;
+                final recScore = (recMedia['averageScore'] as num?)?.toDouble();
+
+                return GestureDetector(
+                  onTap: recId != null
+                      ? () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => MediaDetailScreen(mediaId: recId),
+                            ),
+                          );
+                        }
+                      : null,
+                  child: SizedBox(
+                    width: 105,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Stack(
+                          children: [
+                            AppNetworkImage(
+                              imageUrl: recCover,
+                              width: 105,
+                              height: 135,
+                              borderRadius: AppSpacing.borderRadius8,
+                            ),
+                            if (recScore != null)
+                              Positioned(
+                                top: 4,
+                                right: 4,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withValues(alpha: 0.75),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    '${recScore.toInt()}%',
+                                    style: const TextStyle(
+                                      fontFamily: 'Overpass',
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w800,
+                                      color: Color(0xFFFFB703),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          recTitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontFamily: 'Overpass',
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildCharactersTab(Map<String, dynamic> media) {
+    final edges = (media['characters']?['edges'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+    if (edges.isEmpty) {
+      return const Center(
+        child: Text(
+          'No character information available.',
+          style: TextStyle(fontFamily: 'Overpass', color: AppColors.darkTextSecondary),
+        ),
+      );
+    }
+
+    final mainCount = edges.where((e) => (e['role'] as String? ?? '').toUpperCase() == 'MAIN').length;
+    final supportCount = edges.length - mainCount;
+
+    final filteredEdges = edges.where((e) {
+      if (_characterFilter == 'ALL') return true;
+      final role = (e['role'] as String? ?? '').toUpperCase();
+      return role == _characterFilter;
+    }).toList();
+
+    return Column(
+      children: [
+        // Filter Pills
+        Padding(
+          padding: const EdgeInsets.only(left: 16, right: 16, top: 12, bottom: 6),
+          child: Row(
             children: [
-              _infoRow('Format', media['format'] ?? '?'),
-              _infoRow('Episodes', episodes?.toString() ?? '?'),
-              if (duration != null) _infoRow('Episode Duration', '$duration mins'),
-              _infoRow('Status', media['status'] ?? '?'),
-              _infoRow('Season', season != null ? '$season ${seasonYear ?? ''}' : '?'),
-              _infoRow('Start Date', startDate),
-              if (genres.isNotEmpty) _infoRow('Genres', genres.join(', ')),
+              _charFilterPill('All (${edges.length})', 'ALL'),
+              const SizedBox(width: 8),
+              _charFilterPill('Main ($mainCount)', 'MAIN'),
+              const SizedBox(width: 8),
+              _charFilterPill('Supporting ($supportCount)', 'SUPPORTING'),
             ],
+          ),
+        ),
+
+        // Characters list
+        Expanded(
+          child: ListView.separated(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            itemCount: filteredEdges.length,
+            separatorBuilder: (context, index) => const SizedBox(height: 8),
+            itemBuilder: (context, index) {
+              final edge = filteredEdges[index];
+              final char = edge['node'] as Map<String, dynamic>? ?? {};
+              final role = edge['role'] as String? ?? 'SUPPORTING';
+              final vaList = (edge['voiceActors'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+              final va = vaList.isNotEmpty ? vaList.first : null;
+
+              return CharacterDualCard(
+                character: char,
+                role: role,
+                voiceActor: va,
+              );
+            },
           ),
         ),
       ],
     );
   }
 
-  Widget _infoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: const TextStyle(color: AppColors.darkTextSecondary, fontSize: 13)),
-          Flexible(
-            child: Text(
-              value,
-              textAlign: TextAlign.right,
-              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-            ),
+  Widget _charFilterPill(String title, String filterKey) {
+    final isSelected = _characterFilter == filterKey;
+    return GestureDetector(
+      onTap: () => setState(() => _characterFilter = filterKey),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.brandBlue.withValues(alpha: 0.2) : AppColors.darkCard,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isSelected ? AppColors.brandBlue : Colors.white.withValues(alpha: 0.08),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCharactersTab(Map<String, dynamic> media) {
-    final characters = (media['characters']?['nodes'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-    if (characters.isEmpty) {
-      return const Center(child: Text('No character information available.'));
-    }
-
-    return GridView.builder(
-      padding: const EdgeInsets.all(AppSpacing.p16),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        childAspectRatio: 2.5,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-      ),
-      itemCount: characters.length,
-      itemBuilder: (context, index) {
-        final char = characters[index];
-        final name = char['name']?['userPreferred'] ?? char['name']?['full'] ?? 'Unknown';
-        final image = char['image']?['medium'] as String?;
-
-        return InkWell(
-          onTap: () {
-            final charId = char['id'] as int?;
-            if (charId != null) {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => CharacterDetailScreen(characterId: charId),
-                ),
-              );
-            }
-          },
-          borderRadius: AppSpacing.borderRadius8,
-          child: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: AppColors.darkCard,
-              borderRadius: AppSpacing.borderRadius8,
-              border: Border.all(color: AppColors.darkBorder),
-            ),
-            child: Row(
-              children: [
-                AppAvatar(imageUrl: image, size: 48),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    name,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                  ),
-                ),
-              ],
-            ),
+        ),
+        child: Text(
+          title,
+          style: TextStyle(
+            fontFamily: 'Overpass',
+            fontSize: 11.5,
+            fontWeight: FontWeight.w700,
+            color: isSelected ? AppColors.brandBlue : AppColors.darkTextSecondary,
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 
   Widget _buildStaffTab(Map<String, dynamic> media) {
     final staffEdges = (media['staff']?['edges'] as List?)?.cast<Map<String, dynamic>>() ?? [];
     if (staffEdges.isEmpty) {
-      return const Center(child: Text('No staff information available.'));
+      return const Center(
+        child: Text(
+          'No staff information available.',
+          style: TextStyle(fontFamily: 'Overpass', color: AppColors.darkTextSecondary),
+        ),
+      );
     }
 
     return ListView.separated(
-      padding: const EdgeInsets.all(AppSpacing.p16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       itemCount: staffEdges.length,
-      separatorBuilder: (context, index) => const SizedBox(height: 10),
+      separatorBuilder: (context, index) => const SizedBox(height: 8),
       itemBuilder: (context, index) {
         final edge = staffEdges[index];
         final staff = edge['node'] as Map<String, dynamic>?;
         final role = edge['role'] as String? ?? 'Staff';
         final name = staff?['name']?['userPreferred'] ?? staff?['name']?['full'] ?? 'Unknown';
         final image = staff?['image']?['medium'] as String?;
+        final staffId = staff?['id'] as int?;
 
         return InkWell(
-          onTap: () {
-            final staffId = staff?['id'] as int?;
-            if (staffId != null) {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => StaffDetailScreen(staffId: staffId),
-                ),
-              );
-            }
-          },
-          borderRadius: AppSpacing.borderRadius8,
+          onTap: staffId != null
+              ? () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => StaffDetailScreen(staffId: staffId),
+                    ),
+                  );
+                }
+              : null,
+          borderRadius: AppSpacing.borderRadius12,
           child: Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
               color: AppColors.darkCard,
-              borderRadius: AppSpacing.borderRadius8,
-              border: Border.all(color: AppColors.darkBorder),
+              borderRadius: AppSpacing.borderRadius12,
+              border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.15),
+                  blurRadius: 4,
+                  offset: const Offset(0, 1),
+                ),
+              ],
             ),
             child: Row(
               children: [
-                AppAvatar(imageUrl: image, size: 44),
+                AppAvatar(imageUrl: image, size: 46),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                      const SizedBox(height: 2),
-                      Text(role, style: const TextStyle(color: AppColors.darkTextSecondary, fontSize: 11.5)),
+                      Text(
+                        name,
+                        style: const TextStyle(
+                          fontFamily: 'Overpass',
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13.5,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppColors.brandBlue.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          role,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontFamily: 'Overpass',
+                            color: AppColors.brandBlue,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),
+                const Icon(Icons.chevron_right_rounded, size: 18, color: AppColors.darkTextMuted),
               ],
             ),
           ),
@@ -500,11 +860,16 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
   Widget _buildRelationsTab(Map<String, dynamic> media) {
     final relations = (media['relations']?['edges'] as List?)?.cast<Map<String, dynamic>>() ?? [];
     if (relations.isEmpty) {
-      return const Center(child: Text('No relations found.'));
+      return const Center(
+        child: Text(
+          'No relations found.',
+          style: TextStyle(fontFamily: 'Overpass', color: AppColors.darkTextSecondary),
+        ),
+      );
     }
 
     return ListView.separated(
-      padding: const EdgeInsets.all(AppSpacing.p16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       itemCount: relations.length,
       separatorBuilder: (context, index) => const SizedBox(height: 10),
       itemBuilder: (context, index) {
@@ -514,6 +879,7 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
         final relTitle = TextUtil.getPreferredTitle(relNode?['title']);
         final relCover = relNode?['coverImage']?['medium'] as String?;
         final relFormat = relNode?['format'] as String?;
+        final relStatus = relNode?['status'] as String?;
 
         return InkWell(
           onTap: () {
@@ -526,45 +892,74 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
               );
             }
           },
-          borderRadius: AppSpacing.borderRadius8,
+          borderRadius: AppSpacing.borderRadius12,
           child: Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
               color: AppColors.darkCard,
-              borderRadius: AppSpacing.borderRadius8,
-              border: Border.all(color: AppColors.darkBorder),
+              borderRadius: AppSpacing.borderRadius12,
+              border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.15),
+                  blurRadius: 4,
+                  offset: const Offset(0, 1),
+                ),
+              ],
             ),
             child: Row(
               children: [
                 AppNetworkImage(
                   imageUrl: relCover,
-                  width: 45,
-                  height: 60,
-                  borderRadius: AppSpacing.borderRadius4,
+                  width: 50,
+                  height: 70,
+                  borderRadius: AppSpacing.borderRadius8,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        relType.replaceAll('_', ' '),
-                        style: const TextStyle(color: AppColors.brandBlue, fontSize: 11, fontWeight: FontWeight.w700),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppColors.brandBlue.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          relType.replaceAll('_', ' '),
+                          style: const TextStyle(
+                            fontFamily: 'Overpass',
+                            color: AppColors.brandBlue,
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
                       ),
-                      const SizedBox(height: 2),
+                      const SizedBox(height: 4),
                       Text(
                         relTitle,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                        style: const TextStyle(
+                          fontFamily: 'Overpass',
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13.5,
+                          color: Colors.white,
+                        ),
                       ),
-                      if (relFormat != null) ...[
-                        const SizedBox(height: 4),
-                        FormatChip(format: relFormat),
-                      ],
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          if (relFormat != null) FormatChip(format: relFormat),
+                          if (relFormat != null && relStatus != null) const SizedBox(width: 6),
+                          if (relStatus != null) StatusChip(status: relStatus),
+                        ],
+                      ),
                     ],
                   ),
                 ),
+                const Icon(Icons.chevron_right_rounded, size: 20, color: AppColors.darkTextMuted),
               ],
             ),
           ),

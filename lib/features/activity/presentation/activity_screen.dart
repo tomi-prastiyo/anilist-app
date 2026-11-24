@@ -31,6 +31,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
   bool _isFollowing = true; // Default: Friends Only
   List<Map<String, dynamic>> _activities = [];
   bool _isLoading = true;
+  bool _isLoadingMore = false;
   int _currentPage = 1;
   bool _hasNextPage = true;
 
@@ -59,6 +60,9 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
         _isLoading = true;
         _currentPage = 1;
       });
+    } else {
+      if (_isLoadingMore) return;
+      setState(() => _isLoadingMore = true);
     }
 
     try {
@@ -81,10 +85,16 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
           _currentPage = page;
           _hasNextPage = pageInfo?['hasNextPage'] as bool? ?? false;
           _isLoading = false;
+          _isLoadingMore = false;
         });
       }
     } catch (_) {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _isLoadingMore = false;
+        });
+      }
     }
   }
 
@@ -193,11 +203,20 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                     separatorBuilder: (context, index) => const SizedBox(height: 10),
                     itemBuilder: (context, index) {
                       if (index == _activities.length) {
-                        _load(page: _currentPage + 1, reset: false);
-                        return const Center(
+                        if (!_isLoadingMore && _hasNextPage) {
+                          _load(page: _currentPage + 1, reset: false);
+                        }
+                        return Center(
                           child: Padding(
-                            padding: EdgeInsets.all(16),
-                            child: CircularProgressIndicator(),
+                            padding: const EdgeInsets.all(16),
+                            child: SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.2,
+                                color: accentColor,
+                              ),
+                            ),
                           ),
                         );
                       }

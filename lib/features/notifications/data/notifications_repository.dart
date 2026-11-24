@@ -20,10 +20,49 @@ class NotificationsRepository {
         }
         notifications(resetNotificationCount: $resetNotificationCount) {
           __typename
-          ... on ActivityLikeNotification {
+          ... on AiringNotification {
             id
+            type
+            animeId
+            episode
+            contexts
+            createdAt
+            media {
+              id
+              title {
+                userPreferred
+                romaji
+              }
+              coverImage {
+                medium
+                large
+              }
+              type
+            }
+          }
+          ... on FollowingNotification {
+            id
+            userId
+            type
+            context
             createdAt
             user {
+              id
+              name
+              avatar {
+                medium
+              }
+            }
+          }
+          ... on ActivityLikeNotification {
+            id
+            userId
+            type
+            activityId
+            context
+            createdAt
+            user {
+              id
               name
               avatar {
                 medium
@@ -32,31 +71,215 @@ class NotificationsRepository {
           }
           ... on ActivityReplyNotification {
             id
+            userId
+            type
+            activityId
+            context
             createdAt
             user {
+              id
               name
               avatar {
                 medium
               }
             }
           }
-          ... on AiringNotification {
+          ... on ActivityMentionNotification {
             id
-            episode
+            userId
+            type
+            activityId
+            context
+            createdAt
+            user {
+              id
+              name
+              avatar {
+                medium
+              }
+            }
+          }
+          ... on ActivityMessageNotification {
+            id
+            userId
+            type
+            activityId
+            context
+            createdAt
+            user {
+              id
+              name
+              avatar {
+                medium
+              }
+            }
+          }
+          ... on ActivityReplyLikeNotification {
+            id
+            userId
+            type
+            activityId
+            context
+            createdAt
+            user {
+              id
+              name
+              avatar {
+                medium
+              }
+            }
+          }
+          ... on ActivityReplySubscribedNotification {
+            id
+            userId
+            type
+            activityId
+            context
+            createdAt
+            user {
+              id
+              name
+              avatar {
+                medium
+              }
+            }
+          }
+          ... on RelatedMediaAdditionNotification {
+            id
+            type
+            mediaId
+            context
             createdAt
             media {
+              id
               title {
                 userPreferred
               }
               coverImage {
                 medium
               }
+              type
             }
           }
-          ... on FollowingNotification {
+          ... on MediaDataChangeNotification {
             id
+            type
+            mediaId
+            context
+            reason
             createdAt
+            media {
+              id
+              title {
+                userPreferred
+              }
+              coverImage {
+                medium
+              }
+              type
+            }
+          }
+          ... on MediaMergeNotification {
+            id
+            type
+            mediaId
+            deletedMediaTitles
+            context
+            reason
+            createdAt
+            media {
+              id
+              title {
+                userPreferred
+              }
+              coverImage {
+                medium
+              }
+              type
+            }
+          }
+          ... on MediaDeletionNotification {
+            id
+            type
+            deletedMediaTitle
+            context
+            reason
+            createdAt
+          }
+          ... on ThreadCommentMentionNotification {
+            id
+            userId
+            type
+            commentId
+            context
+            createdAt
+            thread {
+              id
+              title
+              siteUrl
+            }
             user {
+              id
+              name
+              avatar {
+                medium
+              }
+            }
+          }
+          ... on ThreadCommentReplyNotification {
+            id
+            userId
+            type
+            commentId
+            context
+            createdAt
+            thread {
+              id
+              title
+              siteUrl
+            }
+            user {
+              id
+              name
+              avatar {
+                medium
+              }
+            }
+          }
+          ... on ThreadCommentLikeNotification {
+            id
+            userId
+            type
+            commentId
+            context
+            createdAt
+            thread {
+              id
+              title
+              siteUrl
+            }
+            user {
+              id
+              name
+              avatar {
+                medium
+              }
+            }
+          }
+          ... on ThreadLikeNotification {
+            id
+            userId
+            type
+            threadId
+            context
+            createdAt
+            thread {
+              id
+              title
+              siteUrl
+            }
+            user {
+              id
               name
               avatar {
                 medium
@@ -68,7 +291,7 @@ class NotificationsRepository {
     }
   ''';
 
-  Future<List<Map<String, dynamic>>> fetchNotifications({
+  Future<Map<String, dynamic>> fetchNotificationsWithPageInfo({
     required int page,
     bool resetCount = true,
   }) async {
@@ -80,6 +303,20 @@ class NotificationsRepository {
       },
     );
     final pageData = res['Page'] as Map<String, dynamic>?;
-    return (pageData?['notifications'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+    final pageInfo = pageData?['pageInfo'] as Map<String, dynamic>?;
+    final list = (pageData?['notifications'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+    return {
+      'notifications': list,
+      'hasNextPage': pageInfo?['hasNextPage'] as bool? ?? false,
+      'currentPage': pageInfo?['currentPage'] as int? ?? page,
+    };
+  }
+
+  Future<List<Map<String, dynamic>>> fetchNotifications({
+    required int page,
+    bool resetCount = true,
+  }) async {
+    final result = await fetchNotificationsWithPageInfo(page: page, resetCount: resetCount);
+    return (result['notifications'] as List).cast<Map<String, dynamic>>();
   }
 }

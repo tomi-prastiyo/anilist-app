@@ -44,6 +44,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
   int _followersCount = 0;
   bool _isFollowing = false;
 
+  String _statsMode = 'ANIME'; // 'ANIME', 'MANGA'
+  String _favFilter = 'ALL'; // 'ALL', 'ANIME', 'MANGA', 'CHARACTERS', 'STAFF'
+  bool _isBioExpanded = false;
+
   @override
   void initState() {
     super.initState();
@@ -229,11 +233,20 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     final meanScore = (stats?['meanScore'] as num?)?.toDouble() ?? 0.0;
     final stdDev = (stats?['standardDeviation'] as num?)?.toDouble() ?? 0.0;
     final episodes = stats?['episodesWatched'] as int? ?? 0;
-    final mangaChapters = mangaStats?['chaptersRead'] as int? ?? 0;
-    final mangaCount = mangaStats?['count'] as int? ?? 0;
+    final animeStatuses = (stats?['statuses'] as List?)?.cast<Map<String, dynamic>>() ?? [];
     final scoreList = (stats?['scores'] as List?)?.cast<Map<String, dynamic>>() ?? [];
     final formatList = (stats?['formats'] as List?)?.cast<Map<String, dynamic>>() ?? [];
     final genreList = (stats?['genres'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+
+    final mangaCount = mangaStats?['count'] as int? ?? 0;
+    final mangaChapters = mangaStats?['chaptersRead'] as int? ?? 0;
+    final mangaVolumes = mangaStats?['volumesRead'] as int? ?? 0;
+    final mangaMeanScore = (mangaStats?['meanScore'] as num?)?.toDouble() ?? 0.0;
+    final mangaStatuses = (mangaStats?['statuses'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+    final mangaScores = (mangaStats?['scores'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+    final mangaGenres = (mangaStats?['genres'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+
+    final about = _userProfile?['about'] as String?;
 
     // Favourites
     final favs = _userProfile?['favourites'] as Map<String, dynamic>?;
@@ -591,16 +604,24 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                   children: [
                     // Tab 1: Stats & Visual Charts
                     _buildStatsTab(
-                      count: count,
-                      days: days,
-                      meanScore: meanScore,
-                      stdDev: stdDev,
-                      episodes: episodes,
-                      mangaChapters: mangaChapters,
+                      about: about,
+                      animeCount: count,
+                      animeDays: days,
+                      animeMeanScore: meanScore,
+                      animeStdDev: stdDev,
+                      animeEpisodes: episodes,
+                      animeMinutes: minutes,
+                      animeStatuses: animeStatuses,
+                      animeScores: scoreList,
+                      animeFormats: formatList,
+                      animeGenres: genreList,
                       mangaCount: mangaCount,
-                      scoreList: scoreList,
-                      formatList: formatList,
-                      genreList: genreList,
+                      mangaChapters: mangaChapters,
+                      mangaVolumes: mangaVolumes,
+                      mangaMeanScore: mangaMeanScore,
+                      mangaStatuses: mangaStatuses,
+                      mangaScores: mangaScores,
+                      mangaGenres: mangaGenres,
                       accentColor: accentColor,
                     ),
 
@@ -610,6 +631,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                       favManga: favManga,
                       favCharacters: favCharacters,
                       favStaff: favStaff,
+                      accentColor: accentColor,
                     ),
 
                     // Tab 3: Personal Activity Feed (Only this user's activity)
@@ -624,324 +646,805 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     );
   }
 
+  Widget _buildAboutCard(String about, Color accentColor) {
+    final isLong = about.length > 200;
+    final text = (!isLong || _isBioExpanded) ? about : '${about.substring(0, 200)}...';
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.darkSurface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.info_outline_rounded, size: 15, color: accentColor),
+              const SizedBox(width: 6),
+              const Text(
+                'About',
+                style: TextStyle(
+                  fontFamily: 'Overpass',
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            text,
+            style: const TextStyle(
+              fontFamily: 'Overpass',
+              fontSize: 12.5,
+              height: 1.45,
+              color: AppColors.darkTextPrimary,
+            ),
+          ),
+          if (isLong) ...[
+            const SizedBox(height: 6),
+            GestureDetector(
+              onTap: () => setState(() => _isBioExpanded = !_isBioExpanded),
+              child: Text(
+                _isBioExpanded ? 'Show Less' : 'Read More',
+                style: TextStyle(
+                  fontFamily: 'Overpass',
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  color: accentColor,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _buildStatsTab({
-    required int count,
-    required String days,
-    required double meanScore,
-    required double stdDev,
-    required int episodes,
-    required int mangaChapters,
+    String? about,
+    required int animeCount,
+    required String animeDays,
+    required double animeMeanScore,
+    required double animeStdDev,
+    required int animeEpisodes,
+    required int animeMinutes,
+    required List<Map<String, dynamic>> animeStatuses,
+    required List<Map<String, dynamic>> animeScores,
+    required List<Map<String, dynamic>> animeFormats,
+    required List<Map<String, dynamic>> animeGenres,
     required int mangaCount,
-    required List<Map<String, dynamic>> scoreList,
-    required List<Map<String, dynamic>> formatList,
-    required List<Map<String, dynamic>> genreList,
+    required int mangaChapters,
+    required int mangaVolumes,
+    required double mangaMeanScore,
+    required List<Map<String, dynamic>> mangaStatuses,
+    required List<Map<String, dynamic>> mangaScores,
+    required List<Map<String, dynamic>> mangaGenres,
     required Color accentColor,
   }) {
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.p16),
       children: [
-        // 1. Sleek 2x3 Quick Stat Neo-Cards
-        Row(
-          children: [
-            _statCard('Total Anime', '$count', Icons.tv_rounded, accentColor, const Color(0xFF3DB4F2)),
-            const SizedBox(width: 8),
-            _statCard('Days Watched', '${days}d', Icons.access_time_rounded, accentColor, const Color(0xFF00B4D8)),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            _statCard('Mean Score', meanScore > 0 ? '${meanScore.toStringAsFixed(1)}%' : '-', Icons.star_rounded, accentColor, const Color(0xFFFFB703)),
-            const SizedBox(width: 8),
-            _statCard('Std Dev', stdDev > 0 ? stdDev.toStringAsFixed(1) : '-', Icons.query_stats_rounded, accentColor, const Color(0xFFE056FD)),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            _statCard('Episodes', '$episodes', Icons.play_circle_outline_rounded, accentColor, const Color(0xFF06D6A0)),
-            const SizedBox(width: 8),
-            _statCard('Manga Chapters', '$mangaChapters', Icons.menu_book_rounded, accentColor, const Color(0xFF9D4EDD)),
-          ],
-        ),
-        const SizedBox(height: 20),
+        // 1. Expandable About Bio Card (if present)
+        if (about != null && about.trim().isNotEmpty)
+          _buildAboutCard(about, accentColor),
 
-        // 2. Score Distribution Histogram (Scores 10 to 100)
-        if (scoreList.isNotEmpty) ...[
-          Container(
-            padding: const EdgeInsets.all(AppSpacing.p16),
+        // 2. Segmented Pill Switch: Anime Stats vs Manga Stats
+        Center(
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 16),
+            height: 36,
+            padding: const EdgeInsets.all(3),
             decoration: BoxDecoration(
               color: AppColors.darkSurface,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
+                GestureDetector(
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    setState(() => _statsMode = 'ANIME');
+                  },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    padding: const EdgeInsets.symmetric(horizontal: 18),
+                    decoration: BoxDecoration(
+                      color: _statsMode == 'ANIME' ? accentColor : Colors.transparent,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: _statsMode == 'ANIME'
+                          ? [
+                              BoxShadow(
+                                color: accentColor.withValues(alpha: 0.35),
+                                blurRadius: 6,
+                                offset: const Offset(0, 1),
+                              ),
+                            ]
+                          : null,
+                    ),
+                    alignment: Alignment.center,
+                    child: Row(
                       children: [
-                        Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(
-                            color: accentColor.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Icon(Icons.bar_chart_rounded, size: 16, color: accentColor),
+                        Icon(
+                          Icons.tv_rounded,
+                          size: 14,
+                          color: _statsMode == 'ANIME' ? Colors.white : AppColors.darkTextSecondary,
                         ),
-                        const SizedBox(width: 8),
-                        const Text(
-                          'Score Distribution',
+                        const SizedBox(width: 6),
+                        Text(
+                          'Anime Stats',
                           style: TextStyle(
                             fontFamily: 'Overpass',
-                            fontSize: 15,
+                            fontSize: 12,
                             fontWeight: FontWeight.w800,
-                            color: Colors.white,
+                            color: _statsMode == 'ANIME' ? Colors.white : AppColors.darkTextSecondary,
                           ),
                         ),
                       ],
                     ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: accentColor.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        '10 – 100',
-                        style: TextStyle(
-                          fontFamily: 'Overpass',
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                          color: accentColor,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 24),
-                SizedBox(
-                  height: 140,
-                  child: BarChart(
-                    BarChartData(
-                      alignment: BarChartAlignment.spaceAround,
-                      maxY: scoreList.map((e) => (e['count'] as num).toDouble()).fold(0.0, (a, b) => a > b ? a : b) * 1.25 + 2,
-                      barTouchData: BarTouchData(enabled: false),
-                      titlesData: FlTitlesData(
-                        leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                        topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                        rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                        bottomTitles: AxisTitles(
-                          sideTitles: SideTitles(
-                            showTitles: true,
-                            getTitlesWidget: (val, meta) {
-                              final idx = val.toInt();
-                              if (idx >= 0 && idx < scoreList.length) {
-                                return Padding(
-                                  padding: const EdgeInsets.only(top: 6),
-                                  child: Text(
-                                    '${scoreList[idx]['score']}',
-                                    style: const TextStyle(
-                                      fontFamily: 'Overpass',
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w700,
-                                      color: AppColors.darkTextSecondary,
-                                    ),
-                                  ),
-                                );
-                              }
-                              return const SizedBox.shrink();
-                            },
-                          ),
-                        ),
-                      ),
-                      gridData: const FlGridData(show: false),
-                      borderData: FlBorderData(show: false),
-                      barGroups: scoreList.asMap().entries.map((entry) {
-                        final idx = entry.key;
-                        final countVal = (entry.value['count'] as num).toDouble();
-                        return BarChartGroupData(
-                          x: idx,
-                          showingTooltipIndicators: countVal > 0 ? [0] : [],
-                          barRods: [
-                            BarChartRodData(
-                              toY: countVal,
-                              color: accentColor,
-                              width: 14,
-                              borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
-                            ),
-                          ],
-                        );
-                      }).toList(),
-                    ),
                   ),
                 ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-        ],
-
-        // 3. Format Breakdown (Donut Chart)
-        if (formatList.isNotEmpty) ...[
-          Container(
-            padding: const EdgeInsets.all(AppSpacing.p16),
-            decoration: BoxDecoration(
-              color: AppColors.darkSurface,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: accentColor.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Icon(Icons.pie_chart_outline_rounded, size: 16, color: accentColor),
+                GestureDetector(
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    setState(() => _statsMode = 'MANGA');
+                  },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    padding: const EdgeInsets.symmetric(horizontal: 18),
+                    decoration: BoxDecoration(
+                      color: _statsMode == 'MANGA' ? accentColor : Colors.transparent,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: _statsMode == 'MANGA'
+                          ? [
+                              BoxShadow(
+                                color: accentColor.withValues(alpha: 0.35),
+                                blurRadius: 6,
+                                offset: const Offset(0, 1),
+                              ),
+                            ]
+                          : null,
                     ),
-                    const SizedBox(width: 8),
-                    const Text(
-                      'Format Breakdown',
-                      style: TextStyle(
-                        fontFamily: 'Overpass',
-                        fontSize: 15,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  height: 150,
-                  child: PieChart(
-                    PieChartData(
-                      sectionsSpace: 3,
-                      centerSpaceRadius: 40,
-                      sections: formatList.take(5).map((f) {
-                        final format = f['format'] as String? ?? '';
-                        final cnt = (f['count'] as num?)?.toDouble() ?? 0.0;
-                        Color color = accentColor;
-                        if (format == 'MOVIE') color = AppColors.statusCompleted;
-                        if (format == 'OVA') color = AppColors.statusPaused;
-                        if (format == 'SPECIAL') color = AppColors.statusPlanning;
-                        if (format == 'MANGA') color = AppColors.statusRepeating;
-
-                        return PieChartSectionData(
-                          value: cnt,
-                          title: format,
-                          radius: 35,
-                          titleStyle: const TextStyle(
-                            fontFamily: 'Overpass',
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                          color: color,
-                        );
-                      }).toList(),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-        ],
-
-        // 4. Top Genres Breakdown Progress Bars
-        if (genreList.isNotEmpty) ...[
-          Container(
-            padding: const EdgeInsets.all(AppSpacing.p16),
-            decoration: BoxDecoration(
-              color: AppColors.darkSurface,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: accentColor.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Icon(Icons.category_rounded, size: 16, color: accentColor),
-                    ),
-                    const SizedBox(width: 8),
-                    const Text(
-                      'Top Genres',
-                      style: TextStyle(
-                        fontFamily: 'Overpass',
-                        fontSize: 15,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 14),
-                ...genreList.take(6).map((g) {
-                  final genre = g['genre'] as String? ?? '';
-                  final cnt = g['count'] as int? ?? 0;
-                  final maxCnt = (genreList.first['count'] as num?)?.toDouble() ?? 1.0;
-                  final progress = (cnt / maxCnt).clamp(0.0, 1.0);
-
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 5),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    alignment: Alignment.center,
+                    child: Row(
                       children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              genre,
+                        Icon(
+                          Icons.menu_book_rounded,
+                          size: 14,
+                          color: _statsMode == 'MANGA' ? Colors.white : AppColors.darkTextSecondary,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Manga Stats',
+                          style: TextStyle(
+                            fontFamily: 'Overpass',
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                            color: _statsMode == 'MANGA' ? Colors.white : AppColors.darkTextSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        if (_statsMode == 'ANIME') ...[
+          // Anime Quick Stat Cards (2x3)
+          Row(
+            children: [
+              _statCard('Total Anime', '$animeCount', Icons.tv_rounded, accentColor, const Color(0xFF3DB4F2)),
+              const SizedBox(width: 8),
+              _statCard('Days Watched', '${animeDays}d', Icons.access_time_rounded, accentColor, const Color(0xFF00B4D8)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              _statCard('Mean Score', animeMeanScore > 0 ? '${animeMeanScore.toStringAsFixed(1)}%' : '-', Icons.star_rounded, accentColor, const Color(0xFFFFB703)),
+              const SizedBox(width: 8),
+              _statCard('Std Dev', animeStdDev > 0 ? animeStdDev.toStringAsFixed(1) : '-', Icons.query_stats_rounded, accentColor, const Color(0xFFE056FD)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              _statCard('Episodes', '$animeEpisodes', Icons.play_circle_outline_rounded, accentColor, const Color(0xFF06D6A0)),
+              const SizedBox(width: 8),
+              _statCard('Time Watched', '${(animeMinutes / 60).toStringAsFixed(0)}h', Icons.timer_outlined, accentColor, const Color(0xFF9D4EDD)),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // Status Distribution
+          if (animeStatuses.isNotEmpty)
+            _buildStatusBar(animeStatuses, accentColor, isAnime: true),
+
+          // Score Distribution Histogram
+          if (animeScores.isNotEmpty)
+            _buildScoreHistogram(animeScores, animeMeanScore, accentColor),
+
+          // Format Breakdown (Donut Chart)
+          if (animeFormats.isNotEmpty)
+            _buildFormatDonut(animeFormats, animeCount, accentColor),
+
+          // Top Genres Progress Bars
+          if (animeGenres.isNotEmpty)
+            _buildGenresVisualizer(animeGenres, accentColor),
+        ] else ...[
+          // Manga Quick Stat Cards (2x2)
+          Row(
+            children: [
+              _statCard('Total Manga', '$mangaCount', Icons.menu_book_rounded, accentColor, const Color(0xFF3DB4F2)),
+              const SizedBox(width: 8),
+              _statCard('Chapters Read', '$mangaChapters', Icons.auto_stories_rounded, accentColor, const Color(0xFF00B4D8)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              _statCard('Volumes Read', '$mangaVolumes', Icons.book_rounded, accentColor, const Color(0xFF06D6A0)),
+              const SizedBox(width: 8),
+              _statCard('Mean Score', mangaMeanScore > 0 ? '${mangaMeanScore.toStringAsFixed(1)}%' : '-', Icons.star_rounded, accentColor, const Color(0xFFFFB703)),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // Manga Status Distribution
+          if (mangaStatuses.isNotEmpty)
+            _buildStatusBar(mangaStatuses, accentColor, isAnime: false),
+
+          // Manga Score Distribution Histogram
+          if (mangaScores.isNotEmpty)
+            _buildScoreHistogram(mangaScores, mangaMeanScore, accentColor),
+
+          // Manga Top Genres
+          if (mangaGenres.isNotEmpty)
+            _buildGenresVisualizer(mangaGenres, accentColor),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildStatusBar(List<Map<String, dynamic>> statuses, Color accentColor, {required bool isAnime}) {
+    final total = statuses.fold<int>(0, (sum, item) => sum + (item['count'] as int? ?? 0));
+    if (total == 0) return const SizedBox.shrink();
+
+    Color getStatusColor(String status) {
+      switch (status.toUpperCase()) {
+        case 'CURRENT':
+          return AppColors.statusWatching;
+        case 'COMPLETED':
+          return AppColors.statusCompleted;
+        case 'PLANNING':
+          return AppColors.statusPlanning;
+        case 'PAUSED':
+          return AppColors.statusPaused;
+        case 'DROPPED':
+          return AppColors.statusDropped;
+        case 'REPEATING':
+          return AppColors.statusRepeating;
+        default:
+          return AppColors.brandBlue;
+      }
+    }
+
+    String getStatusLabel(String status) {
+      switch (status.toUpperCase()) {
+        case 'CURRENT':
+          return isAnime ? 'Watching' : 'Reading';
+        case 'COMPLETED':
+          return 'Completed';
+        case 'PLANNING':
+          return 'Planning';
+        case 'PAUSED':
+          return 'Paused';
+        case 'DROPPED':
+          return 'Dropped';
+        case 'REPEATING':
+          return isAnime ? 'Rewatching' : 'Rereading';
+        default:
+          return status;
+      }
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(AppSpacing.p16),
+      decoration: BoxDecoration(
+        color: AppColors.darkSurface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: accentColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Icon(Icons.donut_small_rounded, size: 16, color: accentColor),
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'Status Distribution',
+                style: TextStyle(
+                  fontFamily: 'Overpass',
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                '$total entries',
+                style: const TextStyle(
+                  fontFamily: 'Overpass',
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.darkTextSecondary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // Multi-segment horizontal progress bar
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: SizedBox(
+              height: 10,
+              child: Row(
+                children: statuses.map((s) {
+                  final cnt = s['count'] as int? ?? 0;
+                  final status = s['status'] as String? ?? '';
+                  final pct = cnt / total;
+                  return Expanded(
+                    flex: (pct * 1000).toInt().clamp(1, 1000),
+                    child: Container(
+                      color: getStatusColor(status),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          // Status Chips with Legend
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            children: statuses.map((s) {
+              final cnt = s['count'] as int? ?? 0;
+              final status = s['status'] as String? ?? '';
+              final color = getStatusColor(status);
+              final label = getStatusLabel(status);
+              final pct = ((cnt / total) * 100).toStringAsFixed(1);
+
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: color,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 5),
+                  Text(
+                    '$label ($cnt • $pct%)',
+                    style: const TextStyle(
+                      fontFamily: 'Overpass',
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.darkTextSecondary,
+                    ),
+                  ),
+                ],
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildScoreHistogram(List<Map<String, dynamic>> scoreList, double meanScore, Color accentColor) {
+    final maxCount = scoreList
+        .map((e) => (e['count'] as num).toDouble())
+        .fold(0.0, (a, b) => a > b ? a : b);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(AppSpacing.p16),
+      decoration: BoxDecoration(
+        color: AppColors.darkSurface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: accentColor.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Icon(Icons.bar_chart_rounded, size: 16, color: accentColor),
+                  ),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'Score Distribution',
+                    style: TextStyle(
+                      fontFamily: 'Overpass',
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: accentColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: accentColor.withValues(alpha: 0.3)),
+                ),
+                child: Text(
+                  meanScore > 0 ? 'Avg: ${meanScore.toStringAsFixed(1)}%' : '10 – 100',
+                  style: TextStyle(
+                    fontFamily: 'Overpass',
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    color: accentColor,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            height: 140,
+            child: BarChart(
+              BarChartData(
+                alignment: BarChartAlignment.spaceAround,
+                maxY: maxCount * 1.25 + 2,
+                barTouchData: BarTouchData(
+                  touchTooltipData: BarTouchTooltipData(
+                    getTooltipColor: (_) => AppColors.darkCard,
+                    tooltipRoundedRadius: 6,
+                    getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                      final score = scoreList[group.x]['score'];
+                      final count = rod.toY.toInt();
+                      return BarTooltipItem(
+                        '$score%: $count titles',
+                        const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                titlesData: FlTitlesData(
+                  leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      getTitlesWidget: (val, meta) {
+                        final idx = val.toInt();
+                        if (idx >= 0 && idx < scoreList.length) {
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 6),
+                            child: Text(
+                              '${scoreList[idx]['score']}',
                               style: const TextStyle(
                                 fontFamily: 'Overpass',
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.darkTextPrimary,
-                              ),
-                            ),
-                            Text(
-                              '$cnt entries',
-                              style: const TextStyle(
-                                fontSize: 11,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
                                 color: AppColors.darkTextSecondary,
                               ),
                             ),
+                          );
+                        }
+                        return const SizedBox.shrink();
+                      },
+                    ),
+                  ),
+                ),
+                gridData: const FlGridData(show: false),
+                borderData: FlBorderData(show: false),
+                barGroups: scoreList.asMap().entries.map((entry) {
+                  final idx = entry.key;
+                  final countVal = (entry.value['count'] as num).toDouble();
+                  return BarChartGroupData(
+                    x: idx,
+                    barRods: [
+                      BarChartRodData(
+                        toY: countVal,
+                        gradient: LinearGradient(
+                          begin: Alignment.bottomCenter,
+                          end: Alignment.topCenter,
+                          colors: [
+                            accentColor.withValues(alpha: 0.65),
+                            accentColor,
                           ],
                         ),
-                        const SizedBox(height: 5),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(3),
-                          child: LinearProgressIndicator(
-                            value: progress,
-                            backgroundColor: AppColors.darkBorder,
-                            color: accentColor,
-                            minHeight: 6,
-                          ),
-                        ),
-                      ],
-                    ),
+                        width: 15,
+                        borderRadius: const BorderRadius.vertical(top: Radius.circular(5)),
+                      ),
+                    ],
                   );
-                }),
-              ],
+                }).toList(),
+              ),
             ),
           ),
         ],
-      ],
+      ),
+    );
+  }
+
+  Widget _buildFormatDonut(List<Map<String, dynamic>> formatList, int totalCount, Color accentColor) {
+    Color getFormatColor(String format) {
+      switch (format.toUpperCase()) {
+        case 'TV':
+          return const Color(0xFF3DB4F2);
+        case 'TV_SHORT':
+          return const Color(0xFF00B4D8);
+        case 'MOVIE':
+          return AppColors.statusCompleted;
+        case 'OVA':
+          return AppColors.statusPaused;
+        case 'ONA':
+          return const Color(0xFF9D4EDD);
+        case 'SPECIAL':
+          return AppColors.statusPlanning;
+        case 'MANGA':
+          return AppColors.statusRepeating;
+        default:
+          return accentColor;
+      }
+    }
+
+    final topFormats = formatList.take(6).toList();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(AppSpacing.p16),
+      decoration: BoxDecoration(
+        color: AppColors.darkSurface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: accentColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Icon(Icons.pie_chart_outline_rounded, size: 16, color: accentColor),
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'Format Breakdown',
+                style: TextStyle(
+                  fontFamily: 'Overpass',
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Center(
+            child: SizedBox(
+              height: 160,
+              width: 160,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  PieChart(
+                    PieChartData(
+                      sectionsSpace: 3,
+                      centerSpaceRadius: 46,
+                      sections: topFormats.map((f) {
+                        final format = f['format'] as String? ?? '';
+                        final cnt = (f['count'] as num?)?.toDouble() ?? 0.0;
+                        return PieChartSectionData(
+                          value: cnt,
+                          showTitle: false,
+                          radius: 30,
+                          color: getFormatColor(format),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        '$totalCount',
+                        style: const TextStyle(
+                          fontFamily: 'Overpass',
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const Text(
+                        'TITLES',
+                        style: TextStyle(
+                          fontFamily: 'Overpass',
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.darkTextSecondary,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          // Format Legend Grid
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            children: topFormats.map((f) {
+              final format = f['format'] as String? ?? '';
+              final cnt = f['count'] as int? ?? 0;
+              final color = getFormatColor(format);
+              final pct = totalCount > 0 ? ((cnt / totalCount) * 100).toStringAsFixed(1) : '0';
+
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: color,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 5),
+                  Text(
+                    '$format ($cnt • $pct%)',
+                    style: const TextStyle(
+                      fontFamily: 'Overpass',
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.darkTextSecondary,
+                    ),
+                  ),
+                ],
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGenresVisualizer(List<Map<String, dynamic>> genreList, Color accentColor) {
+    final maxCnt = (genreList.first['count'] as num?)?.toDouble() ?? 1.0;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(AppSpacing.p16),
+      decoration: BoxDecoration(
+        color: AppColors.darkSurface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: accentColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Icon(Icons.category_rounded, size: 16, color: accentColor),
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'Top Genres',
+                style: TextStyle(
+                  fontFamily: 'Overpass',
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          ...genreList.take(7).map((g) {
+            final genre = g['genre'] as String? ?? '';
+            final cnt = g['count'] as int? ?? 0;
+            final progress = (cnt / maxCnt).clamp(0.0, 1.0);
+
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 5),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        genre,
+                        style: const TextStyle(
+                          fontFamily: 'Overpass',
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.darkTextPrimary,
+                        ),
+                      ),
+                      Text(
+                        '$cnt entries',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AppColors.darkTextSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 5),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(3),
+                    child: LinearProgressIndicator(
+                      value: progress,
+                      backgroundColor: AppColors.darkBorder,
+                      color: accentColor,
+                      minHeight: 6,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
     );
   }
 
@@ -950,29 +1453,109 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     required List<Map<String, dynamic>> favManga,
     required List<Map<String, dynamic>> favCharacters,
     required List<Map<String, dynamic>> favStaff,
+    required Color accentColor,
   }) {
+    final allCount = favAnime.length + favManga.length + favCharacters.length + favStaff.length;
+
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.p16),
       children: [
-        if (favAnime.isNotEmpty)
-          _favMediaSection('Favorite Anime', favAnime),
-        if (favManga.isNotEmpty)
-          _favMediaSection('Favorite Manga', favManga),
-        if (favCharacters.isNotEmpty)
-          _favPersonSection('Favorite Characters', favCharacters, isCharacter: true),
-        if (favStaff.isNotEmpty)
-          _favPersonSection('Favorite Staff', favStaff, isCharacter: false),
-        if (favAnime.isEmpty && favManga.isEmpty && favCharacters.isEmpty && favStaff.isEmpty)
+        // Category Filter Chips
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              _buildFavFilterChip('All ($allCount)', 'ALL', accentColor),
+              const SizedBox(width: 8),
+              _buildFavFilterChip('Anime (${favAnime.length})', 'ANIME', accentColor),
+              const SizedBox(width: 8),
+              _buildFavFilterChip('Manga (${favManga.length})', 'MANGA', accentColor),
+              const SizedBox(width: 8),
+              _buildFavFilterChip('Characters (${favCharacters.length})', 'CHARACTERS', accentColor),
+              const SizedBox(width: 8),
+              _buildFavFilterChip('Staff (${favStaff.length})', 'STAFF', accentColor),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        if (_favFilter == 'ALL') ...[
+          if (favAnime.isNotEmpty)
+            _favMediaSection(
+              'Favorite Anime',
+              favAnime,
+              onSeeAll: () => setState(() => _favFilter = 'ANIME'),
+            ),
+          if (favManga.isNotEmpty)
+            _favMediaSection(
+              'Favorite Manga',
+              favManga,
+              onSeeAll: () => setState(() => _favFilter = 'MANGA'),
+            ),
+          if (favCharacters.isNotEmpty)
+            _favPersonSection(
+              'Favorite Characters',
+              favCharacters,
+              isCharacter: true,
+              onSeeAll: () => setState(() => _favFilter = 'CHARACTERS'),
+            ),
+          if (favStaff.isNotEmpty)
+            _favPersonSection(
+              'Favorite Staff',
+              favStaff,
+              isCharacter: false,
+              onSeeAll: () => setState(() => _favFilter = 'STAFF'),
+            ),
+        ] else if (_favFilter == 'ANIME') ...[
+          _buildMediaGrid(favAnime, 'No Favorite Anime Added Yet'),
+        ] else if (_favFilter == 'MANGA') ...[
+          _buildMediaGrid(favManga, 'No Favorite Manga Added Yet'),
+        ] else if (_favFilter == 'CHARACTERS') ...[
+          _buildPersonGrid(favCharacters, isCharacter: true, emptyMessage: 'No Favorite Characters Added Yet'),
+        ] else if (_favFilter == 'STAFF') ...[
+          _buildPersonGrid(favStaff, isCharacter: false, emptyMessage: 'No Favorite Staff Added Yet'),
+        ],
+
+        if (allCount == 0)
           const EmptyView(
             title: 'No Favorites Yet',
-            subtitle: 'Heart anime, manga, and characters to showcase them here.',
+            subtitle: 'Heart anime, manga, characters, and staff to showcase them here.',
             icon: Icons.favorite_border_rounded,
           ),
       ],
     );
   }
 
-  Widget _favMediaSection(String title, List<Map<String, dynamic>> items) {
+  Widget _buildFavFilterChip(String label, String key, Color accentColor) {
+    final isSelected = _favFilter == key;
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        setState(() => _favFilter = key);
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          color: isSelected ? accentColor.withValues(alpha: 0.2) : AppColors.darkSurface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isSelected ? accentColor : Colors.white.withValues(alpha: 0.08),
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontFamily: 'Overpass',
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: isSelected ? accentColor : AppColors.darkTextSecondary,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _favMediaSection(String title, List<Map<String, dynamic>> items, {required VoidCallback onSeeAll}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -988,13 +1571,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                 color: Colors.white,
               ),
             ),
-            Text(
-              '${items.length} titles',
-              style: const TextStyle(
-                fontFamily: 'Overpass',
-                fontSize: 11.5,
-                fontWeight: FontWeight.w700,
-                color: AppColors.darkTextSecondary,
+            GestureDetector(
+              onTap: onSeeAll,
+              child: Text(
+                'View All (${items.length}) →',
+                style: const TextStyle(
+                  fontFamily: 'Overpass',
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.brandBlue,
+                ),
               ),
             ),
           ],
@@ -1031,7 +1617,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     );
   }
 
-  Widget _favPersonSection(String title, List<Map<String, dynamic>> items, {required bool isCharacter}) {
+  Widget _favPersonSection(
+    String title,
+    List<Map<String, dynamic>> items, {
+    required bool isCharacter,
+    required VoidCallback onSeeAll,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1047,13 +1638,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                 color: Colors.white,
               ),
             ),
-            Text(
-              '${items.length} items',
-              style: const TextStyle(
-                fontFamily: 'Overpass',
-                fontSize: 11.5,
-                fontWeight: FontWeight.w700,
-                color: AppColors.darkTextSecondary,
+            GestureDetector(
+              onTap: onSeeAll,
+              child: Text(
+                'View All (${items.length}) →',
+                style: const TextStyle(
+                  fontFamily: 'Overpass',
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.brandBlue,
+                ),
               ),
             ),
           ],
@@ -1111,6 +1705,147 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
         ),
         const SizedBox(height: 20),
       ],
+    );
+  }
+
+  Widget _buildMediaGrid(List<Map<String, dynamic>> items, String emptyMessage) {
+    if (items.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 40),
+        child: Center(
+          child: Text(
+            emptyMessage,
+            style: const TextStyle(fontFamily: 'Overpass', color: AppColors.darkTextSecondary),
+          ),
+        ),
+      );
+    }
+
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: items.length,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        childAspectRatio: 0.62,
+        crossAxisSpacing: 10,
+        mainAxisSpacing: 12,
+      ),
+      itemBuilder: (context, index) {
+        final media = items[index];
+        return MediaCard(
+          media: media,
+          mode: MediaCardMode.grid,
+          onTap: () {
+            final id = media['id'] as int?;
+            if (id != null) {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (context) => MediaDetailScreen(mediaId: id)),
+              );
+            }
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildPersonGrid(List<Map<String, dynamic>> items, {required bool isCharacter, required String emptyMessage}) {
+    if (items.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 40),
+        child: Center(
+          child: Text(
+            emptyMessage,
+            style: const TextStyle(fontFamily: 'Overpass', color: AppColors.darkTextSecondary),
+          ),
+        ),
+      );
+    }
+
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: items.length,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        childAspectRatio: 0.72,
+        crossAxisSpacing: 10,
+        mainAxisSpacing: 12,
+      ),
+      itemBuilder: (context, index) {
+        final item = items[index];
+        final name = item['name']?['userPreferred'] ?? item['name']?['full'] ?? '';
+        final image = item['image']?['large'] ?? item['image']?['medium'] as String?;
+        final occupations = (item['primaryOccupations'] as List?)?.cast<String>() ?? [];
+
+        return InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: () {
+            final id = item['id'] as int?;
+            if (id != null) {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => isCharacter
+                      ? CharacterDetailScreen(characterId: id)
+                      : StaffDetailScreen(staffId: id),
+                ),
+              );
+            }
+          },
+          child: Container(
+            decoration: BoxDecoration(
+              color: AppColors.darkSurface,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: ClipRRect(
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(10)),
+                    child: image != null
+                        ? AppNetworkImage(imageUrl: image, fit: BoxFit.cover, width: double.infinity)
+                        : const Center(child: Icon(Icons.person, color: AppColors.darkTextSecondary)),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(6),
+                  child: Column(
+                    children: [
+                      Text(
+                        name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontFamily: 'Overpass',
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                      if (occupations.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          occupations.first,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontFamily: 'Overpass',
+                            fontSize: 9.5,
+                            color: AppColors.darkTextSecondary,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 

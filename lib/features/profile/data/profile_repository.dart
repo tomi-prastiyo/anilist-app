@@ -31,6 +31,12 @@ class ProfileRepository {
             standardDeviation
             minutesWatched
             episodesWatched
+            statuses(sort: [COUNT_DESC]) {
+              status
+              count
+              meanScore
+              minutesWatched
+            }
             scores {
               score
               count
@@ -49,14 +55,33 @@ class ProfileRepository {
             meanScore
             chaptersRead
             volumesRead
+            statuses(sort: [COUNT_DESC]) {
+              status
+              count
+              meanScore
+              chaptersRead
+            }
+            scores {
+              score
+              count
+            }
+            genres(sort: [COUNT_DESC]) {
+              genre
+              count
+            }
           }
         }
         favourites {
-          anime(page: 1, perPage: 12) {
+          anime(page: 1, perPage: 40) {
             nodes {
               id
+              type
+              format
+              averageScore
               title {
                 userPreferred
+                romaji
+                english
               }
               coverImage {
                 large
@@ -64,11 +89,16 @@ class ProfileRepository {
               }
             }
           }
-          manga(page: 1, perPage: 12) {
+          manga(page: 1, perPage: 40) {
             nodes {
               id
+              type
+              format
+              averageScore
               title {
                 userPreferred
+                romaji
+                english
               }
               coverImage {
                 large
@@ -76,26 +106,31 @@ class ProfileRepository {
               }
             }
           }
-          characters(page: 1, perPage: 12) {
+          characters(page: 1, perPage: 40) {
             nodes {
               id
               name {
                 userPreferred
+                full
               }
               image {
+                large
                 medium
               }
             }
           }
-          staff(page: 1, perPage: 12) {
+          staff(page: 1, perPage: 40) {
             nodes {
               id
               name {
                 userPreferred
+                full
               }
               image {
+                large
                 medium
               }
+              primaryOccupations
             }
           }
         }

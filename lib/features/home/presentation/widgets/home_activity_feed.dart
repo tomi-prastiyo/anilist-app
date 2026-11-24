@@ -24,6 +24,9 @@ class HomeActivityFeedState extends ConsumerState<HomeActivityFeed> {
   // Default to Following (Friends Only) per user specification
   bool _isFollowing = true;
   bool _isLoading = true;
+  bool _isLoadingMore = false;
+  int _currentPage = 1;
+  bool _hasNextPage = true;
   List<Map<String, dynamic>> _activities = [];
 
   @override
@@ -32,22 +35,47 @@ class HomeActivityFeedState extends ConsumerState<HomeActivityFeed> {
     loadActivities();
   }
 
-  Future<void> loadActivities() async {
-    setState(() => _isLoading = true);
+  Future<void> loadActivities({int page = 1, bool reset = true}) async {
+    if (reset) {
+      setState(() {
+        _isLoading = true;
+        _currentPage = 1;
+        _hasNextPage = true;
+      });
+    }
     try {
       final repo = ref.read(activityRepositoryProvider);
-      final data = await repo.fetchActivities(page: 1, isFollowing: _isFollowing);
+      final data = await repo.fetchActivities(page: page, isFollowing: _isFollowing);
+      final pageInfo = data['pageInfo'] as Map<String, dynamic>?;
+      final list = (data['activities'] as List?)?.cast<Map<String, dynamic>>() ?? [];
       if (mounted) {
         setState(() {
-          _activities = (data['activities'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+          if (reset) {
+            _activities = list;
+          } else {
+            _activities.addAll(list);
+          }
+          _currentPage = page;
+          _hasNextPage = pageInfo?['hasNextPage'] as bool? ?? false;
           _isLoading = false;
+          _isLoadingMore = false;
         });
       }
     } catch (_) {
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() {
+          _isLoading = false;
+          _isLoadingMore = false;
+        });
       }
     }
+  }
+
+  Future<void> _loadMoreActivities() async {
+    if (_isLoadingMore || !_hasNextPage) return;
+    HapticFeedback.lightImpact();
+    setState(() => _isLoadingMore = true);
+    await loadActivities(page: _currentPage + 1, reset: false);
   }
 
   Future<void> _toggleLike(int index) async {
@@ -260,7 +288,7 @@ class HomeActivityFeedState extends ConsumerState<HomeActivityFeed> {
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.p16),
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            itemCount: _activities.length.clamp(0, 15),
+            itemCount: _activities.length,
             separatorBuilder: (context, index) => const SizedBox(height: 10),
             itemBuilder: (context, index) {
               final item = _activities[index];
@@ -496,6 +524,62 @@ class HomeActivityFeedState extends ConsumerState<HomeActivityFeed> {
                 ),
               );
             },
+          ),
+        if (_activities.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.p16, vertical: 12),
+            child: _hasNextPage
+                ? SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton(
+                      onPressed: _isLoadingMore ? null : _loadMoreActivities,
+                      style: OutlinedButton.styleFrom(
+                        backgroundColor: AppColors.darkSurface,
+                        side: BorderSide(color: accentColor.withValues(alpha: 0.3)),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      child: _isLoadingMore
+                          ? SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: accentColor,
+                              ),
+                            )
+                          : Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.expand_more_rounded, size: 18, color: accentColor),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'Load More Activities',
+                                  style: TextStyle(
+                                    fontFamily: 'Overpass',
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: accentColor,
+                                  ),
+                                ),
+                              ],
+                            ),
+                    ),
+                  )
+                : Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      child: Text(
+                        'No more community activities ✨',
+                        style: TextStyle(
+                          fontFamily: 'Overpass',
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.darkTextSecondary.withValues(alpha: 0.6),
+                        ),
+                      ),
+                    ),
+                  ),
           ),
       ],
     );
