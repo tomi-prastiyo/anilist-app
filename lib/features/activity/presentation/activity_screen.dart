@@ -8,10 +8,19 @@ import '../../../shared/feedback/shimmer_loading.dart';
 import '../../../shared/image/app_avatar.dart';
 import '../../../shared/image/app_network_image.dart';
 import '../../auth/presentation/auth_controller.dart';
+import '../../media_detail/presentation/media_detail_screen.dart';
+import '../../profile/presentation/profile_screen.dart';
 import '../data/activity_repository.dart';
 
 class ActivityScreen extends ConsumerStatefulWidget {
-  const ActivityScreen({super.key});
+  final int? userId;
+  final bool isEmbedded;
+
+  const ActivityScreen({
+    super.key,
+    this.userId,
+    this.isEmbedded = false,
+  });
 
   @override
   ConsumerState<ActivityScreen> createState() => _ActivityScreenState();
@@ -32,6 +41,14 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
   }
 
   @override
+  void didUpdateWidget(covariant ActivityScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.userId != widget.userId) {
+      _load(page: 1);
+    }
+  }
+
+  @override
   void dispose() {
     _postController.dispose();
     super.dispose();
@@ -49,7 +66,8 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
       final repo = ref.read(activityRepositoryProvider);
       final pageData = await repo.fetchActivities(
         page: page,
-        isFollowing: _isFollowing,
+        userId: widget.userId,
+        isFollowing: widget.userId == null ? _isFollowing : null,
       );
       final pageInfo = pageData['pageInfo'] as Map<String, dynamic>?;
       final list = (pageData['activities'] as List?)?.cast<Map<String, dynamic>>() ?? [];
@@ -79,7 +97,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
 
     setState(() {
       activity['isLiked'] = !isLiked;
-      activity['likeCount'] = isLiked ? currentLikes - 1 : currentLikes + 1;
+      activity['likeCount'] = isLiked ? (currentLikes > 0 ? currentLikes - 1 : 0) : currentLikes + 1;
     });
 
     try {
@@ -159,14 +177,302 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
     );
   }
 
+  void _openUserProfile(int? authorId) {
+    if (authorId == null) return;
+    // Don't push if already viewing this user's profile
+    if (widget.userId == authorId) return;
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => ProfileScreen(userId: authorId),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = ref.watch(authControllerProvider);
     final accentColor = auth is Authenticated
         ? AppColors.getProfileAccentColor(auth.user.profileColor)
         : AppColors.brandBlue;
+    final isOwnProfile = widget.userId == null || (auth is Authenticated && widget.userId == auth.user.id);
+
+    final content = _isLoading
+        ? const ShimmerMediaGrid(count: 6)
+        : RefreshIndicator(
+            onRefresh: () => _load(page: 1),
+            color: accentColor,
+            backgroundColor: AppColors.darkSurface,
+            child: _activities.isEmpty
+                ? EmptyView(
+                    title: widget.userId != null
+                        ? 'No Activity Yet'
+                        : (_isFollowing ? 'No Friends Activity Yet' : 'No Activity Found'),
+                    subtitle: widget.userId != null
+                        ? 'This user has not posted any status or list updates yet.'
+                        : (_isFollowing
+                            ? 'Follow people on AniList or switch to Global to see updates!'
+                            : 'Check back later for recent updates.'),
+                    icon: Icons.people_outline_rounded,
+                    action: (widget.userId == null && _isFollowing)
+                        ? TextButton(
+                            onPressed: () {
+                              setState(() => _isFollowing = false);
+                              _load(page: 1);
+                            },
+                            child: const Text('Switch to Global Feed'),
+                          )
+                        : null,
+                  )
+                : ListView.separated(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    itemCount: _activities.length + (_hasNextPage ? 1 : 0),
+                    separatorBuilder: (context, index) => const SizedBox(height: 10),
+                    itemBuilder: (context, index) {
+                      if (index == _activities.length) {
+                        _load(page: _currentPage + 1, reset: false);
+                        return const Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(16),
+                            child: CircularProgressIndicator(),
+                          ),
+                        );
+                      }
+
+                      final item = _activities[index];
+                      final user = item['user'] as Map<String, dynamic>?;
+                      final authorId = user?['id'] as int?;
+                      final avatarUrl = user?['avatar']?['medium'] as String?;
+                      final userName = user?['name'] as String? ?? 'Anonymous';
+                      final type = item['__typename'] as String?;
+                      final isText = type == 'TextActivity';
+                      final isLiked = item['isLiked'] as bool? ?? false;
+                      final likeCount = item['likeCount'] as int? ?? 0;
+                      final replyCount = item['replyCount'] as int? ?? 0;
+                      final createdAt = item['createdAt'] as int?;
+
+                      return Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.darkSurface,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Author Header (Tappable to view Profile)
+                            InkWell(
+                              onTap: () => _openUserProfile(authorId),
+                              borderRadius: BorderRadius.circular(6),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 2),
+                                child: Row(
+                                  children: [
+                                    AppAvatar(imageUrl: avatarUrl, size: 36),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text.rich(
+                                            TextSpan(
+                                              children: [
+                                                TextSpan(
+                                                  text: userName,
+                                                  style: const TextStyle(
+                                                    fontFamily: 'Overpass',
+                                                    fontWeight: FontWeight.w800,
+                                                    fontSize: 13.5,
+                                                    color: Colors.white,
+                                                  ),
+                                                ),
+                                                if (!isText) ...[
+                                                  TextSpan(
+                                                    text: ' ${item['status'] ?? 'updated'}',
+                                                    style: const TextStyle(
+                                                      fontSize: 12,
+                                                      color: AppColors.darkTextSecondary,
+                                                    ),
+                                                  ),
+                                                  if (item['progress'] != null)
+                                                    TextSpan(
+                                                      text: ' ${item['progress']}',
+                                                      style: TextStyle(
+                                                        fontSize: 12,
+                                                        fontWeight: FontWeight.bold,
+                                                        color: accentColor,
+                                                      ),
+                                                    ),
+                                                ],
+                                              ],
+                                            ),
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          Text(
+                                            DateUtil.timeAgo(createdAt),
+                                            style: const TextStyle(
+                                              fontSize: 10.5,
+                                              color: AppColors.darkTextMuted,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+
+                            // Text Body or Media Card
+                            if (isText) ...[
+                              const SizedBox(height: 8),
+                              Text(
+                                item['text'] as String? ?? '',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  height: 1.4,
+                                  color: AppColors.darkTextPrimary,
+                                ),
+                              ),
+                            ] else if (item['media'] != null) ...[
+                              const SizedBox(height: 8),
+                              InkWell(
+                                onTap: () {
+                                  final mediaId = item['media']['id'] as int?;
+                                  if (mediaId != null) {
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (context) => MediaDetailScreen(mediaId: mediaId),
+                                      ),
+                                    );
+                                  }
+                                },
+                                borderRadius: BorderRadius.circular(6),
+                                child: Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.darkBackground,
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: Colors.white.withValues(alpha: 0.04)),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      AppNetworkImage(
+                                        imageUrl: item['media']['coverImage']?['medium'],
+                                        width: 32,
+                                        height: 44,
+                                        borderRadius: BorderRadius.circular(3),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Text(
+                                          item['media']['title']?['userPreferred'] ?? '',
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            fontFamily: 'Overpass',
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: 12.5,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+
+                            // Action Bar: LOVE ONLY (per user requirement)
+                            const SizedBox(height: 10),
+                            Row(
+                              children: [
+                                InkWell(
+                                  onTap: () => _toggleLike(index),
+                                  borderRadius: BorderRadius.circular(6),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: isLiked
+                                          ? AppColors.statusBehind.withValues(alpha: 0.12)
+                                          : Colors.white.withValues(alpha: 0.03),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          isLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                                          size: 16,
+                                          color: isLiked ? AppColors.statusBehind : AppColors.darkTextSecondary,
+                                        ),
+                                        const SizedBox(width: 5),
+                                        Text(
+                                          '$likeCount',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.bold,
+                                            color: isLiked ? AppColors.statusBehind : AppColors.darkTextSecondary,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                if (replyCount > 0) ...[
+                                  const SizedBox(width: 12),
+                                  Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.chat_bubble_outline_rounded,
+                                        size: 14,
+                                        color: AppColors.darkTextMuted,
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        '$replyCount',
+                                        style: const TextStyle(
+                                          fontSize: 11.5,
+                                          color: AppColors.darkTextMuted,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+          );
+
+    // If embedded inside ProfileScreen, do not wrap in a full Scaffold with nested AppBar
+    if (widget.isEmbedded) {
+      return Stack(
+        children: [
+          content,
+          if (isOwnProfile)
+            Positioned(
+              bottom: 16,
+              right: 16,
+              child: FloatingActionButton(
+                heroTag: 'profile_activity_fab',
+                onPressed: _showNewPostDialog,
+                backgroundColor: accentColor,
+                foregroundColor: Colors.white,
+                mini: true,
+                child: const Icon(Icons.edit_rounded, size: 20),
+              ),
+            ),
+        ],
+      );
+    }
 
     return Scaffold(
+      backgroundColor: AppColors.darkBackground,
       appBar: AppBar(
         title: const Text(
           'Activity',
@@ -267,225 +573,13 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
         ),
       ),
       floatingActionButton: FloatingActionButton(
+        heroTag: 'global_activity_fab',
         onPressed: _showNewPostDialog,
         backgroundColor: accentColor,
         foregroundColor: Colors.white,
         child: const Icon(Icons.edit_rounded),
       ),
-      body: _isLoading
-          ? const ShimmerMediaGrid(count: 6)
-          : RefreshIndicator(
-              onRefresh: () => _load(page: 1),
-              color: accentColor,
-              backgroundColor: AppColors.darkSurface,
-              child: _activities.isEmpty
-                  ? EmptyView(
-                      title: _isFollowing ? 'No Friends Activity Yet' : 'No Activity Found',
-                      subtitle: _isFollowing
-                          ? 'Follow people on AniList or switch to Global to see updates!'
-                          : 'Check back later for recent updates.',
-                      icon: Icons.people_outline_rounded,
-                      action: _isFollowing
-                          ? TextButton(
-                              onPressed: () {
-                                setState(() => _isFollowing = false);
-                                _load(page: 1);
-                              },
-                              child: const Text('Switch to Global Feed'),
-                            )
-                          : null,
-                    )
-                  : ListView.separated(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      itemCount: _activities.length + (_hasNextPage ? 1 : 0),
-                      separatorBuilder: (context, index) => const SizedBox(height: 10),
-                      itemBuilder: (context, index) {
-                        if (index == _activities.length) {
-                          // Load more trigger
-                          _load(page: _currentPage + 1, reset: false);
-                          return const Center(
-                            child: Padding(
-                              padding: EdgeInsets.all(16),
-                              child: CircularProgressIndicator(),
-                            ),
-                          );
-                        }
-
-                        final item = _activities[index];
-                        final user = item['user'] as Map<String, dynamic>?;
-                        final avatarUrl = user?['avatar']?['medium'] as String?;
-                        final userName = user?['name'] as String? ?? 'Anonymous';
-                        final type = item['__typename'] as String?;
-                        final isText = type == 'TextActivity';
-                        final isLiked = item['isLiked'] as bool? ?? false;
-                        final likeCount = item['likeCount'] as int? ?? 0;
-                        final replyCount = item['replyCount'] as int? ?? 0;
-                        final createdAt = item['createdAt'] as int?;
-
-                        return Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: AppColors.darkSurface,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  AppAvatar(imageUrl: avatarUrl, size: 36),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text.rich(
-                                          TextSpan(
-                                            children: [
-                                              TextSpan(
-                                                text: userName,
-                                                style: const TextStyle(
-                                                  fontFamily: 'Overpass',
-                                                  fontWeight: FontWeight.w700,
-                                                  fontSize: 13,
-                                                  color: Colors.white,
-                                                ),
-                                              ),
-                                              if (!isText) ...[
-                                                TextSpan(
-                                                  text: ' ${item['status'] ?? 'updated'}',
-                                                  style: const TextStyle(
-                                                    fontSize: 12,
-                                                    color: AppColors.darkTextSecondary,
-                                                  ),
-                                                ),
-                                                if (item['progress'] != null)
-                                                  TextSpan(
-                                                    text: ' ${item['progress']}',
-                                                    style: TextStyle(
-                                                      fontSize: 12,
-                                                      fontWeight: FontWeight.bold,
-                                                      color: accentColor,
-                                                    ),
-                                                  ),
-                                              ],
-                                            ],
-                                          ),
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                        Text(
-                                          DateUtil.timeAgo(createdAt),
-                                          style: const TextStyle(
-                                            fontSize: 10.5,
-                                            color: AppColors.darkTextMuted,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              if (isText) ...[
-                                const SizedBox(height: 8),
-                                Text(
-                                  item['text'] as String? ?? '',
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    height: 1.4,
-                                    color: AppColors.darkTextPrimary,
-                                  ),
-                                ),
-                              ] else if (item['media'] != null) ...[
-                                const SizedBox(height: 8),
-                                Container(
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.darkBackground,
-                                    borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(color: Colors.white.withValues(alpha: 0.04)),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      AppNetworkImage(
-                                        imageUrl: item['media']['coverImage']?['medium'],
-                                        width: 32,
-                                        height: 44,
-                                        borderRadius: BorderRadius.circular(3),
-                                      ),
-                                      const SizedBox(width: 10),
-                                      Expanded(
-                                        child: Text(
-                                          item['media']['title']?['userPreferred'] ?? '',
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: const TextStyle(
-                                            fontFamily: 'Overpass',
-                                            fontWeight: FontWeight.w600,
-                                            fontSize: 12.5,
-                                            color: Colors.white,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                              const SizedBox(height: 8),
-                              Row(
-                                children: [
-                                  InkWell(
-                                    onTap: () => _toggleLike(index),
-                                    borderRadius: BorderRadius.circular(4),
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                                      child: Row(
-                                        children: [
-                                          Icon(
-                                            isLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                                            size: 16,
-                                            color: isLiked ? AppColors.statusBehind : AppColors.darkTextSecondary,
-                                          ),
-                                          const SizedBox(width: 4),
-                                          Text(
-                                            '$likeCount',
-                                            style: TextStyle(
-                                              fontSize: 11.5,
-                                              fontWeight: FontWeight.bold,
-                                              color: isLiked ? AppColors.statusBehind : AppColors.darkTextSecondary,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 16),
-                                  Row(
-                                    children: [
-                                      const Icon(
-                                        Icons.chat_bubble_outline_rounded,
-                                        size: 15,
-                                        color: AppColors.darkTextSecondary,
-                                      ),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        '$replyCount',
-                                        style: const TextStyle(
-                                          fontSize: 11.5,
-                                          color: AppColors.darkTextSecondary,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-            ),
+      body: content,
     );
   }
 }

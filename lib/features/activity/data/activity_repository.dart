@@ -12,13 +12,13 @@ class ActivityRepository {
   ActivityRepository(this._apiClient);
 
   static const String activityListQuery = r'''
-    query ActivityListQuery($page: Int, $isFollowing: Boolean) {
+    query ActivityListQuery($page: Int, $userId: Int, $isFollowing: Boolean) {
       Page(page: $page, perPage: 20) {
         pageInfo {
           currentPage
           hasNextPage
         }
-        activities(isFollowing: $isFollowing, sort: [ID_DESC]) {
+        activities(userId: $userId, isFollowing: $isFollowing, sort: [ID_DESC]) {
           __typename
           ... on TextActivity {
             id
@@ -84,14 +84,21 @@ class ActivityRepository {
 
   Future<Map<String, dynamic>> fetchActivities({
     required int page,
-    bool isFollowing = false,
+    int? userId,
+    bool? isFollowing,
   }) async {
+    final variables = <String, dynamic>{
+      'page': page,
+    };
+    if (userId != null && userId > 0) {
+      variables['userId'] = userId;
+    } else if (isFollowing != null) {
+      variables['isFollowing'] = isFollowing;
+    }
+
     final response = await _apiClient.postGraphQL(
       query: activityListQuery,
-      variables: {
-        'page': page,
-        'isFollowing': isFollowing,
-      },
+      variables: variables,
     );
     return response['Page'] as Map<String, dynamic>? ?? {};
   }

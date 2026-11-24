@@ -1,5 +1,6 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
@@ -16,9 +17,17 @@ import '../../media_detail/presentation/media_detail_screen.dart';
 import '../../notifications/presentation/notifications_screen.dart';
 import '../../settings/presentation/settings_screen.dart';
 import '../data/profile_repository.dart';
+import 'user_follows_screen.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
-  const ProfileScreen({super.key});
+  final int? userId;
+  final String? userName;
+
+  const ProfileScreen({
+    super.key,
+    this.userId,
+    this.userName,
+  });
 
   @override
   ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
@@ -31,6 +40,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
   bool _isLoading = true;
   String? _errorMessage;
 
+  int _followingCount = 0;
+  int _followersCount = 0;
+  bool _isFollowing = false;
+
   @override
   void initState() {
     super.initState();
@@ -39,14 +52,34 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
   }
 
   @override
+  void didUpdateWidget(covariant ProfileScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.userId != widget.userId || oldWidget.userName != widget.userName) {
+      _loadProfile();
+    }
+  }
+
+  @override
   void dispose() {
     _tabController.dispose();
     super.dispose();
   }
 
+  bool _isOwnProfile(dynamic authUser) {
+    if (authUser == null) return false;
+    if (widget.userId == null && widget.userName == null) return true;
+    if (widget.userId != null && widget.userId == authUser.id) return true;
+    if (widget.userName != null && widget.userName == authUser.name) return true;
+    return false;
+  }
+
   Future<void> _loadProfile() async {
     final auth = ref.read(authControllerProvider);
-    if (auth is! Authenticated) {
+    final authUser = auth is Authenticated ? auth.user : null;
+    final isOwn = _isOwnProfile(authUser);
+
+    // If viewing own profile and not signed in, show unauthenticated empty state
+    if (isOwn && authUser == null) {
       setState(() {
         _isLoading = false;
         _errorMessage = null;
@@ -61,13 +94,26 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
 
     try {
       final repo = ref.read(profileRepositoryProvider);
+      final targetUserId = widget.userId ?? (isOwn ? authUser?.id : null);
+      final targetUserName = widget.userName ?? (isOwn ? authUser?.name : null);
+
       final profile = await repo.fetchUserProfile(
-        userId: auth.user.id,
-        userName: auth.user.name,
+        userId: targetUserId,
+        userName: targetUserName,
       );
+
+      final profileId = profile['id'] as int? ?? targetUserId;
+      Map<String, int> counts = {'following': 0, 'followers': 0};
+      if (profileId != null && profileId > 0) {
+        counts = await repo.fetchFollowCounts(userId: profileId);
+      }
+
       if (mounted) {
         setState(() {
           _userProfile = profile;
+          _isFollowing = profile['isFollowing'] as bool? ?? false;
+          _followingCount = counts['following'] ?? 0;
+          _followersCount = counts['followers'] ?? 0;
           _isLoading = false;
         });
       }
@@ -81,28 +127,72 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     }
   }
 
+  Future<void> _toggleFollow() async {
+    if (_userProfile == null) return;
+    HapticFeedback.lightImpact();
+    final previousStatus = _isFollowing;
+    final previousFollowers = _followersCount;
+
+    setState(() {
+      _isFollowing = !previousStatus;
+      _followersCount = _isFollowing ? previousFollowers + 1 : (previousFollowers > 0 ? previousFollowers - 1 : 0);
+    });
+
+    try {
+      final repo = ref.read(profileRepositoryProvider);
+      final targetId = _userProfile!['id'] as int;
+      final newStatus = await repo.toggleFollow(targetId);
+      if (mounted) {
+        setState(() => _isFollowing = newStatus);
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _isFollowing = previousStatus;
+          _followersCount = previousFollowers;
+        });
+      }
+    }
+  }
+
+  void _openFollowsScreen(int tab) {
+    final profileId = _userProfile?['id'] as int? ?? widget.userId;
+    final profileName = _userProfile?['name'] as String? ?? widget.userName ?? 'User';
+    if (profileId == null) return;
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => UserFollowsScreen(
+          userId: profileId,
+          userName: profileName,
+          initialTab: tab,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = ref.watch(authControllerProvider);
     final isAuthenticated = auth is Authenticated;
-    final user = isAuthenticated ? auth.user : null;
-    final userName = user?.name ?? 'Guest User';
-    final userAvatar = user?.avatarUrl;
-    final userBanner = user?.bannerUrl;
-    final accentColor = AppColors.getProfileAccentColor(user?.profileColor);
+    final authUser = isAuthenticated ? auth.user : null;
+    final isOwn = _isOwnProfile(authUser);
 
-    if (!isAuthenticated) {
+    // Unauthenticated viewing own profile
+    if (isOwn && !isAuthenticated) {
       return Scaffold(
+        backgroundColor: AppColors.darkBackground,
         appBar: AppBar(title: const Text('Profile')),
         body: EmptyView(
           title: 'Sign in to see your profile',
-          subtitle: 'View your anime & manga stats, favorite characters, and community activity.',
+          subtitle: 'View your anime & manga stats, favorites, friends, and personal activity.',
           icon: Icons.person_outline_rounded,
           action: ElevatedButton(
             onPressed: () => ref.read(authControllerProvider.notifier).logout(),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.brandBlue,
               foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
             child: const Text('Sign In with AniList'),
           ),
@@ -112,6 +202,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
 
     if (_errorMessage != null && _userProfile == null) {
       return Scaffold(
+        backgroundColor: AppColors.darkBackground,
         appBar: AppBar(title: const Text('Profile')),
         body: ErrorView(
           message: _errorMessage!,
@@ -120,6 +211,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       );
     }
 
+    final userName = _userProfile?['name'] as String? ?? (isOwn ? authUser?.name : (widget.userName ?? 'User'));
+    final userAvatar = _userProfile?['avatar']?['large'] as String? ?? (isOwn ? authUser?.avatarUrl : null);
+    final userBanner = _userProfile?['bannerImage'] as String? ?? (isOwn ? authUser?.bannerUrl : null);
+    final accentColor = isOwn
+        ? AppColors.getProfileAccentColor(authUser?.profileColor)
+        : AppColors.brandBlue;
+    final profileId = _userProfile?['id'] as int? ?? (isOwn ? authUser?.id : widget.userId);
+
+    // Stats
     final stats = _userProfile?['statistics']?['anime'] as Map<String, dynamic>?;
     final mangaStats = _userProfile?['statistics']?['manga'] as Map<String, dynamic>?;
     final count = stats?['count'] as int? ?? 0;
@@ -129,10 +229,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     final stdDev = (stats?['standardDeviation'] as num?)?.toDouble() ?? 0.0;
     final episodes = stats?['episodesWatched'] as int? ?? 0;
     final mangaChapters = mangaStats?['chaptersRead'] as int? ?? 0;
+    final mangaCount = mangaStats?['count'] as int? ?? 0;
     final scoreList = (stats?['scores'] as List?)?.cast<Map<String, dynamic>>() ?? [];
     final formatList = (stats?['formats'] as List?)?.cast<Map<String, dynamic>>() ?? [];
     final genreList = (stats?['genres'] as List?)?.cast<Map<String, dynamic>>() ?? [];
 
+    // Favourites
     final favs = _userProfile?['favourites'] as Map<String, dynamic>?;
     final favAnime = (favs?['anime']?['nodes'] as List?)?.cast<Map<String, dynamic>>() ?? [];
     final favManga = (favs?['manga']?['nodes'] as List?)?.cast<Map<String, dynamic>>() ?? [];
@@ -140,43 +242,82 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     final favStaff = (favs?['staff']?['nodes'] as List?)?.cast<Map<String, dynamic>>() ?? [];
 
     return Scaffold(
+      backgroundColor: AppColors.darkBackground,
       body: NestedScrollView(
         headerSliverBuilder: (context, innerBoxIsScrolled) => [
           SliverAppBar(
-            expandedHeight: 200,
+            expandedHeight: 225,
             pinned: true,
-            actions: [
-              IconButton(
-                icon: const Icon(Icons.notifications_outlined),
-                onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (context) => const NotificationsScreen()),
-                  );
-                },
-              ),
-              IconButton(
-                icon: const Icon(Icons.settings_outlined),
-                onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (context) => const SettingsScreen()),
-                  );
-                },
-              ),
-            ],
+            backgroundColor: AppColors.darkBackground,
+            leading: !isOwn
+                ? IconButton(
+                    icon: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: AppColors.darkBackground.withValues(alpha: 0.6),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                      ),
+                      child: const Icon(Icons.arrow_back_rounded, color: Colors.white, size: 18),
+                    ),
+                    onPressed: () => Navigator.of(context).pop(),
+                  )
+                : null,
+            actions: isOwn
+                ? [
+                    IconButton(
+                      icon: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: AppColors.darkBackground.withValues(alpha: 0.6),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                        ),
+                        child: const Icon(Icons.notifications_outlined, color: Colors.white, size: 18),
+                      ),
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(builder: (context) => const NotificationsScreen()),
+                        );
+                      },
+                    ),
+                    IconButton(
+                      icon: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: AppColors.darkBackground.withValues(alpha: 0.6),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                        ),
+                        child: const Icon(Icons.settings_outlined, color: Colors.white, size: 18),
+                      ),
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(builder: (context) => const SettingsScreen()),
+                        );
+                      },
+                    ),
+                    const SizedBox(width: 4),
+                  ]
+                : null,
             flexibleSpace: FlexibleSpaceBar(
               background: Stack(
                 fit: StackFit.expand,
                 children: [
+                  // Banner Image
                   if (userBanner != null)
                     AppNetworkImage(imageUrl: userBanner, borderRadius: BorderRadius.zero)
                   else
                     Container(
                       decoration: const BoxDecoration(
                         gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
                           colors: [Color(0xFF0E2238), Color(0xFF162A44)],
                         ),
                       ),
                     ),
+                  // Dark Multi-stop Gradient Scrim
                   Container(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
@@ -184,83 +325,231 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                         end: Alignment.bottomCenter,
                         colors: [
                           Colors.transparent,
-                          AppColors.darkBackground.withValues(alpha: 0.6),
+                          AppColors.darkBackground.withValues(alpha: 0.2),
+                          AppColors.darkBackground.withValues(alpha: 0.7),
                           AppColors.darkBackground,
                         ],
+                        stops: const [0.0, 0.4, 0.75, 1.0],
                       ),
                     ),
                   ),
+
+                  // User Info Area (Overlapping Banner)
                   Positioned(
-                    bottom: 12,
+                    bottom: 10,
                     left: 16,
                     right: 16,
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        // Overlapping rectangular avatar (74x98, 4px top radius, 3px solid border)
+                        // Portrait Rectangular Avatar (AniList Authentic: 76x96, 10px radius)
                         Container(
-                          width: 74,
-                          height: 98,
+                          width: 76,
+                          height: 96,
                           decoration: BoxDecoration(
-                            borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+                            borderRadius: BorderRadius.circular(10),
                             border: Border.all(color: AppColors.darkSurface, width: 3),
                             color: AppColors.darkSurface,
-                            boxShadow: const [
-                              BoxShadow(color: Color(0x66000000), blurRadius: 10, offset: Offset(0, 4)),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.6),
+                                blurRadius: 12,
+                                offset: const Offset(0, 4),
+                              ),
                             ],
                           ),
                           child: ClipRRect(
-                            borderRadius: const BorderRadius.vertical(top: Radius.circular(2)),
+                            borderRadius: BorderRadius.circular(7),
                             child: userAvatar != null
                                 ? AppNetworkImage(imageUrl: userAvatar, fit: BoxFit.cover)
                                 : const Icon(Icons.person, size: 36, color: AppColors.darkTextSecondary),
                           ),
                         ),
                         const SizedBox(width: 14),
+
+                        // Username, Badges, Following/Followers, & Follow Button
                         Expanded(
-                          child: Padding(
-                            padding: const EdgeInsets.only(bottom: 6),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  userName,
-                                  style: const TextStyle(
-                                    fontFamily: 'Overpass',
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.w800,
-                                    color: Colors.white,
-                                    shadows: [
-                                      Shadow(color: Colors.black87, blurRadius: 4, offset: Offset(0, 1)),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Row(
-                                  children: [
-                                    Container(
-                                      width: 8,
-                                      height: 8,
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        color: accentColor,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      userName ?? '',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontFamily: 'Overpass',
+                                        fontSize: 21,
+                                        fontWeight: FontWeight.w900,
+                                        color: Colors.white,
+                                        shadows: [
+                                          Shadow(color: Colors.black87, blurRadius: 6, offset: Offset(0, 1)),
+                                        ],
                                       ),
                                     ),
-                                    const SizedBox(width: 6),
-                                    const Text(
-                                      'AniList Member',
-                                      style: TextStyle(
-                                        fontFamily: 'Overpass',
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600,
-                                        color: AppColors.darkTextSecondary,
+                                  ),
+                                  // Follow Button (if viewing another user's profile)
+                                  if (!isOwn && isAuthenticated) ...[
+                                    const SizedBox(width: 8),
+                                    GestureDetector(
+                                      onTap: _toggleFollow,
+                                      child: AnimatedContainer(
+                                        duration: const Duration(milliseconds: 200),
+                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                                        decoration: BoxDecoration(
+                                          color: _isFollowing ? AppColors.darkSurface : accentColor,
+                                          borderRadius: BorderRadius.circular(16),
+                                          border: Border.all(
+                                            color: _isFollowing ? accentColor : Colors.transparent,
+                                          ),
+                                          boxShadow: !_isFollowing
+                                              ? [
+                                                  BoxShadow(
+                                                    color: accentColor.withValues(alpha: 0.35),
+                                                    blurRadius: 6,
+                                                    offset: const Offset(0, 2),
+                                                  ),
+                                                ]
+                                              : null,
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              _isFollowing ? Icons.check_rounded : Icons.add_rounded,
+                                              size: 13,
+                                              color: _isFollowing ? accentColor : Colors.white,
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              _isFollowing ? 'Following' : 'Follow',
+                                              style: TextStyle(
+                                                fontFamily: 'Overpass',
+                                                fontSize: 11.5,
+                                                fontWeight: FontWeight.w800,
+                                                color: _isFollowing ? accentColor : Colors.white,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                     ),
                                   ],
-                                ),
-                              ],
-                            ),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+
+                              // AniList Member Badge
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.darkSurface.withValues(alpha: 0.8),
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Container(
+                                          width: 6,
+                                          height: 6,
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            color: accentColor,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 5),
+                                        const Text(
+                                          'AniList Member',
+                                          style: TextStyle(
+                                            fontFamily: 'Overpass',
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w700,
+                                            color: AppColors.darkTextSecondary,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+
+                              // Interactive Following & Followers Counters
+                              Row(
+                                children: [
+                                  InkWell(
+                                    onTap: () => _openFollowsScreen(0),
+                                    borderRadius: BorderRadius.circular(4),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 2),
+                                      child: Row(
+                                        children: [
+                                          Text(
+                                            '$_followingCount',
+                                            style: const TextStyle(
+                                              fontFamily: 'Overpass',
+                                              fontSize: 12.5,
+                                              fontWeight: FontWeight.w800,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 4),
+                                          const Text(
+                                            'Following',
+                                            style: TextStyle(
+                                              fontFamily: 'Overpass',
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w600,
+                                              color: AppColors.darkTextSecondary,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                  const Padding(
+                                    padding: EdgeInsets.symmetric(horizontal: 6),
+                                    child: Text('•', style: TextStyle(color: AppColors.darkTextMuted)),
+                                  ),
+                                  InkWell(
+                                    onTap: () => _openFollowsScreen(1),
+                                    borderRadius: BorderRadius.circular(4),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 2),
+                                      child: Row(
+                                        children: [
+                                          Text(
+                                            '$_followersCount',
+                                            style: const TextStyle(
+                                              fontFamily: 'Overpass',
+                                              fontSize: 12.5,
+                                              fontWeight: FontWeight.w800,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 4),
+                                          const Text(
+                                            'Followers',
+                                            style: TextStyle(
+                                              fontFamily: 'Overpass',
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w600,
+                                              color: AppColors.darkTextSecondary,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
                           ),
                         ),
                       ],
@@ -270,20 +559,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
               ),
             ),
           ),
+
+          // Pinned Modern Pill Tabs Bar (Consistently styled with Home, MediaList & Search)
           SliverPersistentHeader(
             pinned: true,
-            delegate: _ProfileTabBarDelegate(
-              TabBar(
-                controller: _tabController,
-                indicatorColor: accentColor,
-                labelColor: accentColor,
-                unselectedLabelColor: AppColors.darkTextSecondary,
-                tabs: const [
-                  Tab(text: 'Stats & Charts'),
-                  Tab(text: 'Favorites'),
-                  Tab(text: 'Activity'),
-                ],
-              ),
+            delegate: _ProfilePillTabsDelegate(
+              tabController: _tabController,
+              accentColor: accentColor,
+              isOwnProfile: isOwn,
             ),
           ),
         ],
@@ -304,6 +587,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                       stdDev: stdDev,
                       episodes: episodes,
                       mangaChapters: mangaChapters,
+                      mangaCount: mangaCount,
                       scoreList: scoreList,
                       formatList: formatList,
                       genreList: genreList,
@@ -318,8 +602,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                       favStaff: favStaff,
                     ),
 
-                    // Tab 3: Activity Feed
-                    const ActivityScreen(),
+                    // Tab 3: Personal Activity Feed (Only this user's activity)
+                    ActivityScreen(
+                      userId: profileId,
+                      isEmbedded: true,
+                    ),
                   ],
                 ),
               ),
@@ -334,6 +621,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     required double stdDev,
     required int episodes,
     required int mangaChapters,
+    required int mangaCount,
     required List<Map<String, dynamic>> scoreList,
     required List<Map<String, dynamic>> formatList,
     required List<Map<String, dynamic>> genreList,
@@ -342,12 +630,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.p16),
       children: [
-        // 1. Clean 2x2 Metric Cards (PdBear Authentic Account Stats)
+        // 1. Sleek 2x3 Quick Stat Neo-Cards
         Row(
           children: [
             _statCard('Total Anime', '$count', Icons.tv_rounded, accentColor),
             const SizedBox(width: 8),
-            _statCard('Days Watched', days, Icons.access_time_rounded, accentColor),
+            _statCard('Days Watched', '${days}d', Icons.access_time_rounded, accentColor),
           ],
         ),
         const SizedBox(height: 8),
@@ -374,7 +662,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
             padding: const EdgeInsets.all(AppSpacing.p16),
             decoration: BoxDecoration(
               color: AppColors.darkSurface,
-              borderRadius: BorderRadius.circular(6),
+              borderRadius: BorderRadius.circular(12),
               border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
             ),
             child: Column(
@@ -385,8 +673,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                   children: [
                     Row(
                       children: [
-                        Icon(Icons.bar_chart_rounded, size: 18, color: accentColor),
-                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: accentColor.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Icon(Icons.bar_chart_rounded, size: 16, color: accentColor),
+                        ),
+                        const SizedBox(width: 8),
                         const Text(
                           'Score Distribution',
                           style: TextStyle(
@@ -398,9 +693,21 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                         ),
                       ],
                     ),
-                    const Text(
-                      '10 – 100',
-                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.darkTextSecondary),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: accentColor.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        '10 – 100',
+                        style: TextStyle(
+                          fontFamily: 'Overpass',
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          color: accentColor,
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -453,7 +760,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                               toY: countVal,
                               color: accentColor,
                               width: 14,
-                              borderRadius: const BorderRadius.vertical(top: Radius.circular(3)),
+                              borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
                             ),
                           ],
                         );
@@ -464,7 +771,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
               ],
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
         ],
 
         // 3. Format Breakdown (Donut Chart)
@@ -473,7 +780,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
             padding: const EdgeInsets.all(AppSpacing.p16),
             decoration: BoxDecoration(
               color: AppColors.darkSurface,
-              borderRadius: BorderRadius.circular(6),
+              borderRadius: BorderRadius.circular(12),
               border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
             ),
             child: Column(
@@ -481,8 +788,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
               children: [
                 Row(
                   children: [
-                    Icon(Icons.pie_chart_outline_rounded, size: 18, color: accentColor),
-                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: accentColor.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Icon(Icons.pie_chart_outline_rounded, size: 16, color: accentColor),
+                    ),
+                    const SizedBox(width: 8),
                     const Text(
                       'Format Breakdown',
                       style: TextStyle(
@@ -529,7 +843,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
               ],
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
         ],
 
         // 4. Top Genres Breakdown Progress Bars
@@ -538,7 +852,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
             padding: const EdgeInsets.all(AppSpacing.p16),
             decoration: BoxDecoration(
               color: AppColors.darkSurface,
-              borderRadius: BorderRadius.circular(6),
+              borderRadius: BorderRadius.circular(12),
               border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
             ),
             child: Column(
@@ -546,8 +860,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
               children: [
                 Row(
                   children: [
-                    Icon(Icons.category_rounded, size: 18, color: accentColor),
-                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: accentColor.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Icon(Icons.category_rounded, size: 16, color: accentColor),
+                    ),
+                    const SizedBox(width: 8),
                     const Text(
                       'Top Genres',
                       style: TextStyle(
@@ -592,14 +913,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                             ),
                           ],
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 5),
                         ClipRRect(
-                          borderRadius: BorderRadius.circular(2),
+                          borderRadius: BorderRadius.circular(3),
                           child: LinearProgressIndicator(
                             value: progress,
                             backgroundColor: AppColors.darkBorder,
                             color: accentColor,
-                            minHeight: 5,
+                            minHeight: 6,
                           ),
                         ),
                       ],
@@ -645,14 +966,28 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          title,
-          style: const TextStyle(
-            fontFamily: 'Overpass',
-            fontSize: 16,
-            fontWeight: FontWeight.w800,
-            color: Colors.white,
-          ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              title,
+              style: const TextStyle(
+                fontFamily: 'Overpass',
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+              ),
+            ),
+            Text(
+              '${items.length} titles',
+              style: const TextStyle(
+                fontFamily: 'Overpass',
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+                color: AppColors.darkTextSecondary,
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 10),
         SizedBox(
@@ -690,18 +1025,32 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          title,
-          style: const TextStyle(
-            fontFamily: 'Overpass',
-            fontSize: 16,
-            fontWeight: FontWeight.w800,
-            color: Colors.white,
-          ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              title,
+              style: const TextStyle(
+                fontFamily: 'Overpass',
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+              ),
+            ),
+            Text(
+              '${items.length} items',
+              style: const TextStyle(
+                fontFamily: 'Overpass',
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+                color: AppColors.darkTextSecondary,
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 10),
         SizedBox(
-          height: 90,
+          height: 94,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: items.length,
@@ -724,12 +1073,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                     );
                   }
                 },
+                borderRadius: BorderRadius.circular(8),
                 child: Column(
                   children: [
                     AppAvatar(imageUrl: image, size: 52),
                     const SizedBox(height: 6),
                     SizedBox(
-                      width: 65,
+                      width: 68,
                       child: Text(
                         name,
                         maxLines: 1,
@@ -739,6 +1089,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                           fontFamily: 'Overpass',
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
+                          color: AppColors.darkTextPrimary,
                         ),
                       ),
                     ),
@@ -759,23 +1110,31 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
         padding: const EdgeInsets.all(AppSpacing.p12),
         decoration: BoxDecoration(
           color: AppColors.darkSurface,
-          borderRadius: BorderRadius.circular(6),
+          borderRadius: BorderRadius.circular(10),
           border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, size: 18, color: accentColor),
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: accentColor.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Icon(icon, size: 16, color: accentColor),
+            ),
             const SizedBox(height: 8),
             Text(
               value,
               style: const TextStyle(
                 fontFamily: 'Overpass',
                 fontSize: 17,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w900,
                 color: Colors.white,
               ),
             ),
+            const SizedBox(height: 2),
             Text(
               label,
               style: const TextStyle(
@@ -792,24 +1151,102 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
   }
 }
 
-class _ProfileTabBarDelegate extends SliverPersistentHeaderDelegate {
-  final TabBar tabBar;
+class _ProfilePillTabsDelegate extends SliverPersistentHeaderDelegate {
+  final TabController tabController;
+  final Color accentColor;
+  final bool isOwnProfile;
 
-  _ProfileTabBarDelegate(this.tabBar);
+  _ProfilePillTabsDelegate({
+    required this.tabController,
+    required this.accentColor,
+    required this.isOwnProfile,
+  });
 
   @override
-  double get minExtent => tabBar.preferredSize.height;
+  double get minExtent => 52;
   @override
-  double get maxExtent => tabBar.preferredSize.height;
+  double get maxExtent => 52;
 
   @override
   Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
     return Container(
       color: AppColors.darkBackground,
-      child: tabBar,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      child: AnimatedBuilder(
+        animation: tabController,
+        builder: (context, _) {
+          return Row(
+            children: [
+              _buildPill(0, 'Stats', Icons.bar_chart_rounded),
+              const SizedBox(width: 8),
+              _buildPill(1, 'Favorites', Icons.favorite_rounded),
+              const SizedBox(width: 8),
+              _buildPill(2, isOwnProfile ? 'My Activity' : 'Activity', Icons.history_rounded),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildPill(int index, String title, IconData icon) {
+    final isSelected = tabController.index == index;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () {
+          HapticFeedback.lightImpact();
+          tabController.animateTo(index);
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: isSelected ? accentColor : AppColors.darkSurface,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: isSelected ? accentColor : Colors.white.withValues(alpha: 0.06),
+            ),
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: accentColor.withValues(alpha: 0.35),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 14,
+                color: isSelected ? Colors.white : AppColors.darkTextSecondary,
+              ),
+              const SizedBox(width: 5),
+              Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontFamily: 'Overpass',
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: isSelected ? Colors.white : AppColors.darkTextSecondary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
   @override
-  bool shouldRebuild(_ProfileTabBarDelegate oldDelegate) => false;
+  bool shouldRebuild(_ProfilePillTabsDelegate oldDelegate) {
+    return oldDelegate.accentColor != accentColor ||
+        oldDelegate.isOwnProfile != isOwnProfile ||
+        oldDelegate.tabController != tabController;
+  }
 }

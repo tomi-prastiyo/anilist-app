@@ -263,74 +263,78 @@ class HomeActivityFeedState extends ConsumerState<HomeActivityFeed> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // User header
-                    Row(
-                      children: [
-                        GestureDetector(
-                          onTap: () {
-                            if (userId != null) {
-                              Navigator.of(context).push(
-                                MaterialPageRoute(builder: (context) => const ProfileScreen()),
-                              );
-                            }
-                          },
-                          child: AppAvatar(imageUrl: avatarUrl, size: 32),
-                        ),
-                        const SizedBox(width: 9),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text.rich(
-                                TextSpan(
-                                  children: [
+                    // User header (Tappable to view Profile)
+                    InkWell(
+                      onTap: () {
+                        if (userId != null) {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(builder: (context) => ProfileScreen(userId: userId)),
+                          );
+                        }
+                      },
+                      borderRadius: BorderRadius.circular(6),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 2),
+                        child: Row(
+                          children: [
+                            AppAvatar(imageUrl: avatarUrl, size: 32),
+                            const SizedBox(width: 9),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text.rich(
                                     TextSpan(
-                                      text: userName,
-                                      style: TextStyle(
-                                        fontFamily: 'Overpass',
-                                        fontWeight: FontWeight.w800,
-                                        fontSize: 12.5,
-                                        color: accentColor,
-                                      ),
-                                    ),
-                                    if (!isText) ...[
-                                      TextSpan(
-                                        text: ' ${item['status'] ?? 'updated'}',
-                                        style: const TextStyle(
-                                          fontFamily: 'Overpass',
-                                          fontSize: 12,
-                                          color: AppColors.darkTextSecondary,
-                                        ),
-                                      ),
-                                      if (item['progress'] != null)
+                                      children: [
                                         TextSpan(
-                                          text: ' ${item['progress']}',
-                                          style: const TextStyle(
+                                          text: userName,
+                                          style: TextStyle(
                                             fontFamily: 'Overpass',
-                                            fontSize: 12,
                                             fontWeight: FontWeight.w800,
-                                            color: AppColors.brandBlue,
+                                            fontSize: 12.5,
+                                            color: accentColor,
                                           ),
                                         ),
-                                    ],
-                                  ],
-                                ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
+                                        if (!isText) ...[
+                                          TextSpan(
+                                            text: ' ${item['status'] ?? 'updated'}',
+                                            style: const TextStyle(
+                                              fontFamily: 'Overpass',
+                                              fontSize: 12,
+                                              color: AppColors.darkTextSecondary,
+                                            ),
+                                          ),
+                                          if (item['progress'] != null)
+                                            TextSpan(
+                                              text: ' ${item['progress']}',
+                                              style: const TextStyle(
+                                                fontFamily: 'Overpass',
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w800,
+                                                color: AppColors.brandBlue,
+                                              ),
+                                            ),
+                                        ],
+                                      ],
+                                    ),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: 1),
+                                  Text(
+                                    DateUtil.timeAgo(createdAt),
+                                    style: const TextStyle(
+                                      fontFamily: 'Overpass',
+                                      fontSize: 10,
+                                      color: AppColors.darkTextMuted,
+                                    ),
+                                  ),
+                                ],
                               ),
-                              const SizedBox(height: 1),
-                              Text(
-                                DateUtil.timeAgo(createdAt),
-                                style: const TextStyle(
-                                  fontFamily: 'Overpass',
-                                  fontSize: 10,
-                                  color: AppColors.darkTextMuted,
-                                ),
-                              ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
 
                     // Content: text or media preview
