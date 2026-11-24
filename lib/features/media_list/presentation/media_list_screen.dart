@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -42,6 +43,8 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
   String _searchQuery = '';
   bool _isSearchVisible = false;
   ListSortOption _selectedSort = ListSortOption.updatedAt;
+  final TextEditingController _searchController = TextEditingController();
+  Timer? _searchDebounce;
 
   // Reordered: Active tracking first (Watching/Reading & Rewatching/Rereading), then Planning, Completed, Paused, Dropped
   final List<String> _statuses = [
@@ -66,6 +69,8 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
+    _searchController.dispose();
     _tabController.dispose();
     super.dispose();
   }
@@ -354,7 +359,11 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
             onPressed: () {
               setState(() {
                 _isSearchVisible = !_isSearchVisible;
-                if (!_isSearchVisible) _searchQuery = '';
+                if (!_isSearchVisible) {
+                  _searchDebounce?.cancel();
+                  _searchController.clear();
+                  _searchQuery = '';
+                }
               });
             },
           ),
@@ -384,6 +393,7 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
                   border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
                 ),
                 child: TextField(
+                  controller: _searchController,
                   autofocus: true,
                   style: const TextStyle(fontSize: 13, color: Colors.white),
                   decoration: InputDecoration(
@@ -393,13 +403,22 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
                     suffixIcon: _searchQuery.isNotEmpty
                         ? IconButton(
                             icon: const Icon(Icons.clear_rounded, size: 16, color: AppColors.darkTextSecondary),
-                            onPressed: () => setState(() => _searchQuery = ''),
+                            onPressed: () {
+                              _searchDebounce?.cancel();
+                              _searchController.clear();
+                              setState(() => _searchQuery = '');
+                            },
                           )
                         : null,
                     border: InputBorder.none,
                     contentPadding: const EdgeInsets.symmetric(vertical: 10),
                   ),
-                  onChanged: (val) => setState(() => _searchQuery = val),
+                  onChanged: (val) {
+                    _searchDebounce?.cancel();
+                    _searchDebounce = Timer(const Duration(milliseconds: 250), () {
+                      if (mounted) setState(() => _searchQuery = val);
+                    });
+                  },
                 ),
               ),
             ),

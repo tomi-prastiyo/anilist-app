@@ -53,6 +53,12 @@ class SearchRepository {
           episodes
           chapters
           averageScore
+          genres
+          seasonYear
+          season
+          startDate {
+            year
+          }
           coverImage {
             large
             medium
@@ -74,6 +80,7 @@ class SearchRepository {
           name {
             userPreferred
             full
+            native
           }
           image {
             medium

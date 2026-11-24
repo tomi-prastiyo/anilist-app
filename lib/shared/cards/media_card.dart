@@ -75,6 +75,14 @@ class MediaCard extends StatelessWidget {
 
     final isManga = chapters != null || media['type'] == 'MANGA';
     final unitLabel = isManga ? 'Chapter' : 'Episode';
+    final bool isPersonalList = userProgress != null ||
+        onIncrementProgress != null ||
+        onUpdateScore != null ||
+        listStatus != null;
+    final avgScore = media['averageScore'] as int?;
+    final status = media['status'] as String?;
+    final year = media['seasonYear'] ?? media['startDate']?['year'];
+    final rawGenres = (media['genres'] as List?)?.cast<String>() ?? [];
 
     return GestureDetector(
       onTap: onTap,
@@ -132,17 +140,152 @@ class MediaCard extends StatelessWidget {
 
             // Details Column
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Status Pill + Personal Score Row
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
+              child: !isPersonalList
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Top Row: Global Average Score + Status Pill
+                            Row(
+                              children: [
+                                if (avgScore != null && avgScore > 0) ...[
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: (avgScore >= 75
+                                              ? const Color(0xFF46C07B)
+                                              : (avgScore >= 60 ? const Color(0xFFE5A158) : const Color(0xFFE85D75)))
+                                          .withValues(alpha: 0.16),
+                                      borderRadius: BorderRadius.circular(5),
+                                      border: Border.all(
+                                        color: (avgScore >= 75
+                                                ? const Color(0xFF46C07B)
+                                                : (avgScore >= 60 ? const Color(0xFFE5A158) : const Color(0xFFE85D75)))
+                                            .withValues(alpha: 0.35),
+                                      ),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          Icons.star_rounded,
+                                          size: 12,
+                                          color: avgScore >= 75
+                                              ? const Color(0xFF46C07B)
+                                              : (avgScore >= 60 ? const Color(0xFFE5A158) : const Color(0xFFE85D75)),
+                                        ),
+                                        const SizedBox(width: 3),
+                                        Text(
+                                          '$avgScore%',
+                                          style: TextStyle(
+                                            fontFamily: 'Overpass',
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w900,
+                                            color: avgScore >= 75
+                                                ? const Color(0xFF46C07B)
+                                                : (avgScore >= 60 ? const Color(0xFFE5A158) : const Color(0xFFE85D75)),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                ],
+                                if (status != null)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                    decoration: BoxDecoration(
+                                      color: status == 'RELEASING'
+                                          ? const Color(0xFF46C07B).withValues(alpha: 0.12)
+                                          : AppColors.brandBlue.withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      status == 'RELEASING' ? 'AIRING' : status,
+                                      style: TextStyle(
+                                        fontFamily: 'Overpass',
+                                        fontSize: 8.5,
+                                        fontWeight: FontWeight.w800,
+                                        color: status == 'RELEASING' ? const Color(0xFF46C07B) : AppColors.brandBlue,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 5),
+
+                            // Title
+                            Text(
+                              title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontFamily: 'Overpass',
+                                fontWeight: FontWeight.w800,
+                                fontSize: 13,
+                                color: Colors.white,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+
+                            // Metadata (Episodes/Chapters • Year)
+                            Text(
+                              [
+                                if (episodes != null) '$episodes eps' else if (chapters != null) '$chapters ch',
+                                if (year != null) '$year',
+                              ].join(' • '),
+                              style: const TextStyle(
+                                fontFamily: 'Overpass',
+                                fontSize: 10.5,
+                                color: AppColors.darkTextSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        // Genres Tag Row
+                        if (rawGenres.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Wrap(
+                              spacing: 4,
+                              runSpacing: 2,
+                              children: rawGenres.take(3).map((g) {
+                                return Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.darkSurfaceInput,
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+                                  ),
+                                  child: Text(
+                                    g,
+                                    style: const TextStyle(
+                                      fontFamily: 'Overpass',
+                                      fontSize: 9,
+                                      color: AppColors.darkTextSecondary,
+                                    ),
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+                          ),
+                      ],
+                    )
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Status Pill + Personal Score Row
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
                           // Status / Behind badge
                           if (listStatus == 'REPEATING')
                             Container(
@@ -504,36 +647,49 @@ class MediaCard extends StatelessWidget {
                     left: 5,
                     child: FormatChip(format: format),
                   ),
-                // Personal Score badge on top right
-                Positioned(
-                  top: 5,
-                  right: 5,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.8),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.star_rounded, size: 11, color: Color(0xFFE5A158)),
-                        const SizedBox(width: 2),
-                        Text(
-                          userScore != null && userScore! > 0
-                              ? ScoreUtil.formatScore(userScore, format: scoreFormat)
-                              : '-',
-                          style: const TextStyle(
-                            fontFamily: 'Overpass',
-                            fontSize: 9.5,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
+                // Personal or Global Average Score badge on top right
+                if ((userScore != null && userScore! > 0) || (media['averageScore'] != null && (media['averageScore'] as num) > 0))
+                  Positioned(
+                    top: 5,
+                    right: 5,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.8),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.star_rounded,
+                            size: 11,
+                            color: userScore != null
+                                ? const Color(0xFFE5A158)
+                                : ((media['averageScore'] as num) >= 75
+                                    ? const Color(0xFF46C07B)
+                                    : const Color(0xFFE5A158)),
                           ),
-                        ),
-                      ],
+                          const SizedBox(width: 2),
+                          Text(
+                            userScore != null && userScore! > 0
+                                ? ScoreUtil.formatScore(userScore, format: scoreFormat)
+                                : '${(media['averageScore'] as num).toInt()}%',
+                            style: TextStyle(
+                              fontFamily: 'Overpass',
+                              fontSize: 9.5,
+                              fontWeight: FontWeight.bold,
+                              color: userScore != null
+                                  ? Colors.white
+                                  : ((media['averageScore'] as num) >= 75
+                                      ? const Color(0xFF46C07B)
+                                      : Colors.white),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ),
                 // Quick +1 button on bottom right of poster
                 if (onIncrementProgress != null)
                   Positioned(

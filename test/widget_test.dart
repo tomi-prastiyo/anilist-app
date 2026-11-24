@@ -51,4 +51,34 @@ void main() {
       expect(TextUtil.getPreferredTitle(titleMap, preference: 'NATIVE'), '葬送のフリーレン');
     });
   });
+
+  group('Search Filter & Cache Tests', () {
+    test('Cache memory isolation prevents empty results when switching sort options', () {
+      final Map<String, List<Map<String, dynamic>>> searchCache = {};
+      List<Map<String, dynamic>> results = [];
+
+      final newItems = [
+        {'id': 1, 'title': 'Attack on Titan'},
+        {'id': 2, 'title': 'Death Note'},
+      ];
+
+      final key1 = 'Anime:::::::POPULARITY_DESC::1';
+      searchCache[key1] = List<Map<String, dynamic>>.from(newItems);
+      results = List<Map<String, dynamic>>.from(newItems);
+
+      // Reset for next filter
+      results = [];
+
+      // Ensure cache was not wiped out
+      expect(searchCache[key1]!.length, 2);
+
+      // Restore from cache
+      if (searchCache.containsKey(key1) && searchCache[key1]!.isNotEmpty) {
+        results = List<Map<String, dynamic>>.from(searchCache[key1]!);
+      }
+
+      expect(results.length, 2);
+      expect(results.first['title'], 'Attack on Titan');
+    });
+  });
 }

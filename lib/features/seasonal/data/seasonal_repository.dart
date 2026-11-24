@@ -30,6 +30,9 @@ class SeasonalRepository {
           status
           episodes
           averageScore
+          genres
+          seasonYear
+          season
           coverImage {
             large
             medium
