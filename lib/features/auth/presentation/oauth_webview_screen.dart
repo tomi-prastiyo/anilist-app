@@ -18,6 +18,7 @@ class OAuthWebViewScreen extends StatefulWidget {
 class _OAuthWebViewScreenState extends State<OAuthWebViewScreen> {
   late final WebViewController _controller;
   bool _isLoading = true;
+  bool _hasHandledToken = false;
 
   @override
   void initState() {
@@ -46,6 +47,8 @@ class _OAuthWebViewScreenState extends State<OAuthWebViewScreen> {
   }
 
   bool _checkUrlForToken(String url) {
+    if (_hasHandledToken) return true;
+
     if (url.contains('access_token=')) {
       final uri = Uri.parse(url);
       String? token;
@@ -59,8 +62,12 @@ class _OAuthWebViewScreenState extends State<OAuthWebViewScreen> {
       }
 
       if (token != null && token.isNotEmpty) {
+        _hasHandledToken = true;
+        // Safely pop this screen before notifying callback to prevent Navigator assertion crash
+        if (mounted && Navigator.of(context).canPop()) {
+          Navigator.of(context).pop();
+        }
         widget.onTokenReceived(token);
-        Navigator.of(context).pop();
         return true;
       }
     }

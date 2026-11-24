@@ -28,7 +28,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       MaterialPageRoute(
         builder: (context) => OAuthWebViewScreen(
           onTokenReceived: (token) {
-            ref.read(authControllerProvider.notifier).loginWithToken(token);
+            if (mounted) {
+              ref.read(authControllerProvider.notifier).loginWithToken(token);
+            }
           },
         ),
       ),

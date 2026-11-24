@@ -66,10 +66,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
   }
 
   bool _isOwnProfile(dynamic authUser) {
-    if (authUser == null) return false;
     if (widget.userId == null && widget.userName == null) return true;
-    if (widget.userId != null && widget.userId == authUser.id) return true;
-    if (widget.userName != null && widget.userName == authUser.name) return true;
+    if (authUser != null) {
+      if (widget.userId != null && widget.userId == authUser.id) return true;
+      if (widget.userName != null && widget.userName == authUser.name) return true;
+    }
     return false;
   }
 
@@ -480,15 +481,21 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                               ),
                               const SizedBox(height: 6),
 
-                              // Interactive Following & Followers Counters
+                              // Interactive Following & Followers Counters (Optimized Touch Targets)
                               Row(
                                 children: [
-                                  InkWell(
+                                  GestureDetector(
+                                    behavior: HitTestBehavior.opaque,
                                     onTap: () => _openFollowsScreen(0),
-                                    borderRadius: BorderRadius.circular(4),
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 2),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withValues(alpha: 0.05),
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+                                      ),
                                       child: Row(
+                                        mainAxisSize: MainAxisSize.min,
                                         children: [
                                           Text(
                                             '$_followingCount',
@@ -504,7 +511,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                                             'Following',
                                             style: TextStyle(
                                               fontFamily: 'Overpass',
-                                              fontSize: 12,
+                                              fontSize: 11.5,
                                               fontWeight: FontWeight.w600,
                                               color: AppColors.darkTextSecondary,
                                             ),
@@ -513,16 +520,19 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                                       ),
                                     ),
                                   ),
-                                  const Padding(
-                                    padding: EdgeInsets.symmetric(horizontal: 6),
-                                    child: Text('•', style: TextStyle(color: AppColors.darkTextMuted)),
-                                  ),
-                                  InkWell(
+                                  const SizedBox(width: 8),
+                                  GestureDetector(
+                                    behavior: HitTestBehavior.opaque,
                                     onTap: () => _openFollowsScreen(1),
-                                    borderRadius: BorderRadius.circular(4),
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 2),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withValues(alpha: 0.05),
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+                                      ),
                                       child: Row(
+                                        mainAxisSize: MainAxisSize.min,
                                         children: [
                                           Text(
                                             '$_followersCount',
@@ -538,7 +548,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                                             'Followers',
                                             style: TextStyle(
                                               fontFamily: 'Overpass',
-                                              fontSize: 12,
+                                              fontSize: 11.5,
                                               fontWeight: FontWeight.w600,
                                               color: AppColors.darkTextSecondary,
                                             ),
@@ -633,25 +643,25 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
         // 1. Sleek 2x3 Quick Stat Neo-Cards
         Row(
           children: [
-            _statCard('Total Anime', '$count', Icons.tv_rounded, accentColor),
+            _statCard('Total Anime', '$count', Icons.tv_rounded, accentColor, const Color(0xFF3DB4F2)),
             const SizedBox(width: 8),
-            _statCard('Days Watched', '${days}d', Icons.access_time_rounded, accentColor),
+            _statCard('Days Watched', '${days}d', Icons.access_time_rounded, accentColor, const Color(0xFF00B4D8)),
           ],
         ),
         const SizedBox(height: 8),
         Row(
           children: [
-            _statCard('Mean Score', meanScore > 0 ? '${meanScore.toStringAsFixed(1)}%' : '-', Icons.star_rounded, accentColor),
+            _statCard('Mean Score', meanScore > 0 ? '${meanScore.toStringAsFixed(1)}%' : '-', Icons.star_rounded, accentColor, const Color(0xFFFFB703)),
             const SizedBox(width: 8),
-            _statCard('Std Dev', stdDev > 0 ? stdDev.toStringAsFixed(1) : '-', Icons.query_stats_rounded, accentColor),
+            _statCard('Std Dev', stdDev > 0 ? stdDev.toStringAsFixed(1) : '-', Icons.query_stats_rounded, accentColor, const Color(0xFFE056FD)),
           ],
         ),
         const SizedBox(height: 8),
         Row(
           children: [
-            _statCard('Episodes', '$episodes', Icons.play_circle_outline_rounded, accentColor),
+            _statCard('Episodes', '$episodes', Icons.play_circle_outline_rounded, accentColor, const Color(0xFF06D6A0)),
             const SizedBox(width: 8),
-            _statCard('Manga Chapters', '$mangaChapters', Icons.menu_book_rounded, accentColor),
+            _statCard('Manga Chapters', '$mangaChapters', Icons.menu_book_rounded, accentColor, const Color(0xFF9D4EDD)),
           ],
         ),
         const SizedBox(height: 20),
@@ -1104,14 +1114,22 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     );
   }
 
-  Widget _statCard(String label, String value, IconData icon, Color accentColor) {
+  Widget _statCard(String label, String value, IconData icon, Color accentColor, [Color? iconColor]) {
+    final effectiveColor = iconColor ?? accentColor;
     return Expanded(
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.p12),
         decoration: BoxDecoration(
           color: AppColors.darkSurface,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: effectiveColor.withValues(alpha: 0.16)),
+          boxShadow: [
+            BoxShadow(
+              color: effectiveColor.withValues(alpha: 0.06),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1119,10 +1137,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
             Container(
               padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
-                color: accentColor.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(6),
+                color: effectiveColor.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(8),
               ),
-              child: Icon(icon, size: 16, color: accentColor),
+              child: Icon(icon, size: 16, color: effectiveColor),
             ),
             const SizedBox(height: 8),
             Text(

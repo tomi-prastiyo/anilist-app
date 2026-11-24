@@ -114,33 +114,36 @@ class MangaInProgressShelf extends ConsumerWidget {
                       ? (progress / totalChapters).clamp(0.0, 1.0)
                       : null;
 
-                  return GestureDetector(
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (context) => MediaDetailScreen(mediaId: media['id']),
-                        ),
-                      );
-                    },
-                    child: Container(
-                      width: 260,
-                      decoration: BoxDecoration(
-                        color: AppColors.darkSurface,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.25),
-                            blurRadius: 6,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
+                  void openDetail() {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => MediaDetailScreen(mediaId: media['id']),
                       ),
-                      padding: const EdgeInsets.all(10),
-                      child: Row(
-                        children: [
-                          // Cover Image
-                          ClipRRect(
+                    );
+                  }
+
+                  return Container(
+                    width: 260,
+                    decoration: BoxDecoration(
+                      color: AppColors.darkSurface,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.25),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    padding: const EdgeInsets.all(10),
+                    child: Row(
+                      children: [
+                        // Cover Image (Tappable to Detail)
+                        GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: openDetail,
+                          child: ClipRRect(
                             borderRadius: BorderRadius.circular(8),
                             child: AppNetworkImage(
                               imageUrl: coverUrl,
@@ -149,15 +152,20 @@ class MangaInProgressShelf extends ConsumerWidget {
                               fit: BoxFit.cover,
                             ),
                           ),
-                          const SizedBox(width: 10),
+                        ),
+                        const SizedBox(width: 10),
 
-                          // Details Column
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Column(
+                        // Details Column
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              // Title & Reading Status (Tappable to Detail)
+                              GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: openDetail,
+                                child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     // Reading Tag
@@ -201,66 +209,80 @@ class MangaInProgressShelf extends ConsumerWidget {
                                     ),
                                   ],
                                 ),
+                              ),
 
-                                // Progress Bar + Quick Increment (+1)
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: ClipRRect(
-                                        borderRadius: BorderRadius.circular(3),
-                                        child: LinearProgressIndicator(
-                                          value: progressPercent,
-                                          backgroundColor: AppColors.darkSurfaceInput,
-                                          valueColor: const AlwaysStoppedAnimation<Color>(_mangaPurple),
-                                          minHeight: 5,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    InkWell(
-                                      onTap: () {
-                                        HapticFeedback.lightImpact();
-                                        ref.read(mangaListControllerProvider.notifier).incrementProgress(
-                                          entryId: item['id'] as int,
-                                          mediaId: media['id'] as int,
-                                          currentProgress: progress,
-                                          maxEpisodesOrChapters: totalChapters,
-                                        );
-                                      },
-                                      borderRadius: BorderRadius.circular(6),
-                                      child: Container(
-                                        width: 28,
-                                        height: 28,
-                                        decoration: BoxDecoration(
-                                          color: _mangaPurple,
-                                          borderRadius: BorderRadius.circular(6),
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: _mangaPurple.withValues(alpha: 0.3),
-                                              blurRadius: 4,
-                                              offset: const Offset(0, 1),
-                                            ),
-                                          ],
-                                        ),
-                                        alignment: Alignment.center,
-                                        child: const Text(
-                                          '+1',
-                                          style: TextStyle(
-                                            fontFamily: 'Overpass',
-                                            fontWeight: FontWeight.w900,
-                                            fontSize: 12,
-                                            color: Colors.white,
+                              // Progress Bar + Quick Increment (+1)
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: GestureDetector(
+                                      behavior: HitTestBehavior.opaque,
+                                      onTap: openDetail,
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(vertical: 4),
+                                        child: ClipRRect(
+                                          borderRadius: BorderRadius.circular(4),
+                                          child: LinearProgressIndicator(
+                                            value: progressPercent,
+                                            backgroundColor: AppColors.darkSurfaceInput,
+                                            valueColor: const AlwaysStoppedAnimation<Color>(_mangaPurple),
+                                            minHeight: 6,
                                           ),
                                         ),
                                       ),
                                     ),
-                                  ],
-                                ),
-                              ],
-                            ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  InkWell(
+                                    onTap: () {
+                                      HapticFeedback.lightImpact();
+                                      ref.read(mangaListControllerProvider.notifier).incrementProgress(
+                                        entryId: item['id'] as int,
+                                        mediaId: media['id'] as int,
+                                        currentProgress: progress,
+                                        maxEpisodesOrChapters: totalChapters,
+                                      );
+                                    },
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Container(
+                                      width: 32,
+                                      height: 32,
+                                      decoration: BoxDecoration(
+                                        gradient: const LinearGradient(
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight,
+                                          colors: [
+                                            Color(0xFF8A68F0),
+                                            Color(0xFF6B43DB),
+                                          ],
+                                        ),
+                                        borderRadius: BorderRadius.circular(8),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: _mangaPurple.withValues(alpha: 0.35),
+                                            blurRadius: 6,
+                                            offset: const Offset(0, 2),
+                                          ),
+                                        ],
+                                      ),
+                                      alignment: Alignment.center,
+                                      child: const Text(
+                                        '+1',
+                                        style: TextStyle(
+                                          fontFamily: 'Overpass',
+                                          fontWeight: FontWeight.w900,
+                                          fontSize: 12.5,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   );
                 },

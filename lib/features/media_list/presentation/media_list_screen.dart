@@ -436,7 +436,6 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
                 final status = _statuses[index];
                 final count = statusCounts[status] ?? 0;
                 final isSelected = _selectedTabIndex == index;
-                final label = '${_getStatusLabel(status)} ($count)';
 
                 return GestureDetector(
                   onTap: () {
@@ -446,34 +445,62 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
                   },
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
                       color: isSelected ? accentColor : AppColors.darkSurface,
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: isSelected ? accentColor : Colors.white.withValues(alpha: 0.06),
+                        color: isSelected ? accentColor : Colors.white.withValues(alpha: 0.08),
                       ),
                       boxShadow: isSelected
                           ? [
                               BoxShadow(
-                                color: accentColor.withValues(alpha: 0.3),
-                                blurRadius: 8,
+                                color: accentColor.withValues(alpha: 0.35),
+                                blurRadius: 10,
                                 offset: const Offset(0, 2),
                               ),
                             ]
                           : null,
                     ),
-                    child: Text(
-                      label,
-                      style: TextStyle(
-                        fontFamily: 'Overpass',
-                        fontSize: 12,
-                        fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
-                        color: isSelected
-                            ? (isAnime ? AppColors.darkBackground : Colors.white)
-                            : AppColors.darkTextSecondary,
-                      ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _getStatusLabel(status),
+                          style: TextStyle(
+                            fontFamily: 'Overpass',
+                            fontSize: 12,
+                            fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
+                            color: isSelected
+                                ? (isAnime ? AppColors.darkBackground : Colors.white)
+                                : Colors.white70,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? (isAnime
+                                    ? Colors.black.withValues(alpha: 0.18)
+                                    : Colors.white.withValues(alpha: 0.25))
+                                : Colors.white.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            '$count',
+                            style: TextStyle(
+                              fontFamily: 'Overpass',
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                              color: isSelected
+                                  ? (isAnime ? AppColors.darkBackground : Colors.white)
+                                  : AppColors.darkTextSecondary,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 );

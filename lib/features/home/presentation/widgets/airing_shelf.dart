@@ -130,19 +130,22 @@ class AiringShelf extends StatelessWidget {
                             top: 4,
                             right: 4,
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
                               decoration: BoxDecoration(
-                                color: AppColors.statusBehind,
-                                borderRadius: BorderRadius.circular(4),
+                                gradient: const LinearGradient(
+                                  colors: [Color(0xFFE91E63), Color(0xFFC2185B)],
+                                ),
+                                borderRadius: BorderRadius.circular(6),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.4),
-                                    blurRadius: 3,
+                                    color: const Color(0xFFE91E63).withValues(alpha: 0.4),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 1),
                                   ),
                                 ],
                               ),
                               child: Text(
-                                'Ep $episode in $countdownText',
+                                'Ep $episode • $countdownText',
                                 style: const TextStyle(
                                   fontFamily: 'Overpass',
                                   fontSize: 8.5,

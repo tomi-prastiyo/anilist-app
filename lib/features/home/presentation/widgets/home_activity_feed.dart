@@ -8,6 +8,7 @@ import '../../../../shared/feedback/shimmer_loading.dart';
 import '../../../../shared/image/app_avatar.dart';
 import '../../../../shared/image/app_network_image.dart';
 import '../../../activity/data/activity_repository.dart';
+import '../../../activity/presentation/widgets/activity_comments_bottom_sheet.dart';
 import '../../../auth/presentation/auth_controller.dart';
 import '../../../media_detail/presentation/media_detail_screen.dart';
 import '../../../profile/presentation/profile_screen.dart';
@@ -80,6 +81,34 @@ class HomeActivityFeedState extends ConsumerState<HomeActivityFeed> {
         );
       }
     }
+  }
+
+  void _openComments(Map<String, dynamic> item) {
+    final id = item['id'] as int?;
+    if (id == null) return;
+    final user = item['user'] as Map<String, dynamic>?;
+    final media = item['media'] as Map<String, dynamic>?;
+    final title = media != null
+        ? (media['title']?['userPreferred'] as String?)
+        : item['status'] as String?;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => ActivityCommentsBottomSheet(
+        activityId: id,
+        activityUserName: user?['name'] as String?,
+        activityUserAvatar: user?['avatar']?['medium'] as String?,
+        activityTitle: title,
+        initialReplyCount: item['replyCount'] as int? ?? 0,
+        onReplyAdded: () {
+          setState(() {
+            item['replyCount'] = (item['replyCount'] as int? ?? 0) + 1;
+          });
+        },
+      ),
+    );
   }
 
   @override
@@ -434,25 +463,32 @@ class HomeActivityFeedState extends ConsumerState<HomeActivityFeed> {
                         ),
                         const SizedBox(width: 14),
 
-                        // Read-Only Comment Icon (with count)
-                        Row(
-                          children: [
-                            const Icon(
-                              Icons.chat_bubble_outline_rounded,
-                              size: 14,
-                              color: AppColors.darkTextSecondary,
+                        // Interactive Comment Button (with count)
+                        InkWell(
+                          onTap: () => _openComments(item),
+                          borderRadius: BorderRadius.circular(4),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  Icons.chat_bubble_outline_rounded,
+                                  size: 14,
+                                  color: AppColors.darkTextSecondary,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '$replyCount',
+                                  style: const TextStyle(
+                                    fontFamily: 'Overpass',
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.darkTextSecondary,
+                                  ),
+                                ),
+                              ],
                             ),
-                            const SizedBox(width: 4),
-                            Text(
-                              '$replyCount',
-                              style: const TextStyle(
-                                fontFamily: 'Overpass',
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.darkTextSecondary,
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
                       ],
                     ),

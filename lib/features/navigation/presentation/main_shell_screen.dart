@@ -39,18 +39,30 @@ class _MainShellScreenState extends State<MainShellScreen> {
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
             child: Container(
-              height: 58,
+              height: 60,
               decoration: BoxDecoration(
-                color: AppColors.darkSurface,
-                borderRadius: BorderRadius.circular(20),
+                gradient: const LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Color(0xFF172334),
+                    Color(0xFF121B28),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(24),
                 border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.08),
+                  color: Colors.white.withValues(alpha: 0.09),
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.35),
-                    blurRadius: 16,
-                    offset: const Offset(0, 4),
+                    color: Colors.black.withValues(alpha: 0.45),
+                    blurRadius: 18,
+                    offset: const Offset(0, 6),
+                  ),
+                  BoxShadow(
+                    color: AppColors.brandBlue.withValues(alpha: 0.05),
+                    blurRadius: 12,
+                    offset: const Offset(0, 0),
                   ),
                 ],
               ),
@@ -86,20 +98,30 @@ class _MainShellScreenState extends State<MainShellScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            AnimatedSwitcher(
+            AnimatedContainer(
               duration: const Duration(milliseconds: 200),
+              padding: EdgeInsets.symmetric(
+                horizontal: isSelected ? 12 : 8,
+                vertical: 4,
+              ),
+              decoration: isSelected
+                  ? BoxDecoration(
+                      color: AppColors.brandBlue.withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(12),
+                    )
+                  : null,
               child: Icon(
                 isSelected ? activeIcon : outlineIcon,
                 key: ValueKey<bool>(isSelected),
-                size: 22,
+                size: 21,
                 color: isSelected ? AppColors.brandBlue : AppColors.darkTextSecondary,
               ),
             ),
-            const SizedBox(height: 3),
+            const SizedBox(height: 2),
             if (isSelected)
               Container(
-                width: 4.5,
-                height: 4.5,
+                width: 4,
+                height: 4,
                 decoration: const BoxDecoration(
                   shape: BoxShape.circle,
                   color: AppColors.brandBlue,
@@ -113,7 +135,7 @@ class _MainShellScreenState extends State<MainShellScreen> {
                 ),
               )
             else
-              const SizedBox(height: 4.5),
+              const SizedBox(height: 4),
           ],
         ),
       ),

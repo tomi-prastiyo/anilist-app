@@ -11,6 +11,7 @@ import '../../auth/presentation/auth_controller.dart';
 import '../../media_detail/presentation/media_detail_screen.dart';
 import '../../profile/presentation/profile_screen.dart';
 import '../data/activity_repository.dart';
+import 'widgets/activity_comments_bottom_sheet.dart';
 
 class ActivityScreen extends ConsumerStatefulWidget {
   final int? userId;
@@ -32,7 +33,6 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
   bool _isLoading = true;
   int _currentPage = 1;
   bool _hasNextPage = true;
-  final TextEditingController _postController = TextEditingController();
 
   @override
   void initState() {
@@ -50,7 +50,6 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
 
   @override
   void dispose() {
-    _postController.dispose();
     super.dispose();
   }
 
@@ -114,65 +113,30 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
     }
   }
 
-  void _showNewPostDialog() {
-    final auth = ref.read(authControllerProvider);
-    final accentColor = auth is Authenticated
-        ? AppColors.getProfileAccentColor(auth.user.profileColor)
-        : AppColors.brandBlue;
+  void _openComments(Map<String, dynamic> activity) {
+    final id = activity['id'] as int?;
+    if (id == null) return;
+    final user = activity['user'] as Map<String, dynamic>?;
+    final media = activity['media'] as Map<String, dynamic>?;
+    final title = media != null
+        ? (media['title']?['userPreferred'] as String?)
+        : activity['status'] as String?;
 
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppColors.darkSurface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        title: const Text(
-          'New Status Post',
-          style: TextStyle(
-            fontFamily: 'Overpass',
-            fontWeight: FontWeight.w800,
-            fontSize: 16,
-          ),
-        ),
-        content: TextField(
-          controller: _postController,
-          maxLines: 4,
-          style: const TextStyle(fontSize: 13.5),
-          decoration: InputDecoration(
-            hintText: 'Share your thoughts with AniList...',
-            hintStyle: const TextStyle(color: AppColors.darkTextMuted),
-            fillColor: AppColors.darkSurfaceInput,
-            filled: true,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(6),
-              borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.06)),
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel', style: TextStyle(color: AppColors.darkTextSecondary)),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              final text = _postController.text.trim();
-              if (text.isEmpty) return;
-              Navigator.of(context).pop();
-              try {
-                final repo = ref.read(activityRepositoryProvider);
-                await repo.saveTextActivity(text);
-                _postController.clear();
-                _load(page: 1);
-              } catch (_) {}
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: accentColor,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-            ),
-            child: const Text('Post', style: TextStyle(fontWeight: FontWeight.w700)),
-          ),
-        ],
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => ActivityCommentsBottomSheet(
+        activityId: id,
+        activityUserName: user?['name'] as String?,
+        activityUserAvatar: user?['avatar']?['medium'] as String?,
+        activityTitle: title,
+        initialReplyCount: activity['replyCount'] as int? ?? 0,
+        onReplyAdded: () {
+          setState(() {
+            activity['replyCount'] = (activity['replyCount'] as int? ?? 0) + 1;
+          });
+        },
       ),
     );
   }
@@ -195,7 +159,6 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
     final accentColor = auth is Authenticated
         ? AppColors.getProfileAccentColor(auth.user.profileColor)
         : AppColors.brandBlue;
-    final isOwnProfile = widget.userId == null || (auth is Authenticated && widget.userId == auth.user.id);
 
     final content = _isLoading
         ? const ShimmerMediaGrid(count: 6)
@@ -420,26 +383,35 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                                     ),
                                   ),
                                 ),
-                                if (replyCount > 0) ...[
-                                  const SizedBox(width: 12),
-                                  Row(
-                                    children: [
-                                      const Icon(
-                                        Icons.chat_bubble_outline_rounded,
-                                        size: 14,
-                                        color: AppColors.darkTextMuted,
+                                const SizedBox(width: 8),
+                                Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(16),
+                                    onTap: () => _openComments(item),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      child: Row(
+                                        children: [
+                                          const Icon(
+                                            Icons.chat_bubble_outline_rounded,
+                                            size: 15,
+                                            color: AppColors.darkTextSecondary,
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            replyCount > 0 ? '$replyCount' : 'Reply',
+                                            style: const TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w600,
+                                              color: AppColors.darkTextSecondary,
+                                            ),
+                                          ),
+                                        ],
                                       ),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        '$replyCount',
-                                        style: const TextStyle(
-                                          fontSize: 11.5,
-                                          color: AppColors.darkTextMuted,
-                                        ),
-                                      ),
-                                    ],
+                                    ),
                                   ),
-                                ],
+                                ),
                               ],
                             ),
                           ],
@@ -451,24 +423,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
 
     // If embedded inside ProfileScreen, do not wrap in a full Scaffold with nested AppBar
     if (widget.isEmbedded) {
-      return Stack(
-        children: [
-          content,
-          if (isOwnProfile)
-            Positioned(
-              bottom: 16,
-              right: 16,
-              child: FloatingActionButton(
-                heroTag: 'profile_activity_fab',
-                onPressed: _showNewPostDialog,
-                backgroundColor: accentColor,
-                foregroundColor: Colors.white,
-                mini: true,
-                child: const Icon(Icons.edit_rounded, size: 20),
-              ),
-            ),
-        ],
-      );
+      return content;
     }
 
     return Scaffold(
@@ -571,13 +526,6 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
             ),
           ),
         ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        heroTag: 'global_activity_fab',
-        onPressed: _showNewPostDialog,
-        backgroundColor: accentColor,
-        foregroundColor: Colors.white,
-        child: const Icon(Icons.edit_rounded),
       ),
       body: content,
     );

@@ -444,12 +444,12 @@ class MediaCard extends StatelessWidget {
                     children: [
                       Expanded(
                         child: ClipRRect(
-                          borderRadius: BorderRadius.circular(3),
+                          borderRadius: BorderRadius.circular(4),
                           child: LinearProgressIndicator(
                             value: progressPercent,
                             backgroundColor: AppColors.darkSurfaceInput,
                             valueColor: AlwaysStoppedAnimation<Color>(color),
-                            minHeight: 5,
+                            minHeight: 6,
                           ),
                         ),
                       ),
@@ -457,18 +457,18 @@ class MediaCard extends StatelessWidget {
                         const SizedBox(width: 8),
                         InkWell(
                           onTap: onIncrementProgress,
-                          borderRadius: BorderRadius.circular(6),
+                          borderRadius: BorderRadius.circular(8),
                           child: Container(
-                            width: 28,
-                            height: 28,
+                            width: 30,
+                            height: 30,
                             decoration: BoxDecoration(
                               color: color,
-                              borderRadius: BorderRadius.circular(6),
+                              borderRadius: BorderRadius.circular(8),
                               boxShadow: [
                                 BoxShadow(
-                                  color: color.withValues(alpha: 0.3),
-                                  blurRadius: 4,
-                                  offset: const Offset(0, 1),
+                                  color: color.withValues(alpha: 0.35),
+                                  blurRadius: 6,
+                                  offset: const Offset(0, 2),
                                 ),
                               ],
                             ),
@@ -478,7 +478,7 @@ class MediaCard extends StatelessWidget {
                               style: TextStyle(
                                 fontFamily: 'Overpass',
                                 fontWeight: FontWeight.w900,
-                                fontSize: 12,
+                                fontSize: 12.5,
                                 color: isManga ? Colors.white : AppColors.darkBackground,
                               ),
                             ),
