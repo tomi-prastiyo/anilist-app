@@ -66,18 +66,9 @@ class ActivityRepository {
   ''';
 
   static const String toggleLikeMutation = r'''
-    mutation ToggleLike($id: Int) {
-      ToggleLike(id: $id, type: ACTIVITY) {
-        ... on TextActivity {
-          id
-          isLiked
-          likeCount
-        }
-        ... on ListActivity {
-          id
-          isLiked
-          likeCount
-        }
+    mutation ToggleLikeMutation($id: Int, $type: LikeableType) {
+      ToggleLikeV2(id: $id, type: $type) {
+        __typename
       }
     }
   ''';
@@ -108,7 +99,10 @@ class ActivityRepository {
   Future<void> toggleLike(int activityId) async {
     await _apiClient.postGraphQL(
       query: toggleLikeMutation,
-      variables: {'id': activityId},
+      variables: {
+        'id': activityId,
+        'type': 'ACTIVITY',
+      },
     );
   }
 

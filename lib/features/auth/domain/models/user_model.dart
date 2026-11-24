@@ -8,6 +8,7 @@ class UserModel extends Equatable {
   final String? bannerUrl;
   final String titleLanguage;
   final String scoreFormat;
+  final String? profileColor;
   final bool displayAdultContent;
   final int unreadNotificationCount;
 
@@ -19,6 +20,7 @@ class UserModel extends Equatable {
     this.bannerUrl,
     this.titleLanguage = 'ROMAJI',
     this.scoreFormat = 'POINT_100',
+    this.profileColor,
     this.displayAdultContent = false,
     this.unreadNotificationCount = 0,
   });
@@ -36,6 +38,7 @@ class UserModel extends Equatable {
       bannerUrl: json['bannerImage'] as String?,
       titleLanguage: options?['titleLanguage'] as String? ?? 'ROMAJI',
       scoreFormat: mediaListOptions?['scoreFormat'] as String? ?? 'POINT_100',
+      profileColor: options?['profileColor'] as String?,
       displayAdultContent: options?['displayAdultContent'] as bool? ?? false,
       unreadNotificationCount: json['unreadNotificationCount'] as int? ?? 0,
     );
@@ -50,6 +53,7 @@ class UserModel extends Equatable {
         bannerUrl,
         titleLanguage,
         scoreFormat,
+        profileColor,
         displayAdultContent,
         unreadNotificationCount,
       ];

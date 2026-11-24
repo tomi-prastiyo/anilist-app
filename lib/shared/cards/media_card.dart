@@ -188,26 +188,83 @@ class MediaCard extends StatelessWidget {
 
   Widget _buildCompactCard(BuildContext context) {
     final title = TextUtil.getPreferredTitle(media['title'], preference: titlePreference);
-    final coverUrl = media['coverImage']?['medium'];
+    final coverUrl = media['coverImage']?['medium'] ?? media['coverImage']?['large'];
     final score = (media['averageScore'] as num?)?.toDouble();
+    final format = media['format'] as String?;
+    final episodes = media['episodes'] as int? ?? media['chapters'] as int?;
 
-    return ListTile(
-      onTap: onTap,
-      dense: true,
-      contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.p12, vertical: 2),
-      leading: AppNetworkImage(
-        imageUrl: coverUrl,
-        width: 38,
-        height: 52,
-        borderRadius: AppSpacing.borderRadius4,
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.darkSurface,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: AppColors.darkBorder.withValues(alpha: 0.5)),
       ),
-      title: Text(
-        title,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+      child: ListTile(
+        onTap: onTap,
+        dense: true,
+        contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.p12, vertical: 4),
+        leading: AppNetworkImage(
+          imageUrl: coverUrl,
+          width: 36,
+          height: 48,
+          borderRadius: BorderRadius.circular(3),
+        ),
+        title: Text(
+          title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            fontFamily: 'Overpass',
+            fontSize: 13.5,
+            fontWeight: FontWeight.w600,
+            color: AppColors.darkTextPrimary,
+          ),
+        ),
+        subtitle: Row(
+          children: [
+            if (format != null) ...[
+              Text(
+                format,
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.darkTextMuted,
+                ),
+              ),
+              const SizedBox(width: 8),
+            ],
+            if (userProgress != null)
+              Text(
+                'Ep $userProgress / ${episodes ?? '?'}',
+                style: const TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.darkTextSecondary,
+                ),
+              ),
+          ],
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (score != null) ScoreBadge(score: score, fontSize: 10),
+            if (onIncrementProgress != null) ...[
+              const SizedBox(width: 8),
+              IconButton.filledTonal(
+                onPressed: onIncrementProgress,
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                padding: EdgeInsets.zero,
+                style: IconButton.styleFrom(
+                  backgroundColor: AppColors.brandBlue.withValues(alpha: 0.15),
+                  foregroundColor: AppColors.brandBlue,
+                ),
+                icon: const Icon(Icons.add_rounded, size: 18),
+                tooltip: '+1 Episode / Chapter',
+              ),
+            ],
+          ],
+        ),
       ),
-      trailing: score != null ? ScoreBadge(score: score, fontSize: 10) : null,
     );
   }
 }

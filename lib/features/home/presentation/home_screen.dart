@@ -2,48 +2,115 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
-import '../../../shared/cards/media_card.dart';
 import '../../../shared/feedback/error_view.dart';
 import '../../../shared/feedback/shimmer_loading.dart';
 import '../../../shared/image/app_avatar.dart';
 import '../../auth/presentation/auth_controller.dart';
-import '../../media_detail/presentation/media_detail_screen.dart';
+import '../../media_list/presentation/media_list_controller.dart';
+import '../../notifications/presentation/notifications_screen.dart';
+import '../../profile/presentation/profile_screen.dart';
 import 'home_controller.dart';
+import 'widgets/airing_shelf.dart';
+import 'widgets/anime_in_progress_shelf.dart';
+import 'widgets/home_activity_feed.dart';
+import 'widgets/manga_in_progress_shelf.dart';
 
-class HomeScreen extends ConsumerWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  final GlobalKey<HomeActivityFeedState> _activityFeedKey = GlobalKey<HomeActivityFeedState>();
+
+  @override
+  Widget build(BuildContext context) {
     final homeState = ref.watch(homeDataProvider);
     final authState = ref.watch(authControllerProvider);
 
     final user = authState is Authenticated ? authState.user : null;
     final userName = user?.name ?? 'Guest';
     final userAvatar = user?.avatarUrl;
+    final unreadCount = user?.unreadNotificationCount ?? 0;
 
     return Scaffold(
       appBar: AppBar(
         titleSpacing: AppSpacing.p16,
-        title: Row(
-          children: [
-            AppAvatar(imageUrl: userAvatar, size: 36),
-            const SizedBox(width: AppSpacing.p12),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+        title: InkWell(
+          onTap: () {
+            if (user != null) {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (context) => const ProfileScreen()),
+              );
+            }
+          },
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(
               children: [
-                Text(
-                  'Hello, $userName 👋',
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                ),
-                Text(
-                  user != null ? 'Track your anime & manga' : 'Browsing as Guest',
-                  style: const TextStyle(fontSize: 12, color: AppColors.darkTextSecondary),
+                AppAvatar(imageUrl: userAvatar, size: 36),
+                const SizedBox(width: AppSpacing.p12),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Hello, $userName 👋',
+                      style: const TextStyle(
+                        fontFamily: 'Overpass',
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                      ),
+                    ),
+                    Text(
+                      user != null ? 'Track your anime & manga' : 'Browsing as Guest',
+                      style: const TextStyle(
+                        fontFamily: 'Overpass',
+                        fontSize: 11.5,
+                        color: AppColors.darkTextSecondary,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
-          ],
+          ),
         ),
+        actions: [
+          if (user != null)
+            Stack(
+              alignment: Alignment.center,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.notifications_outlined),
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (context) => const NotificationsScreen()),
+                    );
+                  },
+                ),
+                if (unreadCount > 0)
+                  Positioned(
+                    top: 10,
+                    right: 10,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: const BoxDecoration(
+                        color: AppColors.statusBehind,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Text(
+                        unreadCount > 9 ? '9+' : '$unreadCount',
+                        style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+        ],
       ),
       body: homeState.when(
         loading: () => const SingleChildScrollView(
@@ -56,100 +123,53 @@ class HomeScreen extends ConsumerWidget {
         ),
         error: (err, _) => ErrorView(
           message: err.toString(),
-          onRetry: () => ref.read(homeDataProvider.notifier).refresh(),
+          onRetry: () {
+            ref.read(homeDataProvider.notifier).refresh();
+            ref.read(animeListControllerProvider.notifier).loadLists();
+            ref.read(mangaListControllerProvider.notifier).loadLists();
+            _activityFeedKey.currentState?.loadActivities();
+          },
         ),
         data: (data) {
-          final trendingAnime = (data['trendingAnime']?['media'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-          final popularSeason = (data['popularSeason']?['media'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-          final trendingManga = (data['trendingManga']?['media'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-          final topRated = (data['topRated']?['media'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+          final airingSchedules = (data['airingToday']?['airingSchedules'] as List?)
+                  ?.cast<Map<String, dynamic>>() ??
+              [];
 
           return RefreshIndicator(
-            onRefresh: () => ref.read(homeDataProvider.notifier).refresh(),
+            onRefresh: () async {
+              await Future.wait([
+                ref.read(homeDataProvider.notifier).refresh(),
+                ref.read(animeListControllerProvider.notifier).loadLists(),
+                ref.read(mangaListControllerProvider.notifier).loadLists(),
+                _activityFeedKey.currentState?.loadActivities() ?? Future.value(),
+              ]);
+            },
             color: AppColors.brandBlue,
-            backgroundColor: AppColors.darkCard,
+            backgroundColor: AppColors.darkSurface,
             child: ListView(
-              padding: const EdgeInsets.only(bottom: AppSpacing.p32),
+              padding: const EdgeInsets.only(top: 8, bottom: 90),
               children: [
-                _buildSection(
-                  context,
-                  title: '🔥 Trending Anime',
-                  items: trendingAnime,
-                ),
-                _buildSection(
-                  context,
-                  title: '✨ Popular This Season',
-                  items: popularSeason,
-                ),
-                _buildSection(
-                  context,
-                  title: '📖 Trending Manga',
-                  items: trendingManga,
-                ),
-                _buildSection(
-                  context,
-                  title: '⭐ All-Time Top Rated',
-                  items: topRated,
-                ),
+                // 1. Airing Shelf (Schedule with countdown timers)
+                if (airingSchedules.isNotEmpty) ...[
+                  AiringShelf(schedules: airingSchedules),
+                  const SizedBox(height: 18),
+                ],
+
+                // 2. Anime In Progress (3-4 items + View All)
+                const AnimeInProgressShelf(),
+                const SizedBox(height: 18),
+
+                // 3. Manga In Progress (2-3 items + View All)
+                const MangaInProgressShelf(),
+                const SizedBox(height: 18),
+
+                // 4. Community Activity Feed (Following default vs Global, Like button)
+                HomeActivityFeed(key: _activityFeedKey),
               ],
             ),
           );
         },
       ),
-    );
-  }
-
-  Widget _buildSection(
-    BuildContext context, {
-    required String title,
-    required List<Map<String, dynamic>> items,
-  }) {
-    if (items.isEmpty) return const SizedBox.shrink();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(AppSpacing.p16, AppSpacing.p20, AppSpacing.p16, AppSpacing.p12),
-          child: Text(
-            title,
-            style: const TextStyle(
-              fontSize: 17,
-              fontWeight: FontWeight.w700,
-              letterSpacing: -0.3,
-            ),
-          ),
-        ),
-        SizedBox(
-          height: 220,
-          child: ListView.separated(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.p16),
-            scrollDirection: Axis.horizontal,
-            itemCount: items.length,
-            separatorBuilder: (context, index) => const SizedBox(width: AppSpacing.p12),
-            itemBuilder: (context, index) {
-              final media = items[index];
-              return SizedBox(
-                width: 125,
-                child: MediaCard(
-                  media: media,
-                  mode: MediaCardMode.grid,
-                  onTap: () {
-                    final mediaId = media['id'] as int?;
-                    if (mediaId != null) {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (context) => MediaDetailScreen(mediaId: mediaId),
-                        ),
-                      );
-                    }
-                  },
-                ),
-              );
-            },
-          ),
-        ),
-      ],
     );
   }
 }

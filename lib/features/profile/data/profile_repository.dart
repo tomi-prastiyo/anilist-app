@@ -12,8 +12,8 @@ class ProfileRepository {
   ProfileRepository(this._apiClient);
 
   static const String userDetailQuery = r'''
-    query UserDetailQuery($id: Int) {
-      User(id: $id) {
+    query UserDetailQuery($id: Int, $name: String) {
+      User(id: $id, name: $name) {
         id
         name
         about(asHtml: false)
@@ -29,7 +29,7 @@ class ProfileRepository {
             standardDeviation
             minutesWatched
             episodesWatched
-            scores(sort: [SCORE]) {
+            scores {
               score
               count
             }
@@ -50,18 +50,42 @@ class ProfileRepository {
           }
         }
         favourites {
-          anime(page: 1, perPage: 10) {
+          anime(page: 1, perPage: 12) {
             nodes {
               id
               title {
                 userPreferred
               }
               coverImage {
+                large
                 medium
               }
             }
           }
-          characters(page: 1, perPage: 10) {
+          manga(page: 1, perPage: 12) {
+            nodes {
+              id
+              title {
+                userPreferred
+              }
+              coverImage {
+                large
+                medium
+              }
+            }
+          }
+          characters(page: 1, perPage: 12) {
+            nodes {
+              id
+              name {
+                userPreferred
+              }
+              image {
+                medium
+              }
+            }
+          }
+          staff(page: 1, perPage: 12) {
             nodes {
               id
               name {
@@ -77,10 +101,17 @@ class ProfileRepository {
     }
   ''';
 
-  Future<Map<String, dynamic>> fetchUserProfile(int userId) async {
+  Future<Map<String, dynamic>> fetchUserProfile({int? userId, String? userName}) async {
+    final Map<String, dynamic> variables = {};
+    if (userId != null && userId > 0) {
+      variables['id'] = userId;
+    } else if (userName != null && userName.isNotEmpty) {
+      variables['name'] = userName;
+    }
+
     final res = await _apiClient.postGraphQL(
       query: userDetailQuery,
-      variables: {'id': userId},
+      variables: variables,
     );
     return res['User'] as Map<String, dynamic>? ?? {};
   }

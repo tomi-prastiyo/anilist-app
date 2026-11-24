@@ -32,6 +32,7 @@ class AuthRepository {
         options {
           titleLanguage
           displayAdultContent
+          profileColor
         }
         mediaListOptions {
           scoreFormat

@@ -18,9 +18,10 @@ class LocalStorageService {
   static const String keyAppTheme = 'key_app_theme';
   static const String keyIsGuest = 'key_is_guest';
   static const String keyDisplayAdultContent = 'key_display_adult_content';
-  static const String keyTitleLanguage = 'key_title_language'; // ROMAJI, ENGLISH, NATIVE
-  static const String keyScoreFormat = 'key_score_format'; // POINT_100, POINT_10_DECIMAL, etc.
+  static const String keyTitleLanguage = 'key_title_language';
+  static const String keyScoreFormat = 'key_score_format';
   static const String keyViewerId = 'key_viewer_id';
+  static const String keyRecentSearches = 'key_recent_searches';
 
   String? getString(String key) => _prefs.getString(key);
   Future<bool> setString(String key, String value) => _prefs.setString(key, value);
@@ -31,6 +32,29 @@ class LocalStorageService {
 
   int? getInt(String key) => _prefs.getInt(key);
   Future<bool> setInt(String key, int value) => _prefs.setInt(key, value);
+
+  List<String> getRecentSearches() => _prefs.getStringList(keyRecentSearches) ?? [];
+
+  Future<void> addRecentSearch(String query) async {
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) return;
+
+    final current = getRecentSearches();
+    current.remove(trimmed);
+    current.insert(0, trimmed);
+    if (current.length > 10) current.removeLast();
+    await _prefs.setStringList(keyRecentSearches, current);
+  }
+
+  Future<void> removeRecentSearch(String query) async {
+    final current = getRecentSearches();
+    current.remove(query);
+    await _prefs.setStringList(keyRecentSearches, current);
+  }
+
+  Future<void> clearRecentSearches() async {
+    await _prefs.remove(keyRecentSearches);
+  }
 
   Future<bool> remove(String key) => _prefs.remove(key);
 
