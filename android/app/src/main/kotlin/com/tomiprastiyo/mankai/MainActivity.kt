@@ -1,4 +1,4 @@
-package com.zen.anilist.anilist_app
+package com.tomiprastiyo.mankai
 
 import io.flutter.embedding.android.FlutterActivity
 

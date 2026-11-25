@@ -22,6 +22,9 @@ class LocalStorageService {
   static const String keyScoreFormat = 'key_score_format';
   static const String keyViewerId = 'key_viewer_id';
   static const String keyRecentSearches = 'key_recent_searches';
+  static const String keyReadNotificationIds = 'key_read_notification_ids';
+  static const String keyForcedUnreadNotificationIds = 'key_forced_unread_notification_ids';
+  static const String keyLastNotificationIds = 'key_last_notification_ids';
 
   String? getString(String key) => _prefs.getString(key);
   Future<bool> setString(String key, String value) => _prefs.setString(key, value);
@@ -57,6 +60,29 @@ class LocalStorageService {
   }
 
   Future<bool> remove(String key) => _prefs.remove(key);
+
+  Set<int> getIntIdSet(String key) {
+    final raw = _prefs.getStringList(key) ?? const [];
+    return raw.map(int.tryParse).whereType<int>().toSet();
+  }
+
+  Future<void> setIntIdSet(String key, Set<int> ids, {int maxEntries = 200}) async {
+    final list = ids.toList();
+    if (list.length > maxEntries) {
+      list.removeRange(0, list.length - maxEntries);
+    }
+    await _prefs.setStringList(key, list.map((e) => e.toString()).toList());
+  }
+
+  List<int> getIntIdList(String key) {
+    final raw = _prefs.getStringList(key) ?? const [];
+    return raw.map(int.tryParse).whereType<int>().toList();
+  }
+
+  Future<void> setIntIdList(String key, List<int> ids, {int maxEntries = 50}) async {
+    final list = ids.length > maxEntries ? ids.sublist(0, maxEntries) : ids;
+    await _prefs.setStringList(key, list.map((e) => e.toString()).toList());
+  }
 
   bool get isGuest => getBool(keyIsGuest, defaultValue: false);
   set isGuest(bool val) => setBool(keyIsGuest, val);

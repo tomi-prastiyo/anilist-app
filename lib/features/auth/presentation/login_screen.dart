@@ -21,14 +21,6 @@ class LoginScreen extends ConsumerStatefulWidget {
 }
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
-  final TextEditingController _tokenController = TextEditingController();
-
-  @override
-  void dispose() {
-    _tokenController.dispose();
-    super.dispose();
-  }
-
   void _openOAuthWebView() {
     Navigator.of(context).push(
       MaterialPageRoute(
@@ -39,104 +31,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             }
           },
         ),
-      ),
-    );
-  }
-
-  void _showTokenInputDialog(Color accentColor) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: YuYuYuAssets.twilightSurface,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(18),
-          side: const BorderSide(color: YuYuYuAssets.twilightBorder),
-        ),
-        title: const Text(
-          'Enter AniList Token',
-          style: TextStyle(
-            fontFamily: 'Overpass',
-            fontWeight: FontWeight.w800,
-            color: YuYuYuAssets.blossomTextPrimary,
-          ),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Generate a personal access token under AniList Developer Settings:',
-              style: TextStyle(
-                fontSize: 13,
-                color: YuYuYuAssets.blossomTextSecondary,
-              ),
-            ),
-            const SizedBox(height: 8),
-            InkWell(
-              onTap: () => launchUrl(
-                Uri.parse(ApiConstants.anilistDeveloperUrl),
-                mode: LaunchMode.externalApplication,
-              ),
-              child: const Text(
-                'Open AniList Developer Settings ↗',
-                style: TextStyle(
-                  fontSize: 12.5,
-                  color: YuYuYuAssets.shinjuGold,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-            const SizedBox(height: 14),
-            TextField(
-              controller: _tokenController,
-              style: const TextStyle(
-                color: YuYuYuAssets.blossomTextPrimary,
-                fontSize: 13,
-              ),
-              decoration: InputDecoration(
-                hintText: 'Paste token here...',
-                hintStyle: const TextStyle(color: YuYuYuAssets.blossomTextMuted),
-                filled: true,
-                fillColor: YuYuYuAssets.twilightInput,
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: AppSpacing.borderRadius12,
-                  borderSide: const BorderSide(color: YuYuYuAssets.twilightBorder),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: AppSpacing.borderRadius12,
-                  borderSide: BorderSide(color: accentColor, width: 1.5),
-                ),
-              ),
-              maxLines: 2,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text(
-              'Cancel',
-              style: TextStyle(color: YuYuYuAssets.blossomTextSecondary),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              final token = _tokenController.text.trim();
-              if (token.isNotEmpty) {
-                Navigator.of(context).pop();
-                ref.read(authControllerProvider.notifier).loginWithToken(token);
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: accentColor,
-              foregroundColor: accentColor.computeLuminance() > 0.55
-                  ? Colors.black
-                  : Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-            child: const Text('Log In', style: TextStyle(fontWeight: FontWeight.w800)),
-          ),
-        ],
       ),
     );
   }
@@ -397,53 +291,60 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 const Divider(color: YuYuYuAssets.twilightBorder, height: 1),
                                 const SizedBox(height: 8),
 
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: TextButton.icon(
-                                        onPressed: () => _showTokenInputDialog(accent),
-                                        icon: const Icon(
-                                          Icons.key_rounded,
-                                          size: 15,
-                                          color: YuYuYuAssets.blossomTextSecondary,
-                                        ),
-                                        label: const Text(
-                                          'Token Login',
-                                          style: TextStyle(
-                                            fontFamily: 'Overpass',
-                                            color: YuYuYuAssets.blossomTextSecondary,
-                                            fontSize: 12.5,
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                        ),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: TextButton.icon(
+                                    onPressed: () {
+                                      ref.read(authControllerProvider.notifier).loginAsGuest();
+                                    },
+                                    icon: Icon(
+                                      Icons.explore_outlined,
+                                      size: 16,
+                                      color: accent,
+                                    ),
+                                    label: Text(
+                                      'Continue as Guest',
+                                      style: TextStyle(
+                                        fontFamily: 'Overpass',
+                                        color: accent,
+                                        fontSize: 13.5,
+                                        fontWeight: FontWeight.w800,
                                       ),
                                     ),
-                                    Container(
-                                      width: 1,
-                                      height: 18,
-                                      color: YuYuYuAssets.twilightBorder,
-                                    ),
-                                    Expanded(
-                                      child: TextButton(
-                                        onPressed: () {
-                                          ref.read(authControllerProvider.notifier).loginAsGuest();
-                                        },
-                                        child: Text(
-                                          'Continue as Guest',
-                                          style: TextStyle(
-                                            fontFamily: 'Overpass',
-                                            color: accent,
-                                            fontSize: 12.5,
-                                            fontWeight: FontWeight.w800,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
+                                  ),
                                 ),
                               ],
                             ),
                     ).animateEntrance(index: 4),
+                    const SizedBox(height: 18),
+                    GestureDetector(
+                      onTap: () => launchUrl(
+                        Uri.parse(ApiConstants.anilistWebsiteUrl),
+                        mode: LaunchMode.externalApplication,
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.auto_awesome_rounded,
+                            size: 13,
+                            color: YuYuYuAssets.blossomTextMuted,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Powered by AniList',
+                            style: TextStyle(
+                              fontFamily: 'Overpass',
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.4,
+                              color: YuYuYuAssets.blossomTextSecondary.withValues(alpha: 0.85),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ),

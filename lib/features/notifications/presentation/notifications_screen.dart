@@ -15,6 +15,7 @@ import '../../activity/presentation/widgets/activity_likes_bottom_sheet.dart';
 import '../../media_detail/presentation/media_detail_screen.dart';
 import '../../profile/presentation/profile_screen.dart';
 import '../data/notifications_repository.dart';
+import 'notification_read_controller.dart';
 
 class NotificationsScreen extends ConsumerStatefulWidget {
   const NotificationsScreen({super.key});
@@ -30,7 +31,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   bool _isLoadingMore = false;
   int _currentPage = 1;
   bool _hasNextPage = true;
-  String _selectedFilter = 'ALL'; // 'ALL', 'AIRING', 'ACTIVITY', 'FOLLOWS'
+  String _selectedFilter = 'ALL'; // 'ALL', 'UNREAD', 'AIRING', 'ACTIVITY', 'FOLLOWS'
 
   @override
   void initState() {
@@ -61,9 +62,15 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     });
     try {
       final repo = ref.read(notificationsRepositoryProvider);
-      final res = await repo.fetchNotificationsWithPageInfo(page: 1);
+      final results = await Future.wait([
+        repo.fetchNotificationsWithPageInfo(page: 1, resetCount: false),
+        ref.read(notificationReadProvider.notifier).refreshFromServer(),
+      ]);
+      final res = results[0] as Map<String, dynamic>;
       final list = (res['notifications'] as List).cast<Map<String, dynamic>>();
       final hasNext = res['hasNextPage'] as bool? ?? false;
+      final ids = list.map((n) => n['id']).whereType<int>().toList();
+      await ref.read(notificationReadProvider.notifier).setLoadedNotificationIds(ids);
       if (mounted) {
         setState(() {
           _notifications = list;
@@ -82,7 +89,10 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     try {
       final repo = ref.read(notificationsRepositoryProvider);
       final nextPage = _currentPage + 1;
-      final res = await repo.fetchNotificationsWithPageInfo(page: nextPage);
+      final res = await repo.fetchNotificationsWithPageInfo(
+        page: nextPage,
+        resetCount: false,
+      );
       final list = (res['notifications'] as List).cast<Map<String, dynamic>>();
       final hasNext = res['hasNextPage'] as bool? ?? false;
       if (mounted) {
@@ -92,6 +102,8 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
           _hasNextPage = hasNext;
           _isLoadingMore = false;
         });
+        final ids = _notifications.map((n) => n['id']).whereType<int>().toList();
+        await ref.read(notificationReadProvider.notifier).setLoadedNotificationIds(ids);
       }
     } catch (_) {
       if (mounted) setState(() => _isLoadingMore = false);
@@ -100,6 +112,10 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
 
   void _handleNotificationTap(Map<String, dynamic> notif) {
     HapticFeedback.lightImpact();
+    final id = notif['id'] as int?;
+    if (id != null) {
+      ref.read(notificationReadProvider.notifier).markRead(id);
+    }
     final type = notif['__typename'] as String? ?? '';
     final media = notif['media'] as Map<String, dynamic>?;
     final mediaId = notif['animeId'] as int? ?? notif['mediaId'] as int? ?? media?['id'] as int?;
@@ -185,12 +201,17 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     }
   }
 
-  List<Map<String, dynamic>> _getFilteredNotifications() {
+  List<Map<String, dynamic>> _getFilteredNotifications(NotificationReadState readState) {
     if (_selectedFilter == 'ALL') return _notifications;
 
-    return _notifications.where((n) {
+    return _notifications.asMap().entries.where((entry) {
+      final index = entry.key;
+      final n = entry.value;
       final type = n['__typename'] as String? ?? '';
-      if (_selectedFilter == 'AIRING') {
+      if (_selectedFilter == 'UNREAD') {
+        final id = n['id'] as int? ?? 0;
+        return readState.isUnread(index, id);
+      } else if (_selectedFilter == 'AIRING') {
         return type.contains('Airing');
       } else if (_selectedFilter == 'ACTIVITY') {
         return type.contains('Activity');
@@ -198,15 +219,24 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         return type.contains('Following');
       }
       return true;
-    }).toList();
+    }).map((entry) => entry.value).toList();
   }
 
   @override
   Widget build(BuildContext context) {
-    final filteredList = _getFilteredNotifications();
+    final readState = ref.watch(notificationReadProvider);
+    final filteredList = _getFilteredNotifications(readState);
+    final unreadCount = readState.unreadCount;
     final airingCount = _notifications.where((n) => (n['__typename'] as String? ?? '').contains('Airing')).length;
     final activityCount = _notifications.where((n) => (n['__typename'] as String? ?? '').contains('Activity')).length;
     final followCount = _notifications.where((n) => (n['__typename'] as String? ?? '').contains('Following')).length;
+
+    // Precompute source index map so read/unread resolution stays consistent when filtered.
+    final indexById = <int, int>{};
+    for (int i = 0; i < _notifications.length; i++) {
+      final id = _notifications[i]['id'] as int?;
+      if (id != null) indexById[id] = i;
+    }
 
     return Scaffold(
       backgroundColor: context.appBackground,
@@ -226,6 +256,33 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
             color: context.appTextPrimary,
           ),
         ),
+        actions: [
+          if (unreadCount > 0)
+            TextButton.icon(
+              onPressed: () async {
+                HapticFeedback.lightImpact();
+                await ref.read(notificationReadProvider.notifier).markAllRead();
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('All notifications marked as read'),
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                }
+              },
+              icon: Icon(Icons.done_all_rounded, size: 17, color: context.appAccent),
+              label: Text(
+                'Mark all read',
+                style: TextStyle(
+                  fontFamily: 'Overpass',
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: context.appAccent,
+                ),
+              ),
+            ),
+        ],
       ),
       body: Column(
         children: [
@@ -237,6 +294,8 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
               child: Row(
                 children: [
                   _buildFilterChip('All (${_notifications.length})', 'ALL'),
+                  const SizedBox(width: 8),
+                  _buildFilterChip('Unread ($unreadCount)', 'UNREAD'),
                   const SizedBox(width: 8),
                   _buildFilterChip('Airing ($airingCount)', 'AIRING'),
                   const SizedBox(width: 8),
@@ -254,9 +313,11 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                 ? const ShimmerMediaGrid(count: 6)
                 : filteredList.isEmpty
                     ? EmptyView(
-                        title: _selectedFilter == 'ALL'
-                            ? 'No Notifications Yet'
-                            : 'No $_selectedFilter Notifications',
+                        title: _selectedFilter == 'UNREAD'
+                            ? 'No Unread Notifications'
+                            : (_selectedFilter == 'ALL'
+                                ? 'No Notifications Yet'
+                                : 'No $_selectedFilter Notifications'),
                         subtitle: 'You are all caught up with recent updates!',
                         icon: Icons.notifications_none_rounded,
                       )
@@ -302,7 +363,20 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                               );
                             }
                             final notif = filteredList[index];
-                            return _buildNotificationCard(notif).animateEntrance(index: index);
+                            final notifId = notif['id'] as int? ?? 0;
+                            final sourceIndex = indexById[notifId] ?? index;
+                            final isUnread = readState.isUnread(sourceIndex, notifId);
+                            return _buildNotificationCard(
+                              notif,
+                              isUnread: isUnread,
+                              onToggleRead: () {
+                                HapticFeedback.selectionClick();
+                                ref.read(notificationReadProvider.notifier).toggleReadUnread(
+                                      sourceIndex,
+                                      notifId,
+                                    );
+                              },
+                            ).animateEntrance(index: index);
                           },
                         ),
                       ),
@@ -341,7 +415,11 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     );
   }
 
-  Widget _buildNotificationCard(Map<String, dynamic> notif) {
+  Widget _buildNotificationCard(
+    Map<String, dynamic> notif, {
+    required bool isUnread,
+    required VoidCallback onToggleRead,
+  }) {
     final type = notif['__typename'] as String? ?? '';
     final time = DateUtil.timeAgo(notif['createdAt'] as int?);
     final user = notif['user'] as Map<String, dynamic>?;
@@ -430,9 +508,15 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         child: Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: context.appCard,
+            color: isUnread
+                ? context.appAccent.withValues(alpha: 0.08)
+                : context.appCard,
             borderRadius: AppSpacing.borderRadius12,
-            border: Border.all(color: context.appBorder),
+            border: Border.all(
+              color: isUnread
+                  ? context.appAccent.withValues(alpha: 0.5)
+                  : context.appBorder,
+            ),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: context.isDark ? 0.2 : 0.05),
@@ -492,54 +576,113 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    RichText(
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      text: TextSpan(
-                        children: [
-                          TextSpan(
-                            text: highlightPrefix,
-                            style: TextStyle(
-                              fontFamily: 'Overpass',
-                              fontSize: 13,
-                              fontWeight: FontWeight.w800,
-                              color: context.appTextPrimary,
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (isUnread)
+                          Container(
+                            width: 7,
+                            height: 7,
+                            margin: const EdgeInsets.only(top: 5, right: 6),
+                            decoration: BoxDecoration(
+                              color: context.appAccent,
+                              shape: BoxShape.circle,
                             ),
                           ),
-                          TextSpan(
-                            text: primaryText,
-                            style: TextStyle(
-                              fontFamily: 'Overpass',
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500,
-                              color: context.appTextSecondary,
+                        Expanded(
+                          child: RichText(
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            text: TextSpan(
+                              children: [
+                                TextSpan(
+                                  text: highlightPrefix,
+                                  style: TextStyle(
+                                    fontFamily: 'Overpass',
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w800,
+                                    color: context.appTextPrimary,
+                                  ),
+                                ),
+                                TextSpan(
+                                  text: primaryText,
+                                  style: TextStyle(
+                                    fontFamily: 'Overpass',
+                                    fontSize: 13,
+                                    fontWeight: isUnread ? FontWeight.w700 : FontWeight.w500,
+                                    color: isUnread
+                                        ? context.appTextPrimary
+                                        : context.appTextSecondary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Text(
+                          time,
+                          style: TextStyle(
+                            fontFamily: 'Overpass',
+                            fontSize: 11,
+                            color: context.appTextMuted,
+                          ),
+                        ),
+                        if (isUnread) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                            decoration: BoxDecoration(
+                              color: context.appAccent.withValues(alpha: 0.16),
+                              borderRadius: BorderRadius.circular(5),
+                            ),
+                            child: Text(
+                              'UNREAD',
+                              style: TextStyle(
+                                fontFamily: 'Overpass',
+                                fontSize: 9,
+                                fontWeight: FontWeight.w800,
+                                color: context.appAccent,
+                                letterSpacing: 0.4,
+                              ),
                             ),
                           ),
                         ],
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      time,
-                      style: TextStyle(
-                        fontFamily: 'Overpass',
-                        fontSize: 11,
-                        color: context.appTextMuted,
-                      ),
+                      ],
                     ),
                   ],
                 ),
               ),
 
+              const SizedBox(width: 6),
+              IconButton(
+                tooltip: isUnread ? 'Mark as read' : 'Mark as unread',
+                visualDensity: VisualDensity.compact,
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                padding: EdgeInsets.zero,
+                onPressed: onToggleRead,
+                icon: Icon(
+                  isUnread
+                      ? Icons.mark_email_read_outlined
+                      : Icons.mark_email_unread_outlined,
+                  size: 18,
+                  color: isUnread ? context.appAccent : context.appTextMuted,
+                ),
+              ),
+
               // Trailing Media Thumbnail (if media is associated)
               if (mediaCover != null) ...[
-                const SizedBox(width: 10),
+                const SizedBox(width: 6),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(8),
                   child: AppNetworkImage(
                     imageUrl: mediaCover,
-                    width: 46,
-                    height: 64,
+                    width: 44,
+                    height: 62,
                   ),
                 ),
               ] else ...[

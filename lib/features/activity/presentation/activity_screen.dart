@@ -42,6 +42,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
   @override
   void initState() {
     super.initState();
+    _isFollowing = ref.read(authControllerProvider) is Authenticated;
     _load(page: 1);
   }
 
@@ -71,10 +72,12 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
 
     try {
       final repo = ref.read(activityRepositoryProvider);
+      final isAuthenticated = ref.read(authControllerProvider) is Authenticated;
+      final effectiveFollowing = isAuthenticated && _isFollowing;
       final pageData = await repo.fetchActivities(
         page: page,
         userId: widget.userId,
-        isFollowing: widget.userId == null ? _isFollowing : null,
+        isFollowing: widget.userId == null ? effectiveFollowing : null,
       );
       final pageInfo = pageData['pageInfo'] as Map<String, dynamic>?;
       final list = (pageData['activities'] as List?)?.cast<Map<String, dynamic>>() ?? [];
@@ -284,6 +287,9 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
       },
     );
 
+    final isAuthenticated = ref.watch(authControllerProvider) is Authenticated;
+    final effectiveFollowing = isAuthenticated && _isFollowing;
+
     final content = _isLoading
         ? const ShimmerMediaGrid(count: 6)
         : RefreshIndicator(
@@ -294,14 +300,14 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                 ? EmptyView(
                     title: widget.userId != null
                         ? 'No Activity Yet'
-                        : (_isFollowing ? 'No Friends Activity Yet' : 'No Activity Found'),
+                        : (effectiveFollowing ? 'No Friends Activity Yet' : 'No Activity Found'),
                     subtitle: widget.userId != null
                         ? 'This user has not posted any status or list updates yet.'
-                        : (_isFollowing
+                        : (effectiveFollowing
                             ? 'Follow people on AniList or switch to Global to see updates!'
                             : 'Check back later for recent updates.'),
                     icon: Icons.people_outline_rounded,
-                    action: (widget.userId == null && _isFollowing)
+                    action: (widget.userId == null && effectiveFollowing)
                         ? TextButton(
                             onPressed: () {
                               setState(() => _isFollowing = false);
@@ -669,15 +675,17 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
     return Scaffold(
       backgroundColor: context.appBackground,
       appBar: AppBar(
-        title: const Text(
-          'Activity',
-          style: TextStyle(
+        title: Text(
+          isAuthenticated ? 'Activity' : 'Global Activity',
+          style: const TextStyle(
             fontFamily: 'Overpass',
             fontWeight: FontWeight.w800,
             fontSize: 19,
           ),
         ),
-        bottom: PreferredSize(
+        bottom: !isAuthenticated
+            ? null
+            : PreferredSize(
           preferredSize: const Size.fromHeight(48),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),

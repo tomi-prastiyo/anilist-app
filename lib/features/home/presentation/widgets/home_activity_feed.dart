@@ -24,7 +24,7 @@ class HomeActivityFeed extends ConsumerStatefulWidget {
 }
 
 class HomeActivityFeedState extends ConsumerState<HomeActivityFeed> {
-  // Default to Following (Friends Only) per user specification
+  // Default to Following when authenticated; Guest Mode is Global-only.
   bool _isFollowing = true;
   bool _isLoading = true;
   bool _isLoadingMore = false;
@@ -36,10 +36,16 @@ class HomeActivityFeedState extends ConsumerState<HomeActivityFeed> {
   @override
   void initState() {
     super.initState();
+    _isFollowing = ref.read(authControllerProvider) is Authenticated;
     loadActivities();
   }
 
   Future<void> loadActivities({int page = 1, bool reset = true}) async {
+    final isAuthenticated = ref.read(authControllerProvider) is Authenticated;
+    final effectiveFollowing = isAuthenticated && _isFollowing;
+    if (!isAuthenticated && _isFollowing) {
+      _isFollowing = false;
+    }
     if (reset) {
       setState(() {
         _isLoading = true;
@@ -49,7 +55,7 @@ class HomeActivityFeedState extends ConsumerState<HomeActivityFeed> {
     }
     try {
       final repo = ref.read(activityRepositoryProvider);
-      final data = await repo.fetchActivities(page: page, isFollowing: _isFollowing);
+      final data = await repo.fetchActivities(page: page, isFollowing: effectiveFollowing);
       final pageInfo = data['pageInfo'] as Map<String, dynamic>?;
       final list = (data['activities'] as List?)?.cast<Map<String, dynamic>>() ?? [];
       if (mounted) {
@@ -253,10 +259,21 @@ class HomeActivityFeedState extends ConsumerState<HomeActivityFeed> {
       },
     );
 
+    final isAuthenticated = ref.watch(authControllerProvider) is Authenticated;
+    final effectiveFollowing = isAuthenticated && _isFollowing;
+    ref.listen<AuthState>(authControllerProvider, (prev, next) {
+      final wasAuth = prev is Authenticated;
+      final isNowAuth = next is Authenticated;
+      if (wasAuth != isNowAuth) {
+        setState(() => _isFollowing = isNowAuth);
+        loadActivities();
+      }
+    });
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Section Header with Segmented Pill Toggle
+        // Section Header with Segmented Pill Toggle (or Global badge in Guest Mode)
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.p16),
           child: Row(
@@ -283,88 +300,120 @@ class HomeActivityFeedState extends ConsumerState<HomeActivityFeed> {
               ),
               const Spacer(),
 
-              // Segmented Toggle: Following (Default) vs Global
-              Container(
-                height: 28,
-                padding: const EdgeInsets.all(2.5),
-                decoration: BoxDecoration(
-                  color: context.appInputSurface,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: context.appBorder),
-                ),
-                child: Row(
-                  children: [
-                    GestureDetector(
-                      onTap: () {
-                        if (!_isFollowing) {
-                          setState(() => _isFollowing = true);
-                          loadActivities();
-                        }
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 9),
-                        decoration: BoxDecoration(
-                          color: _isFollowing ? context.appSurface : Colors.transparent,
-                          borderRadius: BorderRadius.circular(6),
-                          boxShadow: _isFollowing
-                              ? [
-                                  BoxShadow(
-                                    color: Colors.black.withValues(alpha: context.isDark ? 0.3 : 0.08),
-                                    blurRadius: 4,
-                                    offset: const Offset(0, 1),
-                                  )
-                                ]
-                              : null,
+              if (!isAuthenticated)
+                Container(
+                  height: 28,
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  decoration: BoxDecoration(
+                    color: context.appInputSurface,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: context.appBorder),
+                  ),
+                  alignment: Alignment.center,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.public_rounded,
+                        size: 13,
+                        color: context.appTextSecondary,
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        'Global',
+                        style: TextStyle(
+                          fontFamily: 'Overpass',
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: context.appTextPrimary,
                         ),
-                        alignment: Alignment.center,
-                        child: Text(
-                          'Following',
-                          style: TextStyle(
-                            fontFamily: 'Overpass',
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: _isFollowing ? context.appTextPrimary : context.appTextSecondary,
+                      ),
+                    ],
+                  ),
+                )
+              else
+                // Segmented Toggle: Following (Default) vs Global
+                Container(
+                  height: 28,
+                  padding: const EdgeInsets.all(2.5),
+                  decoration: BoxDecoration(
+                    color: context.appInputSurface,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: context.appBorder),
+                  ),
+                  child: Row(
+                    children: [
+                      GestureDetector(
+                        onTap: () {
+                          if (!_isFollowing) {
+                            setState(() => _isFollowing = true);
+                            loadActivities();
+                          }
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 9),
+                          decoration: BoxDecoration(
+                            color: _isFollowing ? context.appSurface : Colors.transparent,
+                            borderRadius: BorderRadius.circular(6),
+                            boxShadow: _isFollowing
+                                ? [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: context.isDark ? 0.3 : 0.08),
+                                      blurRadius: 4,
+                                      offset: const Offset(0, 1),
+                                    )
+                                  ]
+                                : null,
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            'Following',
+                            style: TextStyle(
+                              fontFamily: 'Overpass',
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: _isFollowing ? context.appTextPrimary : context.appTextSecondary,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                    GestureDetector(
-                      onTap: () {
-                        if (_isFollowing) {
-                          setState(() => _isFollowing = false);
-                          loadActivities();
-                        }
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10),
-                        decoration: BoxDecoration(
-                          color: !_isFollowing ? context.appSurface : Colors.transparent,
-                          borderRadius: BorderRadius.circular(6),
-                          boxShadow: !_isFollowing
-                              ? [
-                                  BoxShadow(
-                                    color: Colors.black.withValues(alpha: context.isDark ? 0.3 : 0.08),
-                                    blurRadius: 4,
-                                    offset: const Offset(0, 1),
-                                  )
-                                ]
-                              : null,
-                        ),
-                        alignment: Alignment.center,
-                        child: Text(
-                          'Global',
-                          style: TextStyle(
-                            fontFamily: 'Overpass',
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: !_isFollowing ? context.appTextPrimary : context.appTextSecondary,
+                      GestureDetector(
+                        onTap: () {
+                          if (_isFollowing) {
+                            setState(() => _isFollowing = false);
+                            loadActivities();
+                          }
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          decoration: BoxDecoration(
+                            color: !_isFollowing ? context.appSurface : Colors.transparent,
+                            borderRadius: BorderRadius.circular(6),
+                            boxShadow: !_isFollowing
+                                ? [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: context.isDark ? 0.3 : 0.08),
+                                      blurRadius: 4,
+                                      offset: const Offset(0, 1),
+                                    )
+                                  ]
+                                : null,
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            'Global',
+                            style: TextStyle(
+                              fontFamily: 'Overpass',
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: !_isFollowing ? context.appTextPrimary : context.appTextSecondary,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
             ],
           ),
         ),
@@ -388,7 +437,7 @@ class HomeActivityFeedState extends ConsumerState<HomeActivityFeed> {
               ),
               alignment: Alignment.center,
               child: Text(
-                _isFollowing
+                effectiveFollowing
                     ? 'No activity from followed users yet.\nTry switching to Global above!'
                     : 'No global activity found.',
                 textAlign: TextAlign.center,

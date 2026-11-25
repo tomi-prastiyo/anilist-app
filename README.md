@@ -9,6 +9,12 @@
   Inspired by <em>Yuuki Yuuna wa Yuusha de Aru</em> (Sanshu Hero Club)
 </p>
 
+<p align="center">
+  <img src="https://img.shields.io/badge/Flutter-3.x-02569B?style=flat-square&logo=flutter&logoColor=white" alt="Flutter" />
+  <img src="https://img.shields.io/badge/Powered%20by-AniList-02A9FF?style=flat-square" alt="Powered by AniList" />
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-GPL--3.0-blue?style=flat-square" alt="License: GPL-3.0" /></a>
+</p>
+
 ---
 
 ## ✨ Overview
@@ -35,8 +41,9 @@
 - **Reorder Favorites (`UpdateFavouriteOrder`)**: Built-in drag-and-drop & one-tap **Move to #1 (`↑`)** sheet to rearrange your favorite positions directly from your Profile.
 - **Real-Time Love Sync**: Synchronizes Love / Unlove toggles instantly across Anime, Manga, Character, Staff detail screens, and Profile Favorites.
 
-### 💬 Activity Feed, Rich Bios & Details
-- **Friends & Global Activity Feed**: Like/unlike activities & replies, view likes, delete your own activities, and compose comments via a redesigned keyboard-safe comment dock.
+### 💬 Activity Feed, Notifications & Rich Bios
+- **Friends & Global Activity Feed**: Authenticated users can toggle between *Friends Only (Following)* and *Global* feeds, like/unlike activities & replies, view likes, delete their own activities, and compose comments via a keyboard-safe dock. Guest Mode defaults directly to a clean **Global-only** feed.
+- **Notifications with Read / Unread Sync**: Live unread notification counter badge shared across Home and Profile, pull-to-refresh sync, dedicated **Unread** filter tab, per-notification **Mark Read / Mark Unread**, and one-tap **Mark all read**.
 - **Rich AniList Bio Renderer & Editor**: Supports AniList HTML/Markdown formatting helpers, inline images, spoilers, and YouTube / `.webm` embeds.
 - **Media, Character & Staff Details**: Rankings, trailers, AniSongDB OP/ED themes, voice actor & staff roles, and mutual friend scores.
 
@@ -47,8 +54,21 @@
 - **Framework**: Flutter & Dart (`sdk: ^3.11.5`)
 - **State Management**: Riverpod (`flutter_riverpod`)
 - **Networking**: Dio + AniList GraphQL API (`graphql.anilist.co`) with rate-limit handling
-- **Auth & Storage**: AniList OAuth WebView & personal token login via `flutter_secure_storage` & `shared_preferences`
+- **Auth & Storage**: AniList OAuth WebView & Guest Mode via `flutter_secure_storage` & `shared_preferences`
 - **Charts & Media**: `fl_chart`, `cached_network_image`, `shimmer`, `flutter_markdown`
+
+---
+
+## 🌟 Powered by AniList
+
+**Mankai** is an unofficial third-party client **Powered by [AniList](https://anilist.co)** (`graphql.anilist.co`). All anime, manga, character, staff, airing, and community data is provided by the AniList GraphQL API v2.
+
+---
+
+## ⚖️ Community & Open-Source Attribution
+
+- **UI & Feature Reference**: Design concepts, tracker workflows, and layout inspiration reference [**AL-chan**](https://github.com/zend10/AL-chan) (an unofficial Android AniList client licensed under the **GNU General Public License v3.0 / GPL-3.0**).
+- **OAuth Client Note**: Development configuration currently mirrors an existing client ID for testing. Before publishing your own public distribution, register a dedicated application under [AniList Developer Settings](https://anilist.co/settings/developer) so users see **Mankai** on the OAuth consent prompt.
 
 ---
 
@@ -68,3 +88,25 @@ flutter build apk --debug
 # or
 flutter build apk --release
 ```
+
+### 🔐 OAuth Configuration for Public / Fork Builds
+
+1. Register an application at [AniList Developer Settings](https://anilist.co/settings/developer).
+2. Update `ApiConstants.anilistClientId` inside `lib/core/constants/api_constants.dart`.
+3. Android package / application ID is configured as `com.tomiprastiyo.mankai` with custom callback schemes `mankai://` and `anilistapp://`.
+
+---
+
+## 🤝 Contributing & Policies
+
+- [Contributing Guide](CONTRIBUTING.md)
+- [Code of Conduct](CODE_OF_CONDUCT.md)
+- [Security Policy](SECURITY.md)
+
+---
+
+## 📄 License & Disclaimer
+
+Licensed under the [**GNU General Public License v3.0 (GPL-3.0)**](LICENSE).
+
+**Mankai** is an unofficial third-party AniList client and is not affiliated with, endorsed by, or sponsored by **AniList** or **Studio Gokumi / Project 2H** (*Yuuki Yuuna wa Yuusha de Aru*). All user, anime, and manga data is fetched from the public AniList API.

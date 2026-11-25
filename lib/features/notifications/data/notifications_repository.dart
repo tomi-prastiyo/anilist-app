@@ -341,9 +341,33 @@ class NotificationsRepository {
     }
   ''';
 
+  static const String viewerUnreadQuery = r'''
+    query ViewerUnreadCountQuery {
+      Viewer {
+        unreadNotificationCount
+      }
+    }
+  ''';
+
+  Future<int> fetchUnreadCount() async {
+    final res = await _apiClient.postGraphQL(query: viewerUnreadQuery);
+    final viewer = res['Viewer'] as Map<String, dynamic>?;
+    return viewer?['unreadNotificationCount'] as int? ?? 0;
+  }
+
+  Future<void> resetServerUnreadCount() async {
+    await _apiClient.postGraphQL(
+      query: notificationsQuery,
+      variables: {
+        'page': 1,
+        'resetNotificationCount': true,
+      },
+    );
+  }
+
   Future<Map<String, dynamic>> fetchNotificationsWithPageInfo({
     required int page,
-    bool resetCount = true,
+    bool resetCount = false,
   }) async {
     final res = await _apiClient.postGraphQL(
       query: notificationsQuery,
@@ -364,7 +388,7 @@ class NotificationsRepository {
 
   Future<List<Map<String, dynamic>>> fetchNotifications({
     required int page,
-    bool resetCount = true,
+    bool resetCount = false,
   }) async {
     final result = await fetchNotificationsWithPageInfo(page: page, resetCount: resetCount);
     return (result['notifications'] as List).cast<Map<String, dynamic>>();

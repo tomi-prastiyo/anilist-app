@@ -518,20 +518,68 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
             child: Column(
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text('App Version', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                    Text('1.0.0 (Flutter Modern)', style: TextStyle(fontSize: 13, color: textSecondary)),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text('API Backend', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                    Text('AniList GraphQL v2', style: TextStyle(fontSize: 13, color: textSecondary)),
-                  ],
+                for (final entry in [
+                  ('App Version', '1.0.0 (Mankai)', textSecondary, FontWeight.w400, null),
+                  ('API Backend', 'AniList GraphQL v2', textSecondary, FontWeight.w400, null),
+                  (
+                    'Data Source',
+                    'Powered by AniList ↗',
+                    context.appAccent,
+                    FontWeight.w700,
+                    ApiConstants.anilistWebsiteUrl,
+                  ),
+                  (
+                    'Source Code',
+                    'GitHub (tomi-prastiyo/anilist-app) ↗',
+                    context.appAccent,
+                    FontWeight.w600,
+                    'https://github.com/tomi-prastiyo/anilist-app',
+                  ),
+                  ('License', 'GNU GPL v3.0', textSecondary, FontWeight.w400, null),
+                  ('Reference', 'AL-chan (GPL-3.0)', textSecondary, FontWeight.w400, null),
+                ].indexed) ...[
+                  if (entry.$1 > 0) const SizedBox(height: 10),
+                  InkWell(
+                    onTap: entry.$2.$5 == null
+                        ? null
+                        : () => launchUrl(
+                              Uri.parse(entry.$2.$5!),
+                              mode: LaunchMode.externalApplication,
+                            ),
+                    borderRadius: BorderRadius.circular(6),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          entry.$2.$1,
+                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            entry.$2.$2,
+                            textAlign: TextAlign.end,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: entry.$2.$4,
+                              color: entry.$2.$3,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 12),
+                Text(
+                  'Unofficial third-party AniList client, not affiliated with AniList or Studio Gokumi.',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: textSecondary.withValues(alpha: 0.78),
+                    height: 1.35,
+                  ),
                 ),
                 const SizedBox(height: 16),
                 Divider(color: cardBorder, height: 1),

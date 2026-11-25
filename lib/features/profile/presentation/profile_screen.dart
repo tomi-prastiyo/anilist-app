@@ -12,13 +12,13 @@ import '../../../shared/feedback/empty_view.dart';
 import '../../../shared/feedback/error_view.dart';
 import '../../../shared/image/app_network_image.dart';
 import '../../../shared/state/favourite_sync_store.dart';
+import '../../../shared/widgets/notification_bell_button.dart';
 import '../../../shared/widgets/tactile_scale.dart';
 import '../../activity/presentation/activity_screen.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../character_staff/presentation/character_detail_screen.dart';
 import '../../character_staff/presentation/staff_detail_screen.dart';
 import '../../media_detail/presentation/media_detail_screen.dart';
-import '../../notifications/presentation/notifications_screen.dart';
 import '../../settings/presentation/settings_screen.dart';
 import '../data/profile_repository.dart';
 import 'user_follows_screen.dart';
@@ -339,22 +339,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                 : null,
             actions: isOwn
                 ? [
-                    IconButton(
-                      icon: Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.5),
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-                        ),
-                        child: const Icon(Icons.notifications_outlined, color: Colors.white, size: 18),
-                      ),
-                      onPressed: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(builder: (context) => const NotificationsScreen()),
-                        );
-                      },
-                    ),
+                    const NotificationBellButton(darkBackdrop: true),
                     IconButton(
                       icon: Container(
                         padding: const EdgeInsets.all(6),

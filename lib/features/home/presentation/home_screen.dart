@@ -4,9 +4,10 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
 import '../../../shared/feedback/shimmer_loading.dart';
 import '../../../shared/image/app_avatar.dart';
+import '../../../shared/widgets/notification_bell_button.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../media_list/presentation/media_list_controller.dart';
-import '../../notifications/presentation/notifications_screen.dart';
+import '../../notifications/presentation/notification_read_controller.dart';
 import '../../profile/presentation/profile_screen.dart';
 import 'home_controller.dart';
 import 'widgets/airing_shelf.dart';
@@ -33,7 +34,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final user = authState is Authenticated ? authState.user : null;
     final userName = user?.name ?? 'Guest';
     final userAvatar = user?.avatarUrl;
-    final unreadCount = user?.unreadNotificationCount ?? 0;
 
     return Scaffold(
       appBar: AppBar(
@@ -80,36 +80,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ),
         ),
         actions: [
-          if (user != null)
-            Stack(
-              alignment: Alignment.center,
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.notifications_outlined),
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(builder: (context) => const NotificationsScreen()),
-                    );
-                  },
-                ),
-                if (unreadCount > 0)
-                  Positioned(
-                    top: 10,
-                    right: 10,
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: const BoxDecoration(
-                        color: AppColors.statusBehind,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Text(
-                        unreadCount > 9 ? '9+' : '$unreadCount',
-                        style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
+          if (user != null) const NotificationBellButton(),
         ],
       ),
       body: RefreshIndicator(
@@ -118,6 +89,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ref.read(homeDataProvider.notifier).refresh(),
             ref.read(animeListControllerProvider.notifier).loadLists(),
             ref.read(mangaListControllerProvider.notifier).loadLists(),
+            if (user != null)
+              ref.read(notificationReadProvider.notifier).refreshFromServer(),
             _activityFeedKey.currentState?.loadActivities() ?? Future.value(),
           ]);
         },

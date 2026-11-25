@@ -2,15 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:anilist_app/core/network/api_client.dart';
 import 'package:anilist_app/core/storage/local_storage_service.dart';
+import 'package:anilist_app/core/storage/secure_storage_service.dart';
 import 'package:anilist_app/core/utils/score_util.dart';
 import 'package:anilist_app/core/utils/date_util.dart';
 import 'package:anilist_app/core/utils/text_util.dart';
 import 'package:anilist_app/core/widgets/anilist_bio_parser.dart';
+import 'package:anilist_app/features/activity/presentation/activity_screen.dart';
 import 'package:anilist_app/features/auth/data/auth_repository.dart';
 import 'package:anilist_app/features/auth/presentation/auth_controller.dart';
 import 'package:anilist_app/features/auth/presentation/login_screen.dart';
 import 'package:anilist_app/features/auth/presentation/splash_loading_screen.dart';
+import 'package:anilist_app/features/home/presentation/widgets/home_activity_feed.dart';
+import 'package:anilist_app/features/notifications/data/notifications_repository.dart';
+import 'package:anilist_app/features/notifications/presentation/notification_read_controller.dart';
 import 'package:anilist_app/shared/state/favourite_sync_store.dart';
 import 'package:anilist_app/shared/widgets/mankai_logo_emblem.dart';
 
@@ -239,9 +245,94 @@ void main() {
       expect(find.text('SANSHU HERO CLUB EDITION'), findsOneWidget);
       expect(find.text('Log In with AniList'), findsOneWidget);
       expect(find.text('Create AniList Account'), findsOneWidget);
-      expect(find.text('Token Login'), findsOneWidget);
+      expect(find.text('Token Login'), findsNothing);
+      expect(find.text('Enter AniList Token'), findsNothing);
       expect(find.text('Continue as Guest'), findsOneWidget);
+      expect(find.text('Powered by AniList'), findsOneWidget);
       expect(find.text('AL'), findsNothing);
+    });
+  });
+
+  group('Notification Read/Unread & Unread Count Tests', () {
+    test('Tracks server unread baseline, markRead, markUnread, and markAllRead', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final storage = LocalStorageService(prefs);
+      final fakeRepo = _FakeNotificationsRepository();
+      final notifier = NotificationReadNotifier(storage, fakeRepo);
+
+      notifier.syncServerCount(3);
+      await notifier.setLoadedNotificationIds([503, 502, 501, 500]);
+
+      expect(notifier.state.unreadCount, 3);
+      expect(notifier.state.isUnread(0, 503), isTrue);
+      expect(notifier.state.isUnread(1, 502), isTrue);
+      expect(notifier.state.isUnread(2, 501), isTrue);
+      expect(notifier.state.isUnread(3, 500), isFalse);
+
+      // Mark one read -> count decrements from 3 to 2
+      await notifier.markRead(503);
+      expect(notifier.state.unreadCount, 2);
+      expect(notifier.state.isUnread(0, 503), isFalse);
+
+      // Mark an older item unread -> count increments to 3
+      await notifier.markUnread(500);
+      expect(notifier.state.unreadCount, 3);
+      expect(notifier.state.isUnread(3, 500), isTrue);
+
+      // Mark all read -> resets server count and clears forced unread items
+      await notifier.markAllRead();
+      expect(notifier.state.unreadCount, 0);
+      expect(fakeRepo.resetCalled, isTrue);
+
+      // Toggling back unread after markAllRead still shows unread = 1
+      await notifier.markUnread(501);
+      expect(notifier.state.unreadCount, 1);
+      expect(notifier.state.isUnread(2, 501), isTrue);
+    });
+  });
+
+  group('Guest Mode Global-Only Activity Tests', () {
+    testWidgets('HomeActivityFeed & ActivityScreen hide Following toggle in Guest Mode',
+        (tester) async {
+      SharedPreferences.setMockInitialValues({'key_is_guest': true});
+      final prefs = await SharedPreferences.getInstance();
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            sharedPreferencesProvider.overrideWithValue(prefs),
+            authControllerProvider.overrideWith((ref) {
+              final repo = ref.watch(authRepositoryProvider);
+              return _StaticGuestController(repo);
+            }),
+          ],
+          child: const MaterialApp(
+            home: Scaffold(body: HomeActivityFeed()),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.text('Global'), findsOneWidget);
+      expect(find.text('Following'), findsNothing);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            sharedPreferencesProvider.overrideWithValue(prefs),
+            authControllerProvider.overrideWith((ref) {
+              final repo = ref.watch(authRepositoryProvider);
+              return _StaticGuestController(repo);
+            }),
+          ],
+          child: const MaterialApp(home: ActivityScreen()),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.text('Global Activity'), findsOneWidget);
+      expect(find.text('Friends Only'), findsNothing);
     });
   });
 }
@@ -252,5 +343,30 @@ class _StaticUnauthController extends AuthController {
   @override
   Future<void> checkAuth() async {
     state = Unauthenticated();
+  }
+}
+
+class _StaticGuestController extends AuthController {
+  _StaticGuestController(super.repo) {
+    state = GuestMode();
+  }
+
+  @override
+  Future<void> checkAuth() async {
+    state = GuestMode();
+  }
+}
+
+class _FakeNotificationsRepository extends NotificationsRepository {
+  bool resetCalled = false;
+
+  _FakeNotificationsRepository() : super(ApiClient(SecureStorageService()));
+
+  @override
+  Future<int> fetchUnreadCount() async => resetCalled ? 0 : 3;
+
+  @override
+  Future<void> resetServerUnreadCount() async {
+    resetCalled = true;
   }
 }
