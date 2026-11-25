@@ -1,9 +1,18 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:anilist_app/core/storage/local_storage_service.dart';
 import 'package:anilist_app/core/utils/score_util.dart';
 import 'package:anilist_app/core/utils/date_util.dart';
 import 'package:anilist_app/core/utils/text_util.dart';
 import 'package:anilist_app/core/widgets/anilist_bio_parser.dart';
+import 'package:anilist_app/features/auth/data/auth_repository.dart';
+import 'package:anilist_app/features/auth/presentation/auth_controller.dart';
+import 'package:anilist_app/features/auth/presentation/login_screen.dart';
+import 'package:anilist_app/features/auth/presentation/splash_loading_screen.dart';
 import 'package:anilist_app/shared/state/favourite_sync_store.dart';
+import 'package:anilist_app/shared/widgets/mankai_logo_emblem.dart';
 
 void main() {
   group('ScoreUtil Tests', () {
@@ -184,4 +193,64 @@ void main() {
       expect(afterAdd.map((e) => e['id']), [84491, 99999]);
     });
   });
+
+  group('Mankai Branding, Splash & Login Tests', () {
+    testWidgets('SplashLoadingScreen renders Mankai logo & zero AL text', (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
+          child: const MaterialApp(home: SplashLoadingScreen()),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.byType(MankaiLogoEmblem), findsOneWidget);
+      expect(find.text('Mankai'), findsOneWidget);
+      expect(find.text('SANSHU HERO CLUB • ANILIST'), findsOneWidget);
+      expect(find.text('AL'), findsNothing);
+    });
+
+    testWidgets('LoginScreen renders Mankai Hero Club UI & zero AL text without overflow', (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      tester.view.physicalSize = const Size(1080, 2412);
+      tester.view.devicePixelRatio = 3.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            sharedPreferencesProvider.overrideWithValue(prefs),
+            authControllerProvider.overrideWith((ref) {
+              final repo = ref.watch(authRepositoryProvider);
+              return _StaticUnauthController(repo);
+            }),
+          ],
+          child: const MaterialApp(home: LoginScreen()),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 600));
+
+      expect(find.byType(MankaiLogoEmblem), findsOneWidget);
+      expect(find.text('Mankai'), findsOneWidget);
+      expect(find.text('SANSHU HERO CLUB EDITION'), findsOneWidget);
+      expect(find.text('Log In with AniList'), findsOneWidget);
+      expect(find.text('Create AniList Account'), findsOneWidget);
+      expect(find.text('Token Login'), findsOneWidget);
+      expect(find.text('Continue as Guest'), findsOneWidget);
+      expect(find.text('AL'), findsNothing);
+    });
+  });
+}
+
+class _StaticUnauthController extends AuthController {
+  _StaticUnauthController(super.repo);
+
+  @override
+  Future<void> checkAuth() async {
+    state = Unauthenticated();
+  }
 }

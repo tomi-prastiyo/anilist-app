@@ -15,7 +15,7 @@ class MediaDetailRepository {
       receiveTimeout: const Duration(seconds: 4),
       headers: {
         'Content-Type': 'application/json',
-        'User-Agent': 'AL-chan/1.0',
+        'User-Agent': 'Mankai/1.0',
       },
     ),
   );

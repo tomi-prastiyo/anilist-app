@@ -1,11 +1,11 @@
 {
-    "name": "anilist_app",
-    "short_name": "anilist_app",
+    "name": "Mankai",
+    "short_name": "Mankai",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#120B1C",
+    "theme_color": "#F472B6",
+    "description": "Mankai — Yuuki Yuuna wa Yuusha de Aru inspired AniList tracker for anime and manga.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

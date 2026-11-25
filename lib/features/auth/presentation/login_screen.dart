@@ -5,6 +5,11 @@ import '../../../core/animations/app_motion.dart';
 import '../../../core/constants/api_constants.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
+import '../../../core/constants/yuyuyu_assets.dart';
+import '../../../core/theme/theme_provider.dart';
+import '../../../shared/image/app_network_image.dart';
+import '../../../shared/widgets/mankai_logo_emblem.dart';
+import '../../../shared/widgets/sakura_petals_overlay.dart';
 import 'auth_controller.dart';
 import 'oauth_webview_screen.dart';
 
@@ -38,39 +43,68 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
   }
 
-  void _showTokenInputDialog() {
+  void _showTokenInputDialog(Color accentColor) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: AppColors.darkSurface,
-        title: const Text('Enter AniList Token'),
+        backgroundColor: YuYuYuAssets.twilightSurface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+          side: const BorderSide(color: YuYuYuAssets.twilightBorder),
+        ),
+        title: const Text(
+          'Enter AniList Token',
+          style: TextStyle(
+            fontFamily: 'Overpass',
+            fontWeight: FontWeight.w800,
+            color: YuYuYuAssets.blossomTextPrimary,
+          ),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'You can generate a personal access token under AniList Developer Settings:',
-              style: TextStyle(fontSize: 13, color: AppColors.darkTextSecondary),
+              'Generate a personal access token under AniList Developer Settings:',
+              style: TextStyle(
+                fontSize: 13,
+                color: YuYuYuAssets.blossomTextSecondary,
+              ),
             ),
             const SizedBox(height: 8),
             InkWell(
-              onTap: () => launchUrl(Uri.parse(ApiConstants.anilistDeveloperUrl), mode: LaunchMode.externalApplication),
+              onTap: () => launchUrl(
+                Uri.parse(ApiConstants.anilistDeveloperUrl),
+                mode: LaunchMode.externalApplication,
+              ),
               child: const Text(
                 'Open AniList Developer Settings ↗',
-                style: TextStyle(fontSize: 12, color: AppColors.brandBlue, fontWeight: FontWeight.w600),
+                style: TextStyle(
+                  fontSize: 12.5,
+                  color: YuYuYuAssets.shinjuGold,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
             TextField(
               controller: _tokenController,
+              style: const TextStyle(
+                color: YuYuYuAssets.blossomTextPrimary,
+                fontSize: 13,
+              ),
               decoration: InputDecoration(
                 hintText: 'Paste token here...',
-                hintStyle: const TextStyle(color: AppColors.darkTextMuted),
+                hintStyle: const TextStyle(color: YuYuYuAssets.blossomTextMuted),
                 filled: true,
-                fillColor: AppColors.darkCard,
-                border: OutlineInputBorder(
-                  borderRadius: AppSpacing.borderRadius8,
-                  borderSide: const BorderSide(color: AppColors.darkBorder),
+                fillColor: YuYuYuAssets.twilightInput,
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: AppSpacing.borderRadius12,
+                  borderSide: const BorderSide(color: YuYuYuAssets.twilightBorder),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: AppSpacing.borderRadius12,
+                  borderSide: BorderSide(color: accentColor, width: 1.5),
                 ),
               ),
               maxLines: 2,
@@ -80,7 +114,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel', style: TextStyle(color: AppColors.darkTextSecondary)),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: YuYuYuAssets.blossomTextSecondary),
+            ),
           ),
           ElevatedButton(
             onPressed: () {
@@ -91,10 +128,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               }
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.brandBlue,
-              foregroundColor: Colors.white,
+              backgroundColor: accentColor,
+              foregroundColor: accentColor.computeLuminance() > 0.55
+                  ? Colors.black
+                  : Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
-            child: const Text('Log In'),
+            child: const Text('Log In', style: TextStyle(fontWeight: FontWeight.w800)),
           ),
         ],
       ),
@@ -104,165 +144,306 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authControllerProvider);
+    final heroine = ref.watch(yuyuyuHeroineProvider);
     final isLoading = authState is AuthLoading;
+    final accent = heroine.accentColor;
 
     return Scaffold(
+      backgroundColor: YuYuYuAssets.twilightBg,
       body: Stack(
+        fit: StackFit.expand,
         children: [
-          // Background ambient gradient
+          // Deep Twilight Base Gradient
           Container(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: [
-                  Color(0xFF0F1E32),
-                  AppColors.darkBackground,
+                  Color(0xFF231339),
+                  YuYuYuAssets.twilightBg,
+                  Color(0xFF0A0611),
                 ],
               ),
             ),
           ),
+
+          // Atmospheric YuYuYu Top Banner Scrim
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 290,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                Opacity(
+                  opacity: 0.28,
+                  child: const AppNetworkImage(
+                    imageUrl: YuYuYuAssets.bannerUrl,
+                    fit: BoxFit.cover,
+                    borderRadius: BorderRadius.zero,
+                  ),
+                ),
+                Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        YuYuYuAssets.twilightBg.withValues(alpha: 0.35),
+                        YuYuYuAssets.twilightBg.withValues(alpha: 0.85),
+                        YuYuYuAssets.twilightBg,
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Drifting Sakura Petals
+          Positioned.fill(
+            child: SakuraPetalsOverlay(petalColor: accent),
+          ),
+
           SafeArea(
             child: Center(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.p24),
+                padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 20),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // AniList Brand Icon
-                    Container(
-                      width: 88,
-                      height: 88,
-                      decoration: BoxDecoration(
-                        color: AppColors.brandBlue,
-                        borderRadius: AppSpacing.borderRadius24,
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.brandBlue.withValues(alpha: 0.35),
-                            blurRadius: 24,
-                            offset: const Offset(0, 8),
-                          ),
-                        ],
-                      ),
-                      child: const Center(
-                        child: Text(
-                          'AL',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 36,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: -1,
-                          ),
-                        ),
-                      ),
+                    MankaiLogoEmblem(
+                      size: 96,
+                      accentColor: accent,
+                      radius: 26,
                     ).animateEntrance(index: 0),
-                    const SizedBox(height: AppSpacing.p24),
+                    const SizedBox(height: 18),
                     const Text(
-                      'AniList',
+                      'Mankai',
                       style: TextStyle(
-                        fontSize: 32,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -0.5,
+                        fontFamily: 'Overpass',
+                        fontSize: 34,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.3,
+                        color: YuYuYuAssets.blossomTextPrimary,
                       ),
                     ).animateEntrance(index: 1),
-                    const SizedBox(height: AppSpacing.p8),
-                    const Text(
-                      'Track, share, and discover\nyour favorite anime and manga.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 15,
-                        color: AppColors.darkTextSecondary,
-                        height: 1.4,
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: YuYuYuAssets.shinjuGold.withValues(alpha: 0.14),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: YuYuYuAssets.shinjuGold.withValues(alpha: 0.45),
+                        ),
+                      ),
+                      child: const Text(
+                        'SANSHU HERO CLUB EDITION',
+                        style: TextStyle(
+                          fontFamily: 'Overpass',
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 1.0,
+                          color: YuYuYuAssets.shinjuGold,
+                        ),
                       ),
                     ).animateEntrance(index: 2),
-                    const SizedBox(height: AppSpacing.p40),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Track, share, and bloom with your\nfavorite anime and manga on AniList.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontFamily: 'Overpass',
+                        fontSize: 14.5,
+                        color: YuYuYuAssets.blossomTextSecondary,
+                        height: 1.4,
+                      ),
+                    ).animateEntrance(index: 3),
+                    const SizedBox(height: 28),
 
                     if (authState is Unauthenticated && authState.error != null) ...[
                       Container(
-                        padding: const EdgeInsets.all(AppSpacing.p12),
-                        margin: const EdgeInsets.only(bottom: AppSpacing.p16),
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        margin: const EdgeInsets.only(bottom: 16),
                         decoration: BoxDecoration(
-                          color: AppColors.statusDropped.withValues(alpha: 0.15),
-                          borderRadius: AppSpacing.borderRadius8,
-                          border: Border.all(color: AppColors.statusDropped.withValues(alpha: 0.4)),
+                          color: AppColors.statusDropped.withValues(alpha: 0.16),
+                          borderRadius: AppSpacing.borderRadius12,
+                          border: Border.all(
+                            color: AppColors.statusDropped.withValues(alpha: 0.45),
+                          ),
                         ),
                         child: Text(
                           authState.error!,
-                          style: const TextStyle(color: AppColors.statusDropped, fontSize: 13),
+                          style: const TextStyle(
+                            color: AppColors.statusDropped,
+                            fontSize: 13,
+                            fontFamily: 'Overpass',
+                          ),
                           textAlign: TextAlign.center,
                         ),
                       ),
                     ],
 
-                    if (isLoading) ...[
-                      const CircularProgressIndicator(color: AppColors.brandBlue),
-                      const SizedBox(height: AppSpacing.p16),
-                      const Text(
-                        'Authenticating...',
-                        style: TextStyle(color: AppColors.darkTextSecondary),
-                      ),
-                    ] else ...[
-                      // Login Button
-                      SizedBox(
-                        width: double.infinity,
-                        height: 50,
-                        child: ElevatedButton.icon(
-                          onPressed: _openOAuthWebView,
-                          icon: const Icon(Icons.login_rounded, size: 20),
-                          label: const Text('Log In with AniList'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.brandBlue,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(borderRadius: AppSpacing.borderRadius12),
-                            textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                    // Action Panel Card
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.fromLTRB(18, 20, 18, 16),
+                      decoration: BoxDecoration(
+                        color: YuYuYuAssets.twilightSurface.withValues(alpha: 0.90),
+                        borderRadius: BorderRadius.circular(22),
+                        border: Border.all(color: YuYuYuAssets.twilightBorder),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.4),
+                            blurRadius: 24,
+                            offset: const Offset(0, 10),
                           ),
-                        ),
+                        ],
                       ),
-                      const SizedBox(height: AppSpacing.p12),
+                      child: isLoading
+                          ? Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 22),
+                              child: Column(
+                                children: [
+                                  CircularProgressIndicator(color: accent),
+                                  const SizedBox(height: 16),
+                                  const Text(
+                                    'Connecting to AniList...',
+                                    style: TextStyle(
+                                      fontFamily: 'Overpass',
+                                      color: YuYuYuAssets.blossomTextSecondary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )
+                          : Column(
+                              children: [
+                                // Primary Sign In CTA
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: 50,
+                                  child: DecoratedBox(
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        colors: [
+                                          accent,
+                                          Color.lerp(accent, const Color(0xFFEC4899), 0.45)!,
+                                        ],
+                                      ),
+                                      borderRadius: BorderRadius.circular(14),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: accent.withValues(alpha: 0.36),
+                                          blurRadius: 14,
+                                          offset: const Offset(0, 5),
+                                        ),
+                                      ],
+                                    ),
+                                    child: ElevatedButton.icon(
+                                      onPressed: _openOAuthWebView,
+                                      icon: const Icon(Icons.login_rounded, size: 20),
+                                      label: const Text('Log In with AniList'),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.transparent,
+                                        shadowColor: Colors.transparent,
+                                        foregroundColor: accent.computeLuminance() > 0.62
+                                            ? Colors.black
+                                            : Colors.white,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(14),
+                                        ),
+                                        textStyle: const TextStyle(
+                                          fontFamily: 'Overpass',
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 15,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
 
-                      // Register Button
-                      SizedBox(
-                        width: double.infinity,
-                        height: 50,
-                        child: OutlinedButton(
-                          onPressed: () => launchUrl(Uri.parse(ApiConstants.anilistSignupUrl), mode: LaunchMode.externalApplication),
-                          style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: AppColors.darkBorder),
-                            shape: RoundedRectangleBorder(borderRadius: AppSpacing.borderRadius12),
-                            foregroundColor: AppColors.darkTextPrimary,
-                            textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
-                          ),
-                          child: const Text('Register on AniList'),
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.p20),
+                                // Secondary Register CTA
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: 48,
+                                  child: OutlinedButton(
+                                    onPressed: () => launchUrl(
+                                      Uri.parse(ApiConstants.anilistSignupUrl),
+                                      mode: LaunchMode.externalApplication,
+                                    ),
+                                    style: OutlinedButton.styleFrom(
+                                      side: const BorderSide(color: YuYuYuAssets.twilightBorder),
+                                      backgroundColor: YuYuYuAssets.twilightCard.withValues(alpha: 0.5),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(14),
+                                      ),
+                                      foregroundColor: YuYuYuAssets.blossomTextPrimary,
+                                      textStyle: const TextStyle(
+                                        fontFamily: 'Overpass',
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 14.5,
+                                      ),
+                                    ),
+                                    child: const Text('Create AniList Account'),
+                                  ),
+                                ),
+                                const SizedBox(height: 14),
+                                const Divider(color: YuYuYuAssets.twilightBorder, height: 1),
+                                const SizedBox(height: 8),
 
-                      // Manual Token Option
-                      TextButton.icon(
-                        onPressed: _showTokenInputDialog,
-                        icon: const Icon(Icons.key_rounded, size: 16, color: AppColors.darkTextSecondary),
-                        label: const Text(
-                          'Enter Developer Access Token',
-                          style: TextStyle(color: AppColors.darkTextSecondary, fontSize: 13),
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.p12),
-
-                      // Guest Mode
-                      TextButton(
-                        onPressed: () {
-                          ref.read(authControllerProvider.notifier).loginAsGuest();
-                        },
-                        child: const Text(
-                          'Continue as Guest',
-                          style: TextStyle(
-                            color: AppColors.brandBlue,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: TextButton.icon(
+                                        onPressed: () => _showTokenInputDialog(accent),
+                                        icon: const Icon(
+                                          Icons.key_rounded,
+                                          size: 15,
+                                          color: YuYuYuAssets.blossomTextSecondary,
+                                        ),
+                                        label: const Text(
+                                          'Token Login',
+                                          style: TextStyle(
+                                            fontFamily: 'Overpass',
+                                            color: YuYuYuAssets.blossomTextSecondary,
+                                            fontSize: 12.5,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    Container(
+                                      width: 1,
+                                      height: 18,
+                                      color: YuYuYuAssets.twilightBorder,
+                                    ),
+                                    Expanded(
+                                      child: TextButton(
+                                        onPressed: () {
+                                          ref.read(authControllerProvider.notifier).loginAsGuest();
+                                        },
+                                        child: Text(
+                                          'Continue as Guest',
+                                          style: TextStyle(
+                                            fontFamily: 'Overpass',
+                                            color: accent,
+                                            fontSize: 12.5,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                    ).animateEntrance(index: 4),
                   ],
                 ),
               ),
