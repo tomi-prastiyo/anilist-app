@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
-import '../../../shared/feedback/error_view.dart';
 import '../../../shared/feedback/shimmer_loading.dart';
 import '../../../shared/image/app_avatar.dart';
 import '../../auth/presentation/auth_controller.dart';
@@ -14,6 +13,7 @@ import 'widgets/airing_shelf.dart';
 import 'widgets/anime_in_progress_shelf.dart';
 import 'widgets/home_activity_feed.dart';
 import 'widgets/manga_in_progress_shelf.dart';
+import 'widgets/yuyuyu_hero_banner.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -112,63 +112,70 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
         ],
       ),
-      body: homeState.when(
-        loading: () => const SingleChildScrollView(
-          child: Column(
-            children: [
-              SizedBox(height: 16),
-              ShimmerMediaGrid(count: 6),
-            ],
-          ),
-        ),
-        error: (err, _) => ErrorView(
-          message: err.toString(),
-          onRetry: () {
-            ref.read(homeDataProvider.notifier).refresh();
-            ref.read(animeListControllerProvider.notifier).loadLists();
-            ref.read(mangaListControllerProvider.notifier).loadLists();
-            _activityFeedKey.currentState?.loadActivities();
-          },
-        ),
-        data: (data) {
-          final airingSchedules = (data['airingToday']?['airingSchedules'] as List?)
-                  ?.cast<Map<String, dynamic>>() ??
-              [];
-
-          return RefreshIndicator(
-            onRefresh: () async {
-              await Future.wait([
-                ref.read(homeDataProvider.notifier).refresh(),
-                ref.read(animeListControllerProvider.notifier).loadLists(),
-                ref.read(mangaListControllerProvider.notifier).loadLists(),
-                _activityFeedKey.currentState?.loadActivities() ?? Future.value(),
-              ]);
-            },
-            color: AppColors.brandBlue,
-            backgroundColor: context.appSurface,
-            child: ListView(
-              padding: const EdgeInsets.only(top: 8, bottom: 90),
-              children: [
-                // 1. Airing Shelf (Schedule with countdown timers)
-                if (airingSchedules.isNotEmpty) ...[
-                  AiringShelf(schedules: airingSchedules),
-                  const SizedBox(height: 18),
-                ],
-
-                // 2. Anime In Progress (3-4 items + View All)
-                const AnimeInProgressShelf(),
-                const SizedBox(height: 18),
-
-                // 3. Manga In Progress (2-3 items + View All)
-                const MangaInProgressShelf(),
-                const SizedBox(height: 18),
-
-                // 4. Community Activity Feed (Following default vs Global, Like button)
-                HomeActivityFeed(key: _activityFeedKey),
-              ],
-            ),
-          );
+      body: RefreshIndicator(
+        onRefresh: () async {
+          await Future.wait([
+            ref.read(homeDataProvider.notifier).refresh(),
+            ref.read(animeListControllerProvider.notifier).loadLists(),
+            ref.read(mangaListControllerProvider.notifier).loadLists(),
+            _activityFeedKey.currentState?.loadActivities() ?? Future.value(),
+          ]);
         },
+        color: context.appAccent,
+        backgroundColor: context.appSurface,
+        child: ListView(
+          padding: const EdgeInsets.only(top: 6, bottom: 24),
+          children: [
+            // 0. YuYuYu Hero Club Banner (only shown when YuYuYu theme is active)
+            const YuYuYuHeroBanner(),
+
+            // 1. Airing Shelf (Filtered strictly to anime in user's list, never destroys siblings below)
+            homeState.when(
+              loading: () => const Padding(
+                padding: EdgeInsets.only(bottom: 18),
+                child: ShimmerHorizontalRow(height: 208, itemWidth: 144),
+              ),
+              error: (_, _) => const SizedBox.shrink(),
+              data: (data) {
+                final animeLists = ref.watch(animeListControllerProvider).valueOrNull ?? const [];
+                final myMediaIds = <int>{};
+                for (final group in animeLists) {
+                  final entries = (group['entries'] as List?)?.cast<Map<String, dynamic>>() ?? const [];
+                  for (final e in entries) {
+                    final mid = e['media']?['id'] as int?;
+                    if (mid != null) myMediaIds.add(mid);
+                  }
+                }
+                final rawSchedules = (data['airingToday']?['airingSchedules'] as List?)
+                        ?.cast<Map<String, dynamic>>() ??
+                    [];
+                final airingSchedules = rawSchedules.where((s) {
+                  final mid = s['media']?['id'] as int?;
+                  return mid != null && myMediaIds.contains(mid);
+                }).toList();
+
+                if (airingSchedules.isEmpty) return const SizedBox.shrink();
+                return Column(
+                  children: [
+                    AiringShelf(schedules: airingSchedules),
+                    const SizedBox(height: 18),
+                  ],
+                );
+              },
+            ),
+
+            // 2. Anime In Progress (Backdrop Cards + Hero Posters)
+            const AnimeInProgressShelf(),
+            const SizedBox(height: 18),
+
+            // 3. Manga In Progress (Backdrop Cards + Hero Posters)
+            const MangaInProgressShelf(),
+            const SizedBox(height: 18),
+
+            // 4. Community Activity Feed (stays mounted — never reloads twice!)
+            HomeActivityFeed(key: _activityFeedKey),
+          ],
+        ),
       ),
     );
   }

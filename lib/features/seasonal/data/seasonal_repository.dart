@@ -33,7 +33,9 @@ class SeasonalRepository {
           genres
           seasonYear
           season
+          bannerImage
           coverImage {
+            extraLarge
             large
             medium
           }

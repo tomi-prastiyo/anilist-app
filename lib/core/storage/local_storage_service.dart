@@ -16,8 +16,8 @@ class LocalStorageService {
   LocalStorageService(this._prefs);
 
   static const String keyAppTheme = 'key_app_theme';
+  static const String keyYuyuyuHeroine = 'key_yuyuyu_heroine';
   static const String keyIsGuest = 'key_is_guest';
-  static const String keyDisplayAdultContent = 'key_display_adult_content';
   static const String keyTitleLanguage = 'key_title_language';
   static const String keyScoreFormat = 'key_score_format';
   static const String keyViewerId = 'key_viewer_id';
@@ -60,9 +60,6 @@ class LocalStorageService {
 
   bool get isGuest => getBool(keyIsGuest, defaultValue: false);
   set isGuest(bool val) => setBool(keyIsGuest, val);
-
-  bool get displayAdultContent => getBool(keyDisplayAdultContent, defaultValue: false);
-  set displayAdultContent(bool val) => setBool(keyDisplayAdultContent, val);
 
   String get titleLanguage => getString(keyTitleLanguage) ?? 'ROMAJI';
   set titleLanguage(String val) => setString(keyTitleLanguage, val);

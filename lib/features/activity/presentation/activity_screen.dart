@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/animations/app_motion.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/date_util.dart';
 import '../../../shared/feedback/empty_view.dart';
@@ -13,6 +14,7 @@ import '../../profile/presentation/profile_screen.dart';
 import '../data/activity_repository.dart';
 import 'widgets/activity_comments_bottom_sheet.dart';
 import 'widgets/activity_likes_bottom_sheet.dart';
+import 'widgets/delete_activity_dialog.dart';
 
 class ActivityScreen extends ConsumerStatefulWidget {
   final int? userId;
@@ -35,6 +37,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
   bool _isLoadingMore = false;
   int _currentPage = 1;
   bool _hasNextPage = true;
+  final Set<int> _togglingLikeIds = {};
 
   @override
   void initState() {
@@ -99,28 +102,96 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
     }
   }
 
-  Future<void> _toggleLike(int index) async {
-    HapticFeedback.lightImpact();
+  Future<void> _deleteActivity(int index) async {
     final activity = _activities[index];
+    final id = activity['id'] as int?;
+    if (id == null) return;
+
+    final confirmed = await showDeleteActivityConfirmDialog(context);
+    if (!confirmed || !mounted) return;
+
+    final removed = _activities[index];
+    setState(() => _activities.removeAt(index));
+
+    try {
+      final ok = await ref.read(activityRepositoryProvider).deleteActivity(id);
+      if (!ok) throw Exception('Failed to delete');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Activity deleted'), duration: Duration(seconds: 2)),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _activities.insert(index.clamp(0, _activities.length), removed));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not delete activity: $e'), backgroundColor: AppColors.statusDropped),
+        );
+      }
+    }
+  }
+
+  Future<void> _toggleLike(int index) async {
+    final isAuthenticated = ref.read(authControllerProvider) is Authenticated;
+    if (!isAuthenticated) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Sign in with AniList to like activities.'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    final activity = _activities[index];
+    final activityId = activity['id'] as int?;
+    if (activityId == null || _togglingLikeIds.contains(activityId)) return;
+
+    HapticFeedback.lightImpact();
+    _togglingLikeIds.add(activityId);
     final isLiked = activity['isLiked'] as bool? ?? false;
     final currentLikes = activity['likeCount'] as int? ?? 0;
+    final optimisticLiked = !isLiked;
+    final optimisticCount = isLiked ? (currentLikes > 0 ? currentLikes - 1 : 0) : currentLikes + 1;
 
     setState(() {
-      activity['isLiked'] = !isLiked;
-      activity['likeCount'] = isLiked ? (currentLikes > 0 ? currentLikes - 1 : 0) : currentLikes + 1;
+      activity['isLiked'] = optimisticLiked;
+      activity['likeCount'] = optimisticCount;
     });
 
     try {
       final repo = ref.read(activityRepositoryProvider);
-      await repo.toggleLike(activity['id'] as int);
-    } catch (_) {
+      final updated = await repo.toggleLike(activityId);
+      if (mounted) {
+        final finalLiked = updated?['isLiked'] as bool? ?? optimisticLiked;
+        final finalCount = updated?['likeCount'] as int? ?? optimisticCount;
+        setState(() {
+          activity['isLiked'] = finalLiked;
+          activity['likeCount'] = finalCount;
+        });
+        ref.read(activityLikeSyncProvider.notifier).state = (
+          id: activityId,
+          isLiked: finalLiked,
+          likeCount: finalCount,
+        );
+      }
+    } catch (e) {
       // Revert if error
       if (mounted) {
         setState(() {
           activity['isLiked'] = isLiked;
           activity['likeCount'] = currentLikes;
         });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update like: ${e.toString()}'),
+            backgroundColor: AppColors.statusBehind,
+            duration: const Duration(seconds: 2),
+          ),
+        );
       }
+    } finally {
+      _togglingLikeIds.remove(activityId);
     }
   }
 
@@ -196,6 +267,22 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
     final accentColor = auth is Authenticated
         ? AppColors.getProfileAccentColor(auth.user.profileColor)
         : AppColors.brandBlue;
+
+    ref.listen<({int id, bool isLiked, int likeCount})?>(
+      activityLikeSyncProvider,
+      (_, next) {
+        if (next == null || !mounted) return;
+        final idx = _activities.indexWhere((a) => a['id'] == next.id);
+        if (idx != -1 &&
+            (_activities[idx]['isLiked'] != next.isLiked ||
+                _activities[idx]['likeCount'] != next.likeCount)) {
+          setState(() {
+            _activities[idx]['isLiked'] = next.isLiked;
+            _activities[idx]['likeCount'] = next.likeCount;
+          });
+        }
+      },
+    );
 
     final content = _isLoading
         ? const ShimmerMediaGrid(count: 6)
@@ -307,8 +394,8 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
                           color: context.appSurface,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: context.appBorder),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -372,6 +459,22 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                                         ],
                                       ),
                                     ),
+                                    if (auth is Authenticated && authorId != null && authorId == auth.user.id)
+                                      IconButton(
+                                        style: IconButton.styleFrom(
+                                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                          minimumSize: const Size(28, 28),
+                                          padding: EdgeInsets.zero,
+                                        ),
+                                        constraints: const BoxConstraints.tightFor(width: 28, height: 28),
+                                        icon: Icon(
+                                          Icons.delete_outline_rounded,
+                                          size: 16,
+                                          color: context.appTextMuted,
+                                        ),
+                                        tooltip: 'Delete activity',
+                                        onPressed: () => _deleteActivity(index),
+                                      ),
                                   ],
                                 ),
                               ),
@@ -395,40 +498,79 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                                   final mediaId = item['media']['id'] as int?;
                                   if (mediaId != null) {
                                     Navigator.of(context).push(
-                                      MaterialPageRoute(
-                                        builder: (context) => MediaDetailScreen(mediaId: mediaId),
+                                      AppPageRoute(
+                                        page: MediaDetailScreen(mediaId: mediaId),
                                       ),
                                     );
                                   }
                                 },
-                                borderRadius: BorderRadius.circular(6),
+                                borderRadius: BorderRadius.circular(10),
                                 child: Container(
-                                  padding: const EdgeInsets.all(8),
+                                  height: 74,
+                                  clipBehavior: Clip.antiAlias,
                                   decoration: BoxDecoration(
                                     color: context.appBackground,
-                                    borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(color: Colors.white.withValues(alpha: 0.04)),
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(color: context.appBorder),
                                   ),
-                                  child: Row(
+                                  child: Stack(
+                                    fit: StackFit.expand,
                                     children: [
-                                      AppNetworkImage(
-                                        imageUrl: item['media']['coverImage']?['medium'],
-                                        width: 32,
-                                        height: 44,
-                                        borderRadius: BorderRadius.circular(3),
-                                      ),
-                                      const SizedBox(width: 10),
-                                      Expanded(
-                                        child: Text(
-                                          item['media']['title']?['userPreferred'] ?? '',
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(
-                                            fontFamily: 'Overpass',
-                                            fontWeight: FontWeight.w700,
-                                            fontSize: 12.5,
-                                            color: context.appTextPrimary,
+                                      if ((item['media']['bannerImage'] ?? item['media']['coverImage']?['large']) != null)
+                                        Opacity(
+                                          opacity: context.isDark ? 0.22 : 0.12,
+                                          child: AppNetworkImage(
+                                            imageUrl: (item['media']['bannerImage'] ??
+                                                item['media']['coverImage']?['large']) as String?,
+                                            fit: BoxFit.cover,
                                           ),
+                                        ),
+                                      Container(
+                                        decoration: BoxDecoration(
+                                          gradient: LinearGradient(
+                                            begin: Alignment.centerLeft,
+                                            end: Alignment.centerRight,
+                                            colors: [
+                                              context.appBackground.withValues(alpha: 0.92),
+                                              context.appBackground.withValues(alpha: 0.65),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                      Padding(
+                                        padding: const EdgeInsets.all(6),
+                                        child: Row(
+                                          children: [
+                                            ClipRRect(
+                                              borderRadius: BorderRadius.circular(6),
+                                              child: AppNetworkImage(
+                                                imageUrl: (item['media']['coverImage']?['large'] ??
+                                                    item['media']['coverImage']?['medium']) as String?,
+                                                width: 44,
+                                                height: 62,
+                                                fit: BoxFit.cover,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 10),
+                                            Expanded(
+                                              child: Text(
+                                                item['media']['title']?['userPreferred'] ?? '',
+                                                maxLines: 2,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: TextStyle(
+                                                  fontFamily: 'Overpass',
+                                                  fontWeight: FontWeight.w800,
+                                                  fontSize: 12.5,
+                                                  color: context.appTextPrimary,
+                                                ),
+                                              ),
+                                            ),
+                                            Icon(
+                                              Icons.chevron_right_rounded,
+                                              size: 18,
+                                              color: context.appTextMuted,
+                                            ),
+                                          ],
                                         ),
                                       ),
                                     ],
@@ -514,7 +656,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                             ),
                           ],
                         ),
-                      );
+                      ).animateEntrance(index: index);
                     },
                   ),
           );

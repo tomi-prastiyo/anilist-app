@@ -61,3 +61,74 @@ class ShimmerMediaGrid extends StatelessWidget {
     );
   }
 }
+
+class ShimmerHorizontalRow extends StatelessWidget {
+  final double height;
+  final double itemWidth;
+  final int count;
+
+  const ShimmerHorizontalRow({
+    super.key,
+    this.height = 208,
+    this.itemWidth = 144,
+    this.count = 4,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final base = isDark ? AppColors.shimmerBase : const Color(0xFFE5E7EB);
+    final highlight =
+        isDark ? AppColors.shimmerHighlight : const Color(0xFFF3F4F6);
+    final cardColor = isDark ? AppColors.darkCard : AppColors.lightCard;
+
+    return SizedBox(
+      height: height,
+      child: Shimmer.fromColors(
+        baseColor: base,
+        highlightColor: highlight,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          physics: const NeverScrollableScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.p16),
+          itemCount: count,
+          separatorBuilder: (_, _) => const SizedBox(width: AppSpacing.p12),
+          itemBuilder: (context, index) => SizedBox(
+            width: itemWidth,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: cardColor,
+                      borderRadius: AppSpacing.borderRadius8,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.p8),
+                Container(
+                  height: 12,
+                  width: itemWidth * 0.85,
+                  decoration: BoxDecoration(
+                    color: cardColor,
+                    borderRadius: AppSpacing.borderRadius4,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Container(
+                  height: 10,
+                  width: itemWidth * 0.5,
+                  decoration: BoxDecoration(
+                    color: cardColor,
+                    borderRadius: AppSpacing.borderRadius4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

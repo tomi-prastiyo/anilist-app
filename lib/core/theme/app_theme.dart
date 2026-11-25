@@ -1,19 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../constants/app_colors.dart';
+import '../constants/yuyuyu_assets.dart';
+import 'app_typography.dart';
 
 enum AppThemeMode {
   system,
   light,
   dark,
-  amoled,
+  yuyuyu,
 }
 
 class AppTheme {
   AppTheme._();
 
-  static ThemeData getTheme([AppThemeMode? mode]) {
+  static ThemeData getTheme([AppThemeMode? mode, YuYuYuHeroine? heroine]) {
     if (mode == AppThemeMode.light) return lightTheme;
+    if (mode == AppThemeMode.yuyuyu) return yuyuyuTheme(heroine);
     return darkTheme;
   }
 
@@ -29,11 +32,13 @@ class AppTheme {
     final textTheme = GoogleFonts.overpassTextTheme(baseTextTheme).apply(
       bodyColor: textPrimary,
       displayColor: textPrimary,
+      fontFamilyFallback: AppTypography.fallbackFonts,
     );
 
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
+      extensions: const [AppThemePalette.light],
       scaffoldBackgroundColor: scaffoldBg,
       primaryColor: AppColors.brandBlue,
       canvasColor: surfaceColor,
@@ -137,11 +142,13 @@ class AppTheme {
     final textTheme = GoogleFonts.overpassTextTheme(baseTextTheme).apply(
       bodyColor: textPrimary,
       displayColor: textPrimary,
+      fontFamilyFallback: AppTypography.fallbackFonts,
     );
 
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
+      extensions: const [AppThemePalette.dark],
       scaffoldBackgroundColor: scaffoldBg,
       primaryColor: AppColors.brandBlue,
       canvasColor: surfaceColor,
@@ -228,6 +235,114 @@ class AppTheme {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
           side: BorderSide(color: borderColor),
+        ),
+      ),
+    );
+  }
+
+  /// Dedicated *Yuuki Yuuna wa Yuusha de Aru* (Mankai Twilight) theme.
+  static ThemeData yuyuyuTheme([YuYuYuHeroine? heroine]) {
+    final activeHeroine = heroine ?? YuYuYuAssets.heroines.first;
+    final palette = AppThemePalette.yuyuyu(activeHeroine.accentColor);
+    final accent = palette.accent;
+
+    final baseTextTheme = ThemeData.dark().textTheme;
+    final textTheme = GoogleFonts.overpassTextTheme(baseTextTheme).apply(
+      bodyColor: palette.textPrimary,
+      displayColor: palette.textPrimary,
+      fontFamilyFallback: AppTypography.fallbackFonts,
+    );
+
+    return ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.dark,
+      extensions: [palette],
+      scaffoldBackgroundColor: palette.background,
+      primaryColor: accent,
+      canvasColor: palette.surface,
+      colorScheme: ColorScheme(
+        brightness: Brightness.dark,
+        primary: accent,
+        onPrimary: Colors.white,
+        secondary: YuYuYuAssets.shinjuGold,
+        onSecondary: Colors.black,
+        error: AppColors.statusDropped,
+        onError: Colors.white,
+        surface: palette.surface,
+        onSurface: palette.textPrimary,
+      ),
+      textTheme: textTheme,
+      appBarTheme: AppBarTheme(
+        backgroundColor: palette.background,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        centerTitle: false,
+        iconTheme: IconThemeData(color: palette.textPrimary),
+        titleTextStyle: textTheme.titleMedium?.copyWith(
+          color: palette.textPrimary,
+          fontWeight: FontWeight.w800,
+          fontSize: 18,
+          fontFamily: GoogleFonts.overpass().fontFamily,
+        ),
+      ),
+      cardTheme: CardThemeData(
+        color: palette.card,
+        elevation: 0,
+        margin: EdgeInsets.zero,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+          side: BorderSide(color: palette.border, width: 1),
+        ),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: palette.inputSurface,
+        hintStyle: TextStyle(color: palette.textMuted, fontSize: 13),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide(color: palette.border),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide(color: palette.border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide(color: accent, width: 1.5),
+        ),
+      ),
+      chipTheme: ChipThemeData(
+        backgroundColor: palette.surface,
+        side: BorderSide(color: palette.border),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+        labelStyle: textTheme.labelSmall?.copyWith(color: palette.textSecondary, fontWeight: FontWeight.w600),
+      ),
+      bottomNavigationBarTheme: BottomNavigationBarThemeData(
+        backgroundColor: palette.background,
+        selectedItemColor: accent,
+        unselectedItemColor: palette.textSecondary,
+        type: BottomNavigationBarType.fixed,
+        elevation: 0,
+      ),
+      dividerTheme: DividerThemeData(
+        color: palette.border,
+        thickness: 1,
+        space: 1,
+      ),
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: palette.surface,
+        surfaceTintColor: Colors.transparent,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+        ),
+      ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: palette.surface,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: palette.border),
         ),
       ),
     );

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../../core/animations/app_motion.dart';
 import '../../../core/constants/api_constants.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
@@ -154,7 +155,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           ),
                         ),
                       ),
-                    ),
+                    ).animateEntrance(index: 0),
                     const SizedBox(height: AppSpacing.p24),
                     const Text(
                       'AniList',
@@ -163,7 +164,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         fontWeight: FontWeight.w800,
                         letterSpacing: -0.5,
                       ),
-                    ),
+                    ).animateEntrance(index: 1),
                     const SizedBox(height: AppSpacing.p8),
                     const Text(
                       'Track, share, and discover\nyour favorite anime and manga.',
@@ -173,7 +174,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         color: AppColors.darkTextSecondary,
                         height: 1.4,
                       ),
-                    ),
+                    ).animateEntrance(index: 2),
                     const SizedBox(height: AppSpacing.p40),
 
                     if (authState is Unauthenticated && authState.error != null) ...[

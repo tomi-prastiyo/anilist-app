@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/animations/app_motion.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
 import '../../../shared/cards/media_card.dart';
@@ -7,6 +8,7 @@ import '../../../shared/feedback/empty_view.dart';
 import '../../../shared/feedback/shimmer_loading.dart';
 import '../../home/data/home_repository.dart';
 import '../../media_detail/presentation/media_detail_screen.dart';
+import '../../media_list/presentation/media_list_controller.dart';
 import '../data/seasonal_repository.dart';
 
 class SeasonalScreen extends ConsumerStatefulWidget {
@@ -113,50 +115,43 @@ class _SeasonalScreenState extends ConsumerState<SeasonalScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final animeLists = ref.watch(animeListControllerProvider).valueOrNull ?? const [];
+    final inListMap = <int, String>{};
+    for (final group in animeLists) {
+      final st = (group['status'] as String?) ?? '';
+      final entries = (group['entries'] as List?)?.cast<Map<String, dynamic>>() ?? const [];
+      for (final e in entries) {
+        final mid = e['media']?['id'] as int?;
+        if (mid != null && st.isNotEmpty) {
+          inListMap[mid] = st;
+        }
+      }
+    }
+
     return Scaffold(
       backgroundColor: context.appBackground,
       appBar: AppBar(
         titleSpacing: AppSpacing.p16,
-        title: Row(
-          children: [
-            Text(
-              'Seasonal Chart',
-              style: TextStyle(
-                fontFamily: 'Overpass',
-                fontWeight: FontWeight.w900,
-                fontSize: 18,
-                color: context.appTextPrimary,
-              ),
-            ),
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-              decoration: BoxDecoration(
-                color: context.appSurface,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: context.appBorder),
-              ),
-              child: Text(
-                '$_selectedSeason $_selectedYear',
-                style: const TextStyle(
-                  fontFamily: 'Overpass',
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.brandBlue,
-                ),
-              ),
-            ),
-          ],
+        title: Text(
+          'Seasonal Chart',
+          style: TextStyle(
+            fontFamily: 'Overpass',
+            fontWeight: FontWeight.w900,
+            fontSize: 18.5,
+            color: context.appTextPrimary,
+          ),
         ),
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(50),
+          preferredSize: const Size.fromHeight(52),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.p16, vertical: 8),
+            padding: const EdgeInsets.fromLTRB(AppSpacing.p16, 4, AppSpacing.p16, 10),
             child: Row(
               children: [
                 // Season Selector
                 Expanded(
+                  flex: 3,
                   child: Container(
+                    height: 40,
                     padding: const EdgeInsets.symmetric(horizontal: 12),
                     decoration: BoxDecoration(
                       color: context.appInputSurface,
@@ -196,43 +191,48 @@ class _SeasonalScreenState extends ConsumerState<SeasonalScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 10),
                 // Year Selector
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: BoxDecoration(
-                    color: context.appInputSurface,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: context.appBorder),
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<int>(
-                      value: _selectedYear,
-                      dropdownColor: context.appSurface,
-                      icon: Icon(Icons.arrow_drop_down_rounded, color: context.appTextSecondary),
-                      items: _years.map((y) {
-                        return DropdownMenuItem(
-                          value: y,
-                          child: Text(
-                            '$y',
-                            style: TextStyle(
-                              fontFamily: 'Overpass',
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                              color: context.appTextPrimary,
+                Expanded(
+                  flex: 2,
+                  child: Container(
+                    height: 40,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: context.appInputSurface,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: context.appBorder),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<int>(
+                        value: _selectedYear,
+                        dropdownColor: context.appSurface,
+                        isExpanded: true,
+                        icon: Icon(Icons.arrow_drop_down_rounded, color: context.appTextSecondary),
+                        items: _years.map((y) {
+                          return DropdownMenuItem(
+                            value: y,
+                            child: Text(
+                              '$y',
+                              style: TextStyle(
+                                fontFamily: 'Overpass',
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: context.appTextPrimary,
+                              ),
                             ),
-                          ),
-                        );
-                      }).toList(),
-                      onChanged: (val) {
-                        if (val != null) {
-                          setState(() => _selectedYear = val);
-                          if (_scrollController.hasClients) {
-                            _scrollController.jumpTo(0);
+                          );
+                        }).toList(),
+                        onChanged: (val) {
+                          if (val != null) {
+                            setState(() => _selectedYear = val);
+                            if (_scrollController.hasClients) {
+                              _scrollController.jumpTo(0);
+                            }
+                            _loadSeasonalMedia(reset: true);
                           }
-                          _loadSeasonalMedia(reset: true);
-                        }
-                      },
+                        },
+                      ),
                     ),
                   ),
                 ),
@@ -251,7 +251,7 @@ class _SeasonalScreenState extends ConsumerState<SeasonalScreen> {
                 )
               : RefreshIndicator(
                   onRefresh: () => _loadSeasonalMedia(reset: true),
-                  color: AppColors.brandBlue,
+                  color: context.appAccent,
                   backgroundColor: context.appSurface,
                   child: CustomScrollView(
                     controller: _scrollController,
@@ -261,44 +261,44 @@ class _SeasonalScreenState extends ConsumerState<SeasonalScreen> {
                         padding: const EdgeInsets.all(AppSpacing.p16),
                         sliver: SliverGrid(
                           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 3,
-                            childAspectRatio: 0.58,
-                            crossAxisSpacing: 10,
-                            mainAxisSpacing: 12,
+                            crossAxisCount: 2,
+                            childAspectRatio: 0.66,
+                            crossAxisSpacing: 12,
+                            mainAxisSpacing: 14,
                           ),
                           delegate: SliverChildBuilderDelegate(
                             (context, index) {
                               final media = _mediaList[index];
+                              final id = media['id'] as int?;
                               return MediaCard(
                                 media: media,
                                 mode: MediaCardMode.grid,
+                                accentColor: context.appAccent,
+                                inListBadge: id != null ? inListMap[id] : null,
                                 onTap: () {
-                                  final id = media['id'] as int?;
                                   if (id != null) {
                                     Navigator.of(context).push(
-                                      MaterialPageRoute(
-                                        builder: (context) => MediaDetailScreen(mediaId: id),
-                                      ),
+                                      AppPageRoute(page: MediaDetailScreen(mediaId: id)),
                                     );
                                   }
                                 },
-                              );
+                              ).animateEntrance(index: index);
                             },
                             childCount: _mediaList.length,
                           ),
                         ),
                       ),
                       if (_isLoadingMore)
-                        const SliverToBoxAdapter(
+                        SliverToBoxAdapter(
                           child: Padding(
-                            padding: EdgeInsets.symmetric(vertical: 20),
+                            padding: const EdgeInsets.symmetric(vertical: 20),
                             child: Center(
                               child: SizedBox(
                                 width: 24,
                                 height: 24,
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2.5,
-                                  valueColor: AlwaysStoppedAnimation<Color>(AppColors.brandBlue),
+                                  valueColor: AlwaysStoppedAnimation<Color>(context.appAccent),
                                 ),
                               ),
                             ),

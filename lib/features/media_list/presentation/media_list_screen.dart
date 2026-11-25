@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/animations/app_motion.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
 import '../../../core/utils/text_util.dart';
@@ -9,6 +10,7 @@ import '../../../shared/cards/media_card.dart';
 import '../../../shared/feedback/empty_view.dart';
 import '../../../shared/feedback/error_view.dart';
 import '../../../shared/feedback/shimmer_loading.dart';
+import '../../../shared/widgets/random_pick_sheet.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../media_detail/presentation/media_detail_screen.dart';
 import 'media_list_controller.dart';
@@ -319,34 +321,42 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
       }
     });
 
+    final canPop = Navigator.of(context).canPop();
+
     return Scaffold(
       backgroundColor: context.appBackground,
       appBar: AppBar(
-        titleSpacing: AppSpacing.p16,
+        leadingWidth: canPop ? 40 : null,
+        titleSpacing: canPop ? 2 : AppSpacing.p16,
+        actionsPadding: const EdgeInsets.only(right: 6),
         title: Row(
           children: [
-            Text(
-              listTitle,
-              style: TextStyle(
-                fontFamily: 'Overpass',
-                fontWeight: FontWeight.w900,
-                fontSize: 18,
-                color: context.appTextPrimary,
+            Flexible(
+              child: Text(
+                listTitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontFamily: 'Overpass',
+                  fontWeight: FontWeight.w900,
+                  fontSize: canPop ? 16 : 17.5,
+                  color: context.appTextPrimary,
+                ),
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 6),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
                 color: context.appSurface,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: context.appBorder),
               ),
               child: Text(
-                '$totalCount Total',
+                '$totalCount',
                 style: TextStyle(
                   fontFamily: 'Overpass',
-                  fontSize: 10.5,
+                  fontSize: 10,
                   fontWeight: FontWeight.w800,
                   color: accentColor,
                 ),
@@ -356,7 +366,14 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
         ),
         actions: [
           IconButton(
-            icon: Icon(_isSearchVisible ? Icons.search_off_rounded : Icons.search_rounded),
+            style: IconButton.styleFrom(
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              minimumSize: const Size(34, 34),
+              padding: EdgeInsets.zero,
+            ),
+            constraints: const BoxConstraints.tightFor(width: 34, height: 34),
+            padding: EdgeInsets.zero,
+            icon: Icon(_isSearchVisible ? Icons.search_off_rounded : Icons.search_rounded, size: 20),
             tooltip: 'Search list',
             onPressed: () {
               setState(() {
@@ -370,12 +387,57 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
             },
           ),
           IconButton(
-            icon: const Icon(Icons.sort_rounded),
+            style: IconButton.styleFrom(
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              minimumSize: const Size(34, 34),
+              padding: EdgeInsets.zero,
+            ),
+            constraints: const BoxConstraints.tightFor(width: 34, height: 34),
+            padding: EdgeInsets.zero,
+            icon: const Icon(Icons.casino_rounded, size: 20),
+            tooltip: 'Random Pick',
+            onPressed: () {
+              final lists = listState.valueOrNull ?? const [];
+              final activeStatus = _statuses[_selectedTabIndex];
+              final candidates = <Map<String, dynamic>>[];
+              for (final group in lists) {
+                if ((group['status'] as String?)?.toUpperCase() == activeStatus) {
+                  final entries = (group['entries'] as List?)?.cast<Map<String, dynamic>>() ?? const [];
+                  for (final e in entries) {
+                    final m = e['media'] as Map<String, dynamic>?;
+                    if (m != null) candidates.add(m);
+                  }
+                }
+              }
+              RandomPickSheet.show(
+                context,
+                mediaList: candidates,
+                titlePreference: user.titleLanguage,
+                contextTitle: 'Random from ${_getStatusLabel(activeStatus)}',
+              );
+            },
+          ),
+          IconButton(
+            style: IconButton.styleFrom(
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              minimumSize: const Size(34, 34),
+              padding: EdgeInsets.zero,
+            ),
+            constraints: const BoxConstraints.tightFor(width: 34, height: 34),
+            padding: EdgeInsets.zero,
+            icon: const Icon(Icons.sort_rounded, size: 20),
             tooltip: 'Sort by',
             onPressed: () => _showSortMenu(context),
           ),
           IconButton(
-            icon: Icon(_getLayoutIcon()),
+            style: IconButton.styleFrom(
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              minimumSize: const Size(34, 34),
+              padding: EdgeInsets.zero,
+            ),
+            constraints: const BoxConstraints.tightFor(width: 34, height: 34),
+            padding: EdgeInsets.zero,
+            icon: Icon(_getLayoutIcon(), size: 20),
             tooltip: 'Switch layout',
             onPressed: _cycleLayoutMode,
           ),
@@ -576,23 +638,41 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
                       onRefresh: () => ref.read(provider.notifier).loadLists(),
                       color: accentColor,
                       backgroundColor: context.appSurface,
-                      child: _buildLayout(
-                        entries,
-                        status: status,
-                        accentColor: accentColor,
-                        scoreFormat: scoreFormat,
-                        onIncrementProgress: (entryId, mediaId, currentProgress, maxCount) {
-                          HapticFeedback.lightImpact();
-                          ref.read(provider.notifier).incrementProgress(
-                                entryId: entryId,
-                                mediaId: mediaId,
-                                currentProgress: currentProgress,
-                                maxEpisodesOrChapters: maxCount,
-                              );
-                        },
-                        onUpdateScore: (entry) {
-                          _showScoreDialog(context, entry, scoreFormat);
-                        },
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 220),
+                        switchInCurve: Curves.easeOutCubic,
+                        child: KeyedSubtree(
+                          key: ValueKey('${_cardMode.name}_$status'),
+                          child: _buildLayout(
+                            entries,
+                            status: status,
+                            accentColor: accentColor,
+                            scoreFormat: scoreFormat,
+                            onIncrementProgress: (entryId, mediaId, currentProgress, maxCount) {
+                              HapticFeedback.lightImpact();
+                              ref.read(provider.notifier).incrementProgress(
+                                    entryId: entryId,
+                                    mediaId: mediaId,
+                                    currentProgress: currentProgress,
+                                    maxEpisodesOrChapters: maxCount,
+                                  );
+                            },
+                            onIncrementVolume: widget.type == 'MANGA'
+                                ? (entryId, mediaId, currentVols, maxVols) {
+                                    HapticFeedback.lightImpact();
+                                    ref.read(provider.notifier).incrementVolume(
+                                          entryId: entryId,
+                                          mediaId: mediaId,
+                                          currentVolumes: currentVols,
+                                          maxVolumes: maxVols,
+                                        );
+                                  }
+                                : null,
+                            onUpdateScore: (entry) {
+                              _showScoreDialog(context, entry, scoreFormat);
+                            },
+                          ),
+                        ),
                       ),
                     );
                   }).toList(),
@@ -612,16 +692,20 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
     required String scoreFormat,
     required void Function(int entryId, int mediaId, int currentProgress, int? maxCount)
         onIncrementProgress,
+    void Function(int entryId, int mediaId, int currentVols, int? maxVols)?
+        onIncrementVolume,
     required void Function(Map<String, dynamic> entry) onUpdateScore,
   }) {
+    final isManga = widget.type == 'MANGA';
     switch (_cardMode) {
       case MediaCardMode.grid:
+        final isTablet = MediaQuery.sizeOf(context).width >= 600;
         return GridView.builder(
-          padding: const EdgeInsets.fromLTRB(16, 6, 16, 80),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 3,
-            childAspectRatio: 0.58,
-            crossAxisSpacing: 10,
+          padding: const EdgeInsets.fromLTRB(16, 6, 16, 24),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: isTablet ? 3 : 2,
+            childAspectRatio: 0.67,
+            crossAxisSpacing: 12,
             mainAxisSpacing: 12,
           ),
           itemCount: entries.length,
@@ -630,6 +714,8 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
             final media = entry['media'] as Map<String, dynamic>;
             final progress = entry['progress'] as int? ?? 0;
             final maxCount = media['episodes'] as int? ?? media['chapters'] as int?;
+            final volProgress = entry['progressVolumes'] as int? ?? 0;
+            final maxVols = media['volumes'] as int?;
 
             return MediaCard(
               media: media,
@@ -637,6 +723,7 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
               accentColor: accentColor,
               listStatus: status,
               userProgress: progress,
+              userVolumeProgress: isManga ? volProgress : null,
               userScore: (entry['score'] as num?)?.toDouble(),
               scoreFormat: scoreFormat,
               onTap: () => _navigateToDetail(context, media['id']),
@@ -647,20 +734,30 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
                 progress,
                 maxCount,
               ),
+              onIncrementVolume: onIncrementVolume != null
+                  ? () => onIncrementVolume(
+                        entry['id'] as int,
+                        media['id'] as int,
+                        volProgress,
+                        maxVols,
+                      )
+                  : null,
             );
           },
         );
 
       case MediaCardMode.compact:
         return ListView.separated(
-          padding: const EdgeInsets.fromLTRB(16, 6, 16, 80),
+          padding: const EdgeInsets.fromLTRB(16, 6, 16, 24),
           itemCount: entries.length,
-          separatorBuilder: (context, index) => const SizedBox(height: 6),
+          separatorBuilder: (context, index) => const SizedBox(height: 8),
           itemBuilder: (context, index) {
             final entry = entries[index];
             final media = entry['media'] as Map<String, dynamic>;
             final progress = entry['progress'] as int? ?? 0;
             final maxCount = media['episodes'] as int? ?? media['chapters'] as int?;
+            final volProgress = entry['progressVolumes'] as int? ?? 0;
+            final maxVols = media['volumes'] as int?;
 
             return MediaCard(
               media: media,
@@ -668,6 +765,7 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
               accentColor: accentColor,
               listStatus: status,
               userProgress: progress,
+              userVolumeProgress: isManga ? volProgress : null,
               userScore: (entry['score'] as num?)?.toDouble(),
               scoreFormat: scoreFormat,
               onTap: () => _navigateToDetail(context, media['id']),
@@ -678,6 +776,14 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
                 progress,
                 maxCount,
               ),
+              onIncrementVolume: onIncrementVolume != null
+                  ? () => onIncrementVolume(
+                        entry['id'] as int,
+                        media['id'] as int,
+                        volProgress,
+                        maxVols,
+                      )
+                  : null,
             );
           },
         );
@@ -685,7 +791,7 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
       // Model 1: Neo-Card Detailed (Default)
       case MediaCardMode.list:
         return ListView.separated(
-          padding: const EdgeInsets.fromLTRB(16, 6, 16, 80),
+          padding: const EdgeInsets.fromLTRB(16, 6, 16, 24),
           itemCount: entries.length,
           separatorBuilder: (context, index) => const SizedBox(height: 10),
           itemBuilder: (context, index) {
@@ -693,6 +799,8 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
             final media = entry['media'] as Map<String, dynamic>;
             final progress = entry['progress'] as int? ?? 0;
             final maxCount = media['episodes'] as int? ?? media['chapters'] as int?;
+            final volProgress = entry['progressVolumes'] as int? ?? 0;
+            final maxVols = media['volumes'] as int?;
 
             return MediaCard(
               media: media,
@@ -700,6 +808,7 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
               accentColor: accentColor,
               listStatus: status,
               userProgress: progress,
+              userVolumeProgress: isManga ? volProgress : null,
               userScore: (entry['score'] as num?)?.toDouble(),
               scoreFormat: scoreFormat,
               onTap: () => _navigateToDetail(context, media['id']),
@@ -710,6 +819,14 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
                 progress,
                 maxCount,
               ),
+              onIncrementVolume: onIncrementVolume != null
+                  ? () => onIncrementVolume(
+                        entry['id'] as int,
+                        media['id'] as int,
+                        volProgress,
+                        maxVols,
+                      )
+                  : null,
             );
           },
         );
@@ -719,9 +836,7 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
   void _navigateToDetail(BuildContext context, int? mediaId) {
     if (mediaId != null) {
       Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => MediaDetailScreen(mediaId: mediaId),
-        ),
+        AppPageRoute(page: MediaDetailScreen(mediaId: mediaId)),
       );
     }
   }

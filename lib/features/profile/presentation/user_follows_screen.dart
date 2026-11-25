@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/animations/app_motion.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
+import '../../../core/utils/text_util.dart';
 import '../../../shared/feedback/empty_view.dart';
 import '../../../shared/feedback/shimmer_loading.dart';
 import '../../../shared/image/app_avatar.dart';
 import '../../../shared/image/app_network_image.dart';
+import '../../../shared/widgets/tactile_scale.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../data/profile_repository.dart';
 import 'profile_screen.dart';
@@ -141,28 +144,7 @@ class _UserFollowsScreenState extends ConsumerState<UserFollowsScreen> {
   }
 
   /// Cleans raw AniList markdown into a human-readable 1-2 line snippet for user cards
-  static String? cleanBioForCard(String? raw) {
-    if (raw == null || raw.trim().isEmpty) return null;
-    var text = raw;
-    // 1. Strip images: img220(url), img(url), ![alt](url)
-    text = text.replaceAll(RegExp(r'img(?:\d+%?|\d+)?\([^)]+\)', caseSensitive: false), '');
-    text = text.replaceAll(RegExp(r'!\[[^\]]*\]\([^)]+\)'), '');
-    // 2. Strip video / audio / embeds
-    text = text.replaceAll(RegExp(r'webm\([^)]+\)', caseSensitive: false), '');
-    text = text.replaceAll(RegExp(r'youtube\([^)]+\)', caseSensitive: false), '');
-    // 3. Convert markdown links [Label](url) -> Label
-    text = text.replaceAllMapped(RegExp(r'\[([^\]]+)\]\([^)]+\)'), (m) => m.group(1) ?? '');
-    // 4. Strip html tags
-    text = text.replaceAll(RegExp(r'<[^>]+>'), ' ');
-    // 5. Strip headers & centering: #, ~, >#
-    text = text.replaceAll(RegExp(r'^[>#\s~]+', multiLine: true), '');
-    text = text.replaceAll(RegExp(r'[>#~]+'), '');
-    // 6. Strip formatting symbols: **, __, *, _
-    text = text.replaceAll(RegExp(r'[*_]{1,3}'), '');
-    // 7. Normalize spaces
-    text = text.replaceAll(RegExp(r'\s+'), ' ').trim();
-    return text.isNotEmpty ? text : null;
-  }
+  static String? cleanBioForCard(String? raw) => TextUtil.cleanBioSnippet(raw);
 
   @override
   Widget build(BuildContext context) {
@@ -323,37 +305,35 @@ class _UserFollowsScreenState extends ConsumerState<UserFollowsScreen> {
                                 final isMe = loggedInUserId != null && loggedInUserId == id;
                                 final aboutText = cleanBioForCard(user['about'] as String?);
 
-                                return Container(
-                                  decoration: BoxDecoration(
-                                    color: context.appSurface,
-                                    borderRadius: BorderRadius.circular(14),
-                                    border: Border.all(color: context.appBorder),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: context.isDark ? Colors.black.withValues(alpha: 0.25) : Colors.black.withValues(alpha: 0.04),
-                                        blurRadius: 8,
-                                        offset: const Offset(0, 2),
-                                      ),
-                                    ],
-                                  ),
-                                  clipBehavior: Clip.antiAlias,
-                                  child: InkWell(
-                                    onTap: () {
-                                      Navigator.of(context).push(
-                                        MaterialPageRoute(
-                                          builder: (context) => ProfileScreen(userId: id),
+                                return TactileScale(
+                                  onTap: () {
+                                    Navigator.of(context).push(
+                                      AppPageRoute(page: ProfileScreen(userId: id)),
+                                    );
+                                  },
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      color: context.appSurface,
+                                      borderRadius: BorderRadius.circular(14),
+                                      border: Border.all(color: context.appBorder),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: context.isDark ? Colors.black.withValues(alpha: 0.25) : Colors.black.withValues(alpha: 0.04),
+                                          blurRadius: 8,
+                                          offset: const Offset(0, 2),
                                         ),
-                                      );
-                                    },
+                                      ],
+                                    ),
+                                    clipBehavior: Clip.antiAlias,
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        // Mini Banner Header
+                                        // Mini Banner Header (taller visual showcase)
                                         Stack(
                                           clipBehavior: Clip.none,
                                           children: [
                                             SizedBox(
-                                              height: 74,
+                                              height: 92,
                                               width: double.infinity,
                                               child: banner != null
                                                   ? AppNetworkImage(imageUrl: banner, borderRadius: BorderRadius.zero)
@@ -416,8 +396,8 @@ class _UserFollowsScreenState extends ConsumerState<UserFollowsScreen> {
                                                     decoration: BoxDecoration(
                                                       color: isFollowing
                                                           ? (context.isDark
-                                                              ? Colors.black.withValues(alpha: 0.45)
-                                                              : Colors.white.withValues(alpha: 0.95))
+                                                              ? const Color(0xE60D1724)
+                                                              : Colors.white.withValues(alpha: 0.96))
                                                           : accentColor,
                                                       borderRadius: BorderRadius.circular(16),
                                                       border: Border.all(
@@ -559,7 +539,7 @@ class _UserFollowsScreenState extends ConsumerState<UserFollowsScreen> {
                                       ],
                                     ),
                                   ),
-                                );
+                                ).animateEntrance(index: index);
                               },
                             ),
                           ),

@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import '../../../../core/animations/app_motion.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_spacing.dart';
-import '../../../../shared/image/app_avatar.dart';
+import '../../../../core/theme/app_typography.dart';
+import '../../../../shared/image/app_network_image.dart';
+import '../../../../shared/widgets/tactile_scale.dart';
 import '../../../character_staff/presentation/character_detail_screen.dart';
 import '../../../character_staff/presentation/staff_detail_screen.dart';
 
@@ -21,12 +24,12 @@ class CharacterDualCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final charId = character['id'] as int?;
     final charName = character['name']?['userPreferred'] ?? character['name']?['full'] ?? 'Unknown';
-    final charImage = character['image']?['medium'] as String?;
+    final charImage = (character['image']?['large'] ?? character['image']?['medium']) as String?;
     final isMain = role.toUpperCase() == 'MAIN';
 
     final vaId = voiceActor?['id'] as int?;
     final vaName = voiceActor?['name']?['userPreferred'] ?? voiceActor?['name']?['full'];
-    final vaImage = voiceActor?['image']?['medium'] as String?;
+    final vaImage = (voiceActor?['image']?['large'] ?? voiceActor?['image']?['medium']) as String?;
 
     return Container(
       decoration: BoxDecoration(
@@ -49,23 +52,26 @@ class CharacterDualCard extends StatelessWidget {
         children: [
           // Left: Character
           Expanded(
-            child: InkWell(
-              borderRadius: const BorderRadius.horizontal(left: Radius.circular(12)),
+            child: TactileScale(
               onTap: charId != null
-                  ? () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (context) => CharacterDetailScreen(characterId: charId),
-                        ),
-                      );
-                    }
+                  ? () => Navigator.of(context).push(
+                        AppPageRoute(page: CharacterDetailScreen(characterId: charId)),
+                      )
                   : null,
               child: Padding(
                 padding: const EdgeInsets.all(8),
                 child: Row(
                   children: [
-                    AppAvatar(imageUrl: charImage, size: 44),
-                    const SizedBox(width: 8),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: AppNetworkImage(
+                        imageUrl: charImage,
+                        width: 48,
+                        height: 62,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                    const SizedBox(width: 9),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -73,11 +79,11 @@ class CharacterDualCard extends StatelessWidget {
                         children: [
                           Text(
                             charName,
-                            maxLines: 1,
+                            maxLines: 2,
                             overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontFamily: 'Overpass',
-                              fontSize: 12.5,
+                            style: AppTypography.style(
+                              fontSize: 12,
+                              height: 1.15,
                               fontWeight: FontWeight.w700,
                               color: context.appTextPrimary,
                             ),
@@ -119,16 +125,11 @@ class CharacterDualCard extends StatelessWidget {
 
           // Right: Voice Actor (Seiyuu)
           Expanded(
-            child: InkWell(
-              borderRadius: const BorderRadius.horizontal(right: Radius.circular(12)),
+            child: TactileScale(
               onTap: vaId != null
-                  ? () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (context) => StaffDetailScreen(staffId: vaId),
-                        ),
-                      );
-                    }
+                  ? () => Navigator.of(context).push(
+                        AppPageRoute(page: StaffDetailScreen(staffId: vaId)),
+                      )
                   : null,
               child: Padding(
                 padding: const EdgeInsets.all(8),
@@ -142,12 +143,12 @@ class CharacterDualCard extends StatelessWidget {
                               children: [
                                 Text(
                                   vaName,
-                                  maxLines: 1,
+                                  maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                   textAlign: TextAlign.right,
-                                  style: TextStyle(
-                                    fontFamily: 'Overpass',
-                                    fontSize: 12.5,
+                                  style: AppTypography.style(
+                                    fontSize: 12,
+                                    height: 1.15,
                                     fontWeight: FontWeight.w600,
                                     color: context.appTextPrimary,
                                   ),
@@ -155,16 +156,16 @@ class CharacterDualCard extends StatelessWidget {
                                 const SizedBox(height: 3),
                                 Row(
                                   mainAxisSize: MainAxisSize.min,
-                                  children: const [
-                                    Icon(Icons.mic_rounded, size: 10, color: AppColors.brandBlue),
-                                    SizedBox(width: 3),
+                                  children: [
+                                    Icon(Icons.mic_rounded, size: 10, color: context.appAccent),
+                                    const SizedBox(width: 3),
                                     Text(
                                       'Japanese',
                                       style: TextStyle(
                                         fontFamily: 'Overpass',
                                         fontSize: 9.5,
                                         fontWeight: FontWeight.w600,
-                                        color: AppColors.brandBlue,
+                                        color: context.appAccent,
                                       ),
                                     ),
                                   ],
@@ -172,8 +173,16 @@ class CharacterDualCard extends StatelessWidget {
                               ],
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          AppAvatar(imageUrl: vaImage, size: 44),
+                          const SizedBox(width: 9),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: AppNetworkImage(
+                              imageUrl: vaImage,
+                              width: 48,
+                              height: 62,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
                         ],
                       )
                     : Container(

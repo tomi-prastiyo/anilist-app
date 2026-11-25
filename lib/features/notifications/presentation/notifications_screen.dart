@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../../core/animations/app_motion.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
 import '../../../core/utils/date_util.dart';
@@ -261,7 +262,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                       )
                     : RefreshIndicator(
                         onRefresh: _load,
-                        color: AppColors.brandBlue,
+                        color: context.appAccent,
                         backgroundColor: context.appSurface,
                         child: ListView.separated(
                           controller: _scrollController,
@@ -272,15 +273,15 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                           itemBuilder: (context, index) {
                             if (index == filteredList.length) {
                               if (_isLoadingMore) {
-                                return const Padding(
-                                  padding: EdgeInsets.symmetric(vertical: 20),
+                                return Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 20),
                                   child: Center(
                                     child: SizedBox(
                                       width: 24,
                                       height: 24,
                                       child: CircularProgressIndicator(
                                         strokeWidth: 2.5,
-                                        color: AppColors.brandBlue,
+                                        color: context.appAccent,
                                       ),
                                     ),
                                   ),
@@ -301,7 +302,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                               );
                             }
                             final notif = filteredList[index];
-                            return _buildNotificationCard(notif);
+                            return _buildNotificationCard(notif).animateEntrance(index: index);
                           },
                         ),
                       ),
@@ -349,17 +350,17 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     final media = (notif['media'] as Map<String, dynamic>?) ?? (notif['activity']?['media'] as Map<String, dynamic>?);
     final mediaTitle = media?['title']?['userPreferred'] ?? media?['title']?['romaji'] ?? media?['title']?['english'] ?? 'Anime';
     final mediaCover = media?['coverImage']?['medium'] as String?;
-    final contextText = notif['context'] as String? ?? '';
+    final contextText = (notif['context'] as String? ?? '').trim();
 
     // Notification Presentation Logic
     String primaryText;
     String highlightPrefix = '';
     IconData badgeIcon;
     Color badgeColor;
-    bool isAiring = false;
+    bool useIconTile = false;
 
     if (type.contains('Airing')) {
-      isAiring = true;
+      useIconTile = true;
       final ep = notif['episode'];
       highlightPrefix = 'Episode $ep';
       primaryText = ' of $mediaTitle aired!';
@@ -395,11 +396,13 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       badgeIcon = Icons.person_add_rounded;
       badgeColor = AppColors.statusCompleted;
     } else if (type.contains('RelatedMedia')) {
+      useIconTile = true;
       highlightPrefix = mediaTitle;
       primaryText = contextText.isNotEmpty ? ' $contextText' : ' was added to AniList';
       badgeIcon = Icons.movie_filter_rounded;
       badgeColor = const Color(0xFF00E676);
     } else if (type.contains('MediaDataChange') || type.contains('MediaMerge')) {
+      useIconTile = true;
       final reason = notif['reason'] as String? ?? 'Data updated';
       highlightPrefix = mediaTitle;
       primaryText = ': $reason';
@@ -442,7 +445,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               // Leading Avatar or Action Indicator
-              if (isAiring)
+              if (useIconTile)
                 Container(
                   width: 44,
                   height: 44,
@@ -532,11 +535,11 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
               if (mediaCover != null) ...[
                 const SizedBox(width: 10),
                 ClipRRect(
-                  borderRadius: BorderRadius.circular(6),
+                  borderRadius: BorderRadius.circular(8),
                   child: AppNetworkImage(
                     imageUrl: mediaCover,
-                    width: 38,
-                    height: 52,
+                    width: 46,
+                    height: 64,
                   ),
                 ),
               ] else ...[

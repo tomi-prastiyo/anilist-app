@@ -41,6 +41,7 @@ class ActivityCommentsBottomSheet extends ConsumerStatefulWidget {
 
 class _ActivityCommentsBottomSheetState extends ConsumerState<ActivityCommentsBottomSheet> {
   final TextEditingController _commentController = TextEditingController();
+  final FocusNode _commentFocusNode = FocusNode();
   final ScrollController _scrollController = ScrollController();
   List<Map<String, dynamic>> _replies = [];
   Map<String, dynamic>? _media;
@@ -50,6 +51,7 @@ class _ActivityCommentsBottomSheetState extends ConsumerState<ActivityCommentsBo
   bool _isLoading = true;
   bool _isSending = false;
   String? _errorMessage;
+  final Set<int> _togglingReplyIds = {};
 
   @override
   void initState() {
@@ -64,6 +66,7 @@ class _ActivityCommentsBottomSheetState extends ConsumerState<ActivityCommentsBo
   @override
   void dispose() {
     _commentController.dispose();
+    _commentFocusNode.dispose();
     _scrollController.dispose();
     super.dispose();
   }
@@ -156,29 +159,58 @@ class _ActivityCommentsBottomSheetState extends ConsumerState<ActivityCommentsBo
   }
 
   Future<void> _toggleReplyLike(int index) async {
-    HapticFeedback.lightImpact();
+    final isAuthenticated = ref.read(authControllerProvider) is Authenticated;
+    if (!isAuthenticated) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Sign in with AniList to like replies.'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
     final reply = _replies[index];
     final replyId = reply['id'] as int?;
-    if (replyId == null) return;
+    if (replyId == null || _togglingReplyIds.contains(replyId)) return;
 
+    HapticFeedback.lightImpact();
+    _togglingReplyIds.add(replyId);
     final isLiked = reply['isLiked'] as bool? ?? false;
     final currentLikes = reply['likeCount'] as int? ?? 0;
+    final optimisticLiked = !isLiked;
+    final optimisticCount = isLiked ? (currentLikes > 0 ? currentLikes - 1 : 0) : currentLikes + 1;
 
     setState(() {
-      reply['isLiked'] = !isLiked;
-      reply['likeCount'] = isLiked ? (currentLikes > 0 ? currentLikes - 1 : 0) : currentLikes + 1;
+      reply['isLiked'] = optimisticLiked;
+      reply['likeCount'] = optimisticCount;
     });
 
     try {
       final repo = ref.read(activityRepositoryProvider);
-      await repo.toggleReplyLike(replyId);
-    } catch (_) {
+      final updated = await repo.toggleReplyLike(replyId);
+      if (mounted) {
+        setState(() {
+          reply['isLiked'] = updated?['isLiked'] as bool? ?? optimisticLiked;
+          reply['likeCount'] = updated?['likeCount'] as int? ?? optimisticCount;
+        });
+      }
+    } catch (e) {
       if (mounted) {
         setState(() {
           reply['isLiked'] = isLiked;
           reply['likeCount'] = currentLikes;
         });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update reply like: ${e.toString()}'),
+            backgroundColor: AppColors.statusBehind,
+            duration: const Duration(seconds: 2),
+          ),
+        );
       }
+    } finally {
+      _togglingReplyIds.remove(replyId);
     }
   }
 
@@ -190,7 +222,7 @@ class _ActivityCommentsBottomSheetState extends ConsumerState<ActivityCommentsBo
 
     return Container(
       constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.85,
+        maxHeight: MediaQuery.of(context).size.height * (bottomInset > 0 ? 0.94 : 0.85),
       ),
       decoration: BoxDecoration(
         color: context.appSurface,
@@ -206,7 +238,7 @@ class _ActivityCommentsBottomSheetState extends ConsumerState<ActivityCommentsBo
               width: 36,
               height: 4,
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.15),
+                color: context.appTextMuted.withValues(alpha: 0.3),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -221,7 +253,7 @@ class _ActivityCommentsBottomSheetState extends ConsumerState<ActivityCommentsBo
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.chat_bubble_rounded, size: 18, color: AppColors.brandBlue),
+                    Icon(Icons.chat_bubble_rounded, size: 18, color: context.appAccent),
                     const SizedBox(width: 8),
                     Text(
                       'Comments (${_replies.length})',
@@ -263,7 +295,7 @@ class _ActivityCommentsBottomSheetState extends ConsumerState<ActivityCommentsBo
                 decoration: BoxDecoration(
                   color: context.appBackground,
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                  border: Border.all(color: context.appBorder),
                 ),
                 child: Row(
                   children: [
@@ -379,7 +411,7 @@ class _ActivityCommentsBottomSheetState extends ConsumerState<ActivityCommentsBo
             ),
           ],
 
-          const Divider(color: Colors.white10, height: 1),
+          Divider(color: context.appBorder, height: 1),
 
           // Comments List
           Expanded(
@@ -395,11 +427,21 @@ class _ActivityCommentsBottomSheetState extends ConsumerState<ActivityCommentsBo
                         ),
                       )
                     : _replies.isEmpty
-                        ? const Center(
-                            child: EmptyView(
-                              title: 'No comments yet',
-                              subtitle: 'Be the first to join the conversation!',
-                              icon: Icons.chat_bubble_outline_rounded,
+                        ? LayoutBuilder(
+                            builder: (context, constraints) => SingleChildScrollView(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              child: ConstrainedBox(
+                                constraints: BoxConstraints(
+                                  minHeight: (constraints.maxHeight - 24).clamp(0.0, double.infinity),
+                                ),
+                                child: const Center(
+                                  child: EmptyView(
+                                    title: 'No comments yet',
+                                    subtitle: 'Be the first to join the conversation!',
+                                    icon: Icons.chat_bubble_outline_rounded,
+                                  ),
+                                ),
+                              ),
                             ),
                           )
                         : ListView.separated(
@@ -538,98 +580,153 @@ class _ActivityCommentsBottomSheetState extends ConsumerState<ActivityCommentsBo
                           ),
           ),
 
-          // Pinned Input Field (Bottom)
-          Padding(
-            padding: EdgeInsets.only(
-              left: 16,
-              right: 16,
-              top: 8,
-              bottom: bottomInset > 0 ? bottomInset + 8 : 24,
+          // Pinned Comment Composer Dock (Bottom)
+          Container(
+            decoration: BoxDecoration(
+              color: context.appSurface,
+              border: Border(top: BorderSide(color: context.appBorder)),
             ),
-            child: isAuthenticated
-                ? Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: context.appInputSurface,
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: context.appBorder),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: context.isDark ? 0.2 : 0.05),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _commentController,
-                            maxLines: 3,
-                            minLines: 1,
-                            textInputAction: TextInputAction.send,
-                            onSubmitted: (_) {
-                              if (!_isSending) _sendReply();
-                            },
-                            style: TextStyle(fontSize: 13.5, color: context.appTextPrimary),
-                            decoration: InputDecoration(
-                              hintText: 'Write a comment...',
-                              hintStyle: TextStyle(
-                                color: context.appTextMuted,
-                                fontSize: 13,
-                                fontFamily: 'Overpass',
-                              ),
-                              border: InputBorder.none,
-                              contentPadding: EdgeInsets.symmetric(vertical: 8),
+            child: SafeArea(
+              top: false,
+              child: AnimatedPadding(
+                duration: const Duration(milliseconds: 160),
+                curve: Curves.easeOutCubic,
+                padding: EdgeInsets.only(
+                  left: 14,
+                  right: 14,
+                  top: 10,
+                  bottom: bottomInset > 0 ? bottomInset + 10 : 12,
+                ),
+                child: isAuthenticated
+                    ? Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 5),
+                            child: AppAvatar(
+                              imageUrl: authState.user.avatarUrl,
+                              size: 32,
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onTap: _isSending ? null : _sendReply,
-                          child: Container(
-                            width: 36,
-                            height: 36,
-                            decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                colors: [Color(0xFF3DB4F2), Color(0xFF2088CA)],
-                              ),
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: AppColors.brandBlue.withValues(alpha: 0.35),
-                                  blurRadius: 6,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: ListenableBuilder(
+                              listenable: Listenable.merge([_commentController, _commentFocusNode]),
+                              builder: (context, _) {
+                                final hasText = _commentController.text.trim().isNotEmpty;
+                                final hasFocus = _commentFocusNode.hasFocus;
+                                final accent = context.appAccent;
+                                final canSend = hasText && !_isSending;
+
+                                return AnimatedContainer(
+                                  duration: const Duration(milliseconds: 160),
+                                  padding: const EdgeInsets.fromLTRB(14, 4, 6, 4),
+                                  decoration: BoxDecoration(
+                                    color: context.appInputSurface,
+                                    borderRadius: BorderRadius.circular(18),
+                                    border: Border.all(
+                                      color: hasFocus
+                                          ? accent.withValues(alpha: 0.75)
+                                          : context.appBorder,
+                                      width: hasFocus ? 1.3 : 1.0,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      Expanded(
+                                        child: TextField(
+                                          controller: _commentController,
+                                          focusNode: _commentFocusNode,
+                                          maxLines: 4,
+                                          minLines: 1,
+                                          textCapitalization: TextCapitalization.sentences,
+                                          textInputAction: TextInputAction.send,
+                                          onSubmitted: (_) {
+                                            if (canSend) _sendReply();
+                                          },
+                                          style: TextStyle(
+                                            fontFamily: 'Overpass',
+                                            fontSize: 13.5,
+                                            height: 1.35,
+                                            color: context.appTextPrimary,
+                                          ),
+                                          decoration: InputDecoration(
+                                            isDense: true,
+                                            filled: false,
+                                            hintText: 'Write a comment...',
+                                            hintStyle: TextStyle(
+                                              color: context.appTextMuted,
+                                              fontSize: 13,
+                                              fontFamily: 'Overpass',
+                                            ),
+                                            border: InputBorder.none,
+                                            enabledBorder: InputBorder.none,
+                                            focusedBorder: InputBorder.none,
+                                            contentPadding: const EdgeInsets.symmetric(vertical: 9),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Padding(
+                                        padding: const EdgeInsets.only(bottom: 2),
+                                        child: GestureDetector(
+                                          behavior: HitTestBehavior.opaque,
+                                          onTap: canSend ? _sendReply : null,
+                                          child: AnimatedContainer(
+                                            duration: const Duration(milliseconds: 160),
+                                            width: 34,
+                                            height: 34,
+                                            decoration: BoxDecoration(
+                                              color: canSend
+                                                  ? accent
+                                                  : context.appTextMuted.withValues(alpha: 0.16),
+                                              borderRadius: BorderRadius.circular(12),
+                                            ),
+                                            alignment: Alignment.center,
+                                            child: _isSending
+                                                ? SizedBox(
+                                                    width: 14,
+                                                    height: 14,
+                                                    child: CircularProgressIndicator(
+                                                      strokeWidth: 2,
+                                                      color: accent,
+                                                    ),
+                                                  )
+                                                : Icon(
+                                                    Icons.send_rounded,
+                                                    size: 16,
+                                                    color: canSend
+                                                        ? (context.isYuYuYu && accent.computeLuminance() > 0.55
+                                                            ? Colors.black
+                                                            : Colors.white)
+                                                        : context.appTextMuted,
+                                                  ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
                             ),
-                            alignment: Alignment.center,
-                            child: _isSending
-                                ? const SizedBox(
-                                    width: 14,
-                                    height: 14,
-                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                                  )
-                                : const Icon(Icons.send_rounded, size: 16, color: Colors.white),
+                          ),
+                        ],
+                      )
+                    : Container(
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        alignment: Alignment.center,
+                        child: Text(
+                          'Sign in to join the conversation',
+                          style: TextStyle(
+                            fontFamily: 'Overpass',
+                            fontSize: 12.5,
+                            color: context.appTextSecondary,
                           ),
                         ),
-                      ],
-                    ),
-                  )
-                : Container(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    alignment: Alignment.center,
-                    child: Text(
-                      'Sign in to join the conversation',
-                      style: TextStyle(
-                        fontFamily: 'Overpass',
-                        fontSize: 12.5,
-                        color: context.appTextSecondary,
                       ),
-                    ),
-                  ),
+              ),
+            ),
           ),
         ],
       ),

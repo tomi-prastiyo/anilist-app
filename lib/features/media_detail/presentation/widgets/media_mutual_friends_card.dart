@@ -87,13 +87,13 @@ class MediaMutualFriendsCard extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
-                      color: AppColors.brandBlue.withValues(alpha: 0.15),
+                      color: context.appAccent.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Icon(
+                    child: Icon(
                       Icons.people_alt_rounded,
                       size: 16,
-                      color: AppColors.brandBlue,
+                      color: context.appAccent,
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -111,17 +111,17 @@ class MediaMutualFriendsCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: AppColors.brandBlue.withValues(alpha: 0.12),
+                  color: context.appAccent.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.brandBlue.withValues(alpha: 0.3)),
+                  border: Border.all(color: context.appAccent.withValues(alpha: 0.3)),
                 ),
                 child: Text(
                   '${friends.length} friends',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontFamily: 'Overpass',
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
-                    color: AppColors.brandBlue,
+                    color: context.appAccent,
                   ),
                 ),
               ),
@@ -131,7 +131,7 @@ class MediaMutualFriendsCard extends StatelessWidget {
 
           // Horizontal List of Friend Cards
           SizedBox(
-            height: 72,
+            height: 76,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               itemCount: friends.length,
@@ -162,12 +162,14 @@ class MediaMutualFriendsCard extends StatelessWidget {
                       }
                     },
                     child: Container(
+                      constraints: const BoxConstraints(minWidth: 150, maxWidth: 235),
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(color: context.appBorder),
                       ),
                       child: Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
                           Stack(
                             clipBehavior: Clip.none,
@@ -189,10 +191,11 @@ class MediaMutualFriendsCard extends StatelessWidget {
                             ],
                           ),
                           const SizedBox(width: 10),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
+                          Flexible(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
                               Text(
                                 userName,
                                 maxLines: 1,
@@ -254,7 +257,8 @@ class MediaMutualFriendsCard extends StatelessWidget {
                                   ],
                                 ],
                               ),
-                            ],
+                              ],
+                            ),
                           ),
                         ],
                       ),

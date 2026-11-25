@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../../core/animations/app_motion.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
 import '../../../core/utils/text_util.dart';
@@ -10,11 +11,15 @@ import '../../../shared/badges/format_chip.dart';
 import '../../../shared/badges/score_badge.dart';
 import '../../../shared/badges/status_chip.dart';
 import '../../../shared/feedback/error_view.dart';
-import '../../../shared/image/app_avatar.dart';
 import '../../../shared/image/app_network_image.dart';
+import '../../../shared/state/favourite_sync_store.dart';
+import '../../../shared/widgets/favourite_icon_button.dart';
+import '../../../shared/widgets/in_app_video_dialog.dart';
+import '../../../shared/widgets/tactile_scale.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../character_staff/presentation/staff_detail_screen.dart';
 import '../../media_editor/presentation/media_editor_bottom_sheet.dart';
+import '../../profile/data/profile_repository.dart';
 import '../data/media_detail_repository.dart';
 import 'widgets/character_dual_card.dart';
 import 'widgets/media_info_grid.dart';
@@ -40,6 +45,7 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
   bool _isLoading = true;
   String? _errorMessage;
   bool _isFavourite = false;
+  bool _isTogglingFavourite = false;
 
   // Themes state
   Map<String, List<Map<String, dynamic>>> _themes = {
@@ -78,9 +84,16 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
       final data = await repo.fetchMediaDetail(widget.mediaId);
       final friends = await repo.fetchFollowingMediaList(widget.mediaId);
       if (mounted) {
+        final mediaType = data['type'] as String?;
+        final kind = mediaType == 'MANGA' ? FavouriteKind.manga : FavouriteKind.anime;
+        final resolvedFav = ref.read(favouriteSyncStoreProvider).resolve(
+              kind,
+              widget.mediaId,
+              data['isFavourite'] as bool? ?? false,
+            );
         setState(() {
           _mediaData = data;
-          _isFavourite = data['isFavourite'] as bool? ?? false;
+          _isFavourite = resolvedFav;
           _followingFriends = friends;
           _isLoading = false;
         });
@@ -121,18 +134,46 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
   }
 
   Future<void> _toggleFavourite() async {
-    HapticFeedback.lightImpact();
+    if (_isTogglingFavourite) return;
     final type = _mediaData?['type'] as String?;
-    setState(() => _isFavourite = !_isFavourite);
+    if (type != 'ANIME' && type != 'MANGA') return;
+
+    HapticFeedback.lightImpact();
+    final previous = _isFavourite;
+    setState(() {
+      _isTogglingFavourite = true;
+      _isFavourite = !previous;
+    });
     try {
       final repo = ref.read(mediaDetailRepositoryProvider);
       await repo.toggleFavourite(
         animeId: type == 'ANIME' ? widget.mediaId : null,
         mangaId: type == 'MANGA' ? widget.mediaId : null,
       );
+      if (mounted) {
+        final kind = type == 'MANGA' ? FavouriteKind.manga : FavouriteKind.anime;
+        _mediaData?['isFavourite'] = _isFavourite;
+        ref.read(favouriteSyncStoreProvider).record(
+              kind,
+              widget.mediaId,
+              _isFavourite,
+              itemPreview: _mediaData,
+            );
+        ref.read(favoritesRevisionProvider.notifier).state++;
+      }
     } catch (e) {
-      // Revert if error
-      if (mounted) setState(() => _isFavourite = !_isFavourite);
+      if (mounted) {
+        setState(() => _isFavourite = previous);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update favorite: $e'),
+            backgroundColor: AppColors.statusBehind,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isTogglingFavourite = false);
     }
   }
 
@@ -206,7 +247,7 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
       body: NestedScrollView(
         headerSliverBuilder: (context, innerBoxIsScrolled) => [
           SliverAppBar(
-            expandedHeight: 270,
+            expandedHeight: 295,
             pinned: true,
             backgroundColor: context.appSurface,
             leading: IconButton(
@@ -222,19 +263,10 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
             ),
             actions: [
               if (isAuthenticated)
-                IconButton(
-                  icon: Container(
-                    padding: const EdgeInsets.all(7),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.6),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      _isFavourite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                      color: _isFavourite ? AppColors.favoritePink : Colors.white,
-                      size: 20,
-                    ),
-                  ),
+                FavouriteIconButton(
+                  isFavourite: _isFavourite,
+                  isToggling: _isTogglingFavourite,
+                  useDarkBackdrop: true,
                   onPressed: _toggleFavourite,
                 ),
             ],
@@ -246,15 +278,17 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
                     AppNetworkImage(imageUrl: bannerUrl, borderRadius: BorderRadius.zero)
                   else if (coverUrl != null)
                     AppNetworkImage(imageUrl: coverUrl, borderRadius: BorderRadius.zero),
-                  // Dark gradient overlay
+                  // Dark gradient overlay (top status-bar scrim + bottom fade)
                   Container(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
+                        stops: const [0.0, 0.25, 0.65, 1.0],
                         colors: [
+                          Colors.black.withValues(alpha: 0.45),
                           Colors.transparent,
-                          context.appBackground.withValues(alpha: 0.75),
+                          context.appBackground.withValues(alpha: 0.78),
                           context.appBackground,
                         ],
                       ),
@@ -268,11 +302,23 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        AppNetworkImage(
-                          imageUrl: coverUrl,
-                          width: 86,
-                          height: 124,
-                          borderRadius: AppSpacing.borderRadius8,
+                        Container(
+                          decoration: BoxDecoration(
+                            borderRadius: AppSpacing.borderRadius8,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.5),
+                                blurRadius: 12,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: AppNetworkImage(
+                            imageUrl: coverUrl,
+                            width: 96,
+                            height: 138,
+                            borderRadius: AppSpacing.borderRadius8,
+                          ),
                         ),
                         const SizedBox(width: 14),
                         Expanded(
@@ -336,7 +382,7 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
                     child: ElevatedButton.icon(
                       onPressed: isAuthenticated ? _openEditor : null,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: entry != null ? AppColors.statusCompleted : AppColors.brandBlue,
+                        backgroundColor: entry != null ? AppColors.statusCompleted : context.appAccent,
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         shape: RoundedRectangleBorder(borderRadius: AppSpacing.borderRadius12),
@@ -359,12 +405,13 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
             delegate: _SliverTabBarDelegate(
               TabBar(
                 controller: _tabController,
-                indicatorColor: AppColors.brandBlue,
+                indicatorColor: context.appAccent,
                 indicatorWeight: 3,
-                labelColor: AppColors.brandBlue,
+                labelColor: context.appAccent,
                 unselectedLabelColor: context.appTextSecondary,
-                labelStyle: const TextStyle(fontFamily: 'Overpass', fontWeight: FontWeight.w800, fontSize: 13.5),
-                unselectedLabelStyle: const TextStyle(fontFamily: 'Overpass', fontWeight: FontWeight.w600, fontSize: 13.5),
+                labelPadding: EdgeInsets.zero,
+                labelStyle: const TextStyle(fontFamily: 'Overpass', fontWeight: FontWeight.w800, fontSize: 13),
+                unselectedLabelStyle: const TextStyle(fontFamily: 'Overpass', fontWeight: FontWeight.w600, fontSize: 13),
                 tabs: const [
                   Tab(text: 'Overview'),
                   Tab(text: 'Characters'),
@@ -392,6 +439,8 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
     final rawDescription = TextUtil.stripHtml(media['description'] as String?);
     final isAnime = media['type'] == 'ANIME';
     final tags = (media['tags'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+    final rankings = (media['rankings'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+    final trailer = media['trailer'] as Map<String, dynamic>?;
     final externalLinks = (media['externalLinks'] as List?)?.cast<Map<String, dynamic>>() ?? [];
     final recNodes = (media['recommendations']?['nodes'] as List?)?.cast<Map<String, dynamic>>() ?? [];
     final title = TextUtil.getPreferredTitle(media['title']);
@@ -437,7 +486,7 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
                       fontFamily: 'Overpass',
                       fontSize: 12.5,
                       fontWeight: FontWeight.w700,
-                      color: AppColors.brandBlue,
+                      color: context.appAccent,
                     ),
                   ),
                 ),
@@ -471,6 +520,20 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
         const SizedBox(height: 10),
         MediaInfoGrid(media: media),
         const SizedBox(height: 18),
+
+        // Official Rankings Highlights
+        if (rankings.isNotEmpty) ...[
+          _buildRankingsStrip(rankings),
+          const SizedBox(height: 18),
+        ],
+
+        // Official Trailer Card (YouTube)
+        if (trailer != null &&
+            (trailer['site'] as String?)?.toLowerCase() == 'youtube' &&
+            (trailer['id'] as String?)?.isNotEmpty == true) ...[
+          _buildTrailerCard(trailer),
+          const SizedBox(height: 18),
+        ],
 
         // Alternative Titles Section (All Versions: Romaji, English, Native, Synonyms)
         _buildTitlesCard(
@@ -540,11 +603,11 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
                     const SizedBox(width: 6),
                     Text(
                       '$rank%',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontFamily: 'Overpass',
                         fontSize: 11,
                         fontWeight: FontWeight.w800,
-                        color: AppColors.brandBlue,
+                        color: context.appAccent,
                       ),
                     ),
                   ],
@@ -619,7 +682,7 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
           ),
           const SizedBox(height: 10),
           SizedBox(
-            height: 175,
+            height: 208,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               itemCount: recNodes.length,
@@ -629,21 +692,19 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
                 if (recMedia == null) return const SizedBox.shrink();
                 final recId = recMedia['id'] as int?;
                 final recTitle = TextUtil.getPreferredTitle(recMedia['title']);
-                final recCover = recMedia['coverImage']?['medium'] as String?;
+                final recCover = (recMedia['coverImage']?['large'] ?? recMedia['coverImage']?['medium']) as String?;
                 final recScore = (recMedia['averageScore'] as num?)?.toDouble();
 
                 return GestureDetector(
                   onTap: recId != null
                       ? () {
                           Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (context) => MediaDetailScreen(mediaId: recId),
-                            ),
+                            AppPageRoute(page: MediaDetailScreen(mediaId: recId)),
                           );
                         }
                       : null,
                   child: SizedBox(
-                    width: 105,
+                    width: 112,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -651,9 +712,9 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
                            children: [
                             AppNetworkImage(
                               imageUrl: recCover,
-                              width: 105,
-                              height: 135,
-                              borderRadius: AppSpacing.borderRadius8,
+                              width: 112,
+                              height: 154,
+                              borderRadius: BorderRadius.circular(10),
                             ),
                             if (recScore != null)
                               Positioned(
@@ -756,7 +817,7 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
                 character: char,
                 role: role,
                 voiceActor: va,
-              );
+              ).animateEntrance(index: index);
             },
           ),
         ),
@@ -810,15 +871,15 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
         final staff = edge['node'] as Map<String, dynamic>?;
         final role = edge['role'] as String? ?? 'Staff';
         final name = staff?['name']?['userPreferred'] ?? staff?['name']?['full'] ?? 'Unknown';
-        final image = staff?['image']?['medium'] as String?;
+        final image = (staff?['image']?['large'] ?? staff?['image']?['medium']) as String?;
         final staffId = staff?['id'] as int?;
 
         return InkWell(
           onTap: staffId != null
               ? () {
                   Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (context) => StaffDetailScreen(staffId: staffId),
+                    AppPageRoute(
+                      page: StaffDetailScreen(staffId: staffId),
                     ),
                   );
                 }
@@ -840,7 +901,12 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
             ),
             child: Row(
               children: [
-                AppAvatar(imageUrl: image, size: 46),
+                AppNetworkImage(
+                  imageUrl: image,
+                  width: 52,
+                  height: 68,
+                  borderRadius: AppSpacing.borderRadius8,
+                ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -855,20 +921,20 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
                           color: context.appTextPrimary,
                         ),
                       ),
-                      const SizedBox(height: 3),
+                      const SizedBox(height: 4),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
-                          color: AppColors.brandBlue.withValues(alpha: 0.12),
+                          color: context.appAccent.withValues(alpha: 0.14),
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
                           role,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontFamily: 'Overpass',
-                            color: AppColors.brandBlue,
+                            color: context.appAccent,
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
                           ),
@@ -881,7 +947,7 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
               ],
             ),
           ),
-        );
+        ).animateEntrance(index: index);
       },
     );
   }
@@ -906,7 +972,7 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
         final relType = rel['relationType'] as String? ?? '';
         final relNode = rel['node'] as Map<String, dynamic>?;
         final relTitle = TextUtil.getPreferredTitle(relNode?['title']);
-        final relCover = relNode?['coverImage']?['medium'] as String?;
+        final relCover = (relNode?['coverImage']?['large'] ?? relNode?['coverImage']?['medium']) as String?;
         final relFormat = relNode?['format'] as String?;
         final relStatus = relNode?['status'] as String?;
 
@@ -915,8 +981,8 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
             final relId = relNode?['id'] as int?;
             if (relId != null) {
               Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => MediaDetailScreen(mediaId: relId),
+                AppPageRoute(
+                  page: MediaDetailScreen(mediaId: relId),
                 ),
               );
             }
@@ -940,8 +1006,8 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
               children: [
                 AppNetworkImage(
                   imageUrl: relCover,
-                  width: 50,
-                  height: 70,
+                  width: 56,
+                  height: 80,
                   borderRadius: AppSpacing.borderRadius8,
                 ),
                 const SizedBox(width: 12),
@@ -952,14 +1018,14 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
-                          color: AppColors.brandBlue.withValues(alpha: 0.15),
+                          color: context.appAccent.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
                           relType.replaceAll('_', ' '),
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontFamily: 'Overpass',
-                            color: AppColors.brandBlue,
+                            color: context.appAccent,
                             fontSize: 10.5,
                             fontWeight: FontWeight.w800,
                           ),
@@ -992,8 +1058,160 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
               ],
             ),
           ),
-        );
+        ).animateEntrance(index: index);
       },
+    );
+  }
+
+  Widget _buildRankingsStrip(List<Map<String, dynamic>> rankings) {
+    final topRanks = rankings.take(4).toList();
+    if (topRanks.isEmpty) return const SizedBox.shrink();
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: topRanks.map((r) {
+        final rank = r['rank'] as int? ?? 0;
+        final contextLabel = (r['context'] as String? ?? 'Ranked').trim();
+        final year = r['year'] as int?;
+        final isRated = r['type'] == 'RATED';
+        final badgeColor = isRated ? const Color(0xFFFBBF24) : context.appAccent;
+
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: context.appCard,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: badgeColor.withValues(alpha: 0.35)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                isRated ? Icons.emoji_events_rounded : Icons.favorite_rounded,
+                size: 14,
+                color: badgeColor,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                '#$rank $contextLabel${year != null ? ' $year' : ''}',
+                style: TextStyle(
+                  fontFamily: 'Overpass',
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  color: context.appTextPrimary,
+                ),
+              ),
+            ],
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildTrailerCard(Map<String, dynamic> trailer) {
+    final id = trailer['id'] as String;
+    final thumbnail = (trailer['thumbnail'] as String?)?.isNotEmpty == true
+        ? trailer['thumbnail'] as String
+        : 'https://img.youtube.com/vi/$id/hqdefault.jpg';
+    final ytUrl = 'https://www.youtube.com/watch?v=$id';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Official Trailer',
+          style: TextStyle(
+            fontFamily: 'Overpass',
+            fontSize: 16,
+            fontWeight: FontWeight.w800,
+            color: context.appTextPrimary,
+          ),
+        ),
+        const SizedBox(height: 10),
+        TactileScale(
+          onTap: () => InAppVideoDialog.show(
+            context,
+            url: ytUrl,
+            isYoutube: true,
+            accentColor: context.appAccent,
+            title: 'Official Trailer',
+          ),
+          child: Container(
+            decoration: BoxDecoration(
+              color: context.appCard,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: context.appBorder),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: AspectRatio(
+              aspectRatio: 16 / 9,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  AppNetworkImage(imageUrl: thumbnail, borderRadius: BorderRadius.zero),
+                  Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.black.withValues(alpha: 0.15),
+                          Colors.black.withValues(alpha: 0.65),
+                        ],
+                      ),
+                    ),
+                  ),
+                  Center(
+                    child: Container(
+                      width: 54,
+                      height: 54,
+                      decoration: BoxDecoration(
+                        color: context.appAccent,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: context.appAccent.withValues(alpha: 0.5),
+                            blurRadius: 16,
+                          ),
+                        ],
+                      ),
+                      child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 32),
+                    ),
+                  ),
+                  Positioned(
+                    left: 12,
+                    bottom: 10,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.72),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.smart_display_rounded, color: Color(0xFFFF0000), size: 14),
+                          SizedBox(width: 5),
+                          Text(
+                            'Watch Trailer',
+                            style: TextStyle(
+                              fontFamily: 'Overpass',
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 

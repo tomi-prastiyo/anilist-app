@@ -2,18 +2,22 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/animations/app_motion.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
 import '../../../core/storage/local_storage_service.dart';
+import '../../../core/utils/text_util.dart';
 import '../../../shared/cards/media_card.dart';
 import '../../../shared/feedback/empty_view.dart';
 import '../../../shared/feedback/error_view.dart';
 import '../../../shared/feedback/shimmer_loading.dart';
 import '../../../shared/image/app_network_image.dart';
+import '../../../shared/widgets/random_pick_sheet.dart';
 import '../../character_staff/presentation/character_detail_screen.dart';
 import '../../character_staff/presentation/staff_detail_screen.dart';
 import '../../home/presentation/airing_schedule_screen.dart';
 import '../../media_detail/presentation/media_detail_screen.dart';
+import '../../media_list/presentation/media_list_controller.dart';
 import '../../profile/presentation/profile_screen.dart';
 import '../../seasonal/presentation/seasonal_screen.dart';
 import '../data/search_repository.dart';
@@ -269,45 +273,47 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
     final isMediaTab = _selectedTabIndex == 0 || _selectedTabIndex == 1;
     final activeAccent = _getTabAccentColor(_selectedTabIndex);
 
+    final listGroups = (_selectedTabIndex == 0
+            ? ref.watch(animeListControllerProvider).valueOrNull
+            : (_selectedTabIndex == 1 ? ref.watch(mangaListControllerProvider).valueOrNull : null)) ??
+        const [];
+    final inListMap = <int, String>{};
+    for (final group in listGroups) {
+      final st = (group['status'] as String?) ?? '';
+      final entries = (group['entries'] as List?)?.cast<Map<String, dynamic>>() ?? const [];
+      for (final e in entries) {
+        final mid = e['media']?['id'] as int?;
+        if (mid != null && st.isNotEmpty) {
+          inListMap[mid] = st;
+        }
+      }
+    }
+
     return Scaffold(
       backgroundColor: context.appBackground,
       appBar: AppBar(
         titleSpacing: AppSpacing.p16,
-        title: Row(
-          children: [
-            Text(
-              'Search',
-              style: TextStyle(
-                fontFamily: 'Overpass',
-                fontWeight: FontWeight.w900,
-                fontSize: 18,
-                color: context.appTextPrimary,
-              ),
-            ),
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-              decoration: BoxDecoration(
-                color: context.appSurface,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: context.appBorder),
-              ),
-              child: Text(
-                'AniList',
-                style: TextStyle(
-                  fontFamily: 'Overpass',
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w800,
-                  color: activeAccent,
-                ),
-              ),
-            ),
-          ],
+        actionsPadding: const EdgeInsets.only(right: 6),
+        title: Text(
+          'Search',
+          style: TextStyle(
+            fontFamily: 'Overpass',
+            fontWeight: FontWeight.w900,
+            fontSize: 19,
+            color: context.appTextPrimary,
+          ),
         ),
         actions: [
-          // 1. Airing Schedule (Exact same as Home!)
+          // 1. Airing Schedule
           IconButton(
-            icon: const Icon(Icons.calendar_month_rounded),
+            style: IconButton.styleFrom(
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              minimumSize: const Size(34, 34),
+              padding: EdgeInsets.zero,
+            ),
+            constraints: const BoxConstraints.tightFor(width: 34, height: 34),
+            padding: EdgeInsets.zero,
+            icon: const Icon(Icons.calendar_month_rounded, size: 20),
             tooltip: 'Airing Schedule',
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (context) => const AiringScheduleScreen()),
@@ -315,7 +321,14 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
           ),
           // 2. Seasonal Chart
           IconButton(
-            icon: const Icon(Icons.wb_sunny_rounded),
+            style: IconButton.styleFrom(
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              minimumSize: const Size(34, 34),
+              padding: EdgeInsets.zero,
+            ),
+            constraints: const BoxConstraints.tightFor(width: 34, height: 34),
+            padding: EdgeInsets.zero,
+            icon: const Icon(Icons.auto_awesome_rounded, size: 20),
             tooltip: 'Seasonal Chart',
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (context) => const SeasonalScreen()),
@@ -327,16 +340,23 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
               alignment: Alignment.center,
               children: [
                 IconButton(
-                  icon: const Icon(Icons.tune_rounded),
+                  style: IconButton.styleFrom(
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    minimumSize: const Size(34, 34),
+                    padding: EdgeInsets.zero,
+                  ),
+                  constraints: const BoxConstraints.tightFor(width: 34, height: 34),
+                  padding: EdgeInsets.zero,
+                  icon: const Icon(Icons.tune_rounded, size: 20),
                   tooltip: 'Filter & Sort',
                   onPressed: _openFilterModal,
                 ),
                 if (filterCount > 0)
                   Positioned(
-                    top: 8,
-                    right: 8,
+                    top: 3,
+                    right: 3,
                     child: Container(
-                      padding: const EdgeInsets.all(4),
+                      padding: const EdgeInsets.all(3.5),
                       decoration: BoxDecoration(
                         color: activeAccent,
                         shape: BoxShape.circle,
@@ -344,7 +364,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
                       child: Text(
                         '$filterCount',
                         style: const TextStyle(
-                          fontSize: 8.5,
+                          fontSize: 8,
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
                         ),
@@ -353,12 +373,41 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
                   ),
               ],
             ),
-          // 4. Layout Mode Toggle (Grid vs Detailed List)
+          // 4. Random Pick from current search/discover results
+          if (isMediaTab && _results.isNotEmpty)
+            IconButton(
+              style: IconButton.styleFrom(
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                minimumSize: const Size(34, 34),
+                padding: EdgeInsets.zero,
+              ),
+              constraints: const BoxConstraints.tightFor(width: 34, height: 34),
+              padding: EdgeInsets.zero,
+              icon: const Icon(Icons.casino_rounded, size: 20),
+              tooltip: 'Random Pick',
+              onPressed: () => RandomPickSheet.show(
+                context,
+                mediaList: _results.whereType<Map<String, dynamic>>().toList(),
+                titlePreference: ref.read(localStorageServiceProvider).titleLanguage,
+                contextTitle: _selectedTabIndex == 0 ? 'Random Anime Pick' : 'Random Manga Pick',
+              ),
+            ),
+          // 5. Layout Mode Toggle (Grid vs Detailed List)
           if (isMediaTab)
             IconButton(
-              icon: Icon(_layoutMode == MediaCardMode.grid
-                  ? Icons.view_headline_rounded
-                  : Icons.grid_view_rounded),
+              style: IconButton.styleFrom(
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                minimumSize: const Size(34, 34),
+                padding: EdgeInsets.zero,
+              ),
+              constraints: const BoxConstraints.tightFor(width: 34, height: 34),
+              padding: EdgeInsets.zero,
+              icon: Icon(
+                _layoutMode == MediaCardMode.grid
+                    ? Icons.view_headline_rounded
+                    : Icons.grid_view_rounded,
+                size: 20,
+              ),
               tooltip: 'Switch layout',
               onPressed: _toggleLayoutMode,
             ),
@@ -381,7 +430,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
                 onChanged: _onSearchChanged,
                 style: TextStyle(fontSize: 13, color: context.appTextPrimary, fontFamily: 'Overpass'),
                 decoration: InputDecoration(
-                  hintText: 'Search anime, manga, characters, staff...',
+                  hintText: 'Search anime, manga, characters...',
                   hintStyle: TextStyle(color: context.appTextMuted, fontSize: 13, fontFamily: 'Overpass'),
                   prefixIcon: Icon(Icons.search_rounded, size: 18, color: activeAccent),
                   suffixIcon: _searchController.text.isNotEmpty
@@ -463,14 +512,14 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
 
           // 3. Results Section (Directly into clean Grid or List, NO cluttered ribbons!)
           Expanded(
-            child: _buildResultsView(isMediaTab, activeAccent),
+            child: _buildResultsView(isMediaTab, activeAccent, inListMap),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildResultsView(bool isMediaTab, Color activeAccent) {
+  Widget _buildResultsView(bool isMediaTab, Color activeAccent, Map<int, String> inListMap) {
     if (_errorMessage != null && _results.isEmpty) {
       return ErrorView(
         message: _errorMessage!,
@@ -509,7 +558,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
       backgroundColor: context.appSurface,
       child: ListView(
         controller: _scrollController,
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 80),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
           // Results List / Grid
           if (isMediaTab)
@@ -517,28 +566,29 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
                 ? GridView.builder(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 3,
-                      childAspectRatio: 0.58,
-                      crossAxisSpacing: 10,
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: MediaQuery.sizeOf(context).width >= 600 ? 3 : 2,
+                      childAspectRatio: 0.67,
+                      crossAxisSpacing: 12,
                       mainAxisSpacing: 12,
                     ),
                     itemCount: _results.length,
                     itemBuilder: (context, index) {
                       final item = _results[index];
+                      final id = item['id'] as int?;
                       return MediaCard(
                         media: item,
                         mode: MediaCardMode.grid,
                         accentColor: activeAccent,
+                        inListBadge: id != null ? inListMap[id] : null,
                         onTap: () {
-                          final id = item['id'] as int?;
                           if (id != null) {
                             Navigator.of(context).push(
-                              MaterialPageRoute(builder: (context) => MediaDetailScreen(mediaId: id)),
+                              AppPageRoute(page: MediaDetailScreen(mediaId: id)),
                             );
                           }
                         },
-                      );
+                      ).animateEntrance(index: index);
                     },
                   )
                 : ListView.separated(
@@ -548,19 +598,20 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
                     separatorBuilder: (context, index) => const SizedBox(height: 10),
                     itemBuilder: (context, index) {
                       final item = _results[index];
+                      final id = item['id'] as int?;
                       return MediaCard(
                         media: item,
                         mode: MediaCardMode.list,
                         accentColor: activeAccent,
+                        inListBadge: id != null ? inListMap[id] : null,
                         onTap: () {
-                          final id = item['id'] as int?;
                           if (id != null) {
                             Navigator.of(context).push(
-                              MaterialPageRoute(builder: (context) => MediaDetailScreen(mediaId: id)),
+                              AppPageRoute(page: MediaDetailScreen(mediaId: id)),
                             );
                           }
                         },
-                      );
+                      ).animateEntrance(index: index);
                     },
                   )
           else
@@ -576,17 +627,14 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
                 if (_selectedTabIndex == 4) {
                   final name = item['name'] as String? ?? 'Unknown';
                   final avatar = item['avatar']?['medium'] as String? ?? item['avatar']?['large'] as String?;
-                  final about = item['about'] as String?;
-                  final cleanAbout = about?.replaceAll(RegExp(r'<[^>]*>|[\r\n]+'), ' ').trim();
+                  final cleanAbout = TextUtil.cleanBioSnippet(item['about'] as String?);
 
                   return InkWell(
                     onTap: () {
                       final id = item['id'] as int?;
                       if (id != null) {
                         Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (context) => ProfileScreen(userId: id, userName: name),
-                          ),
+                          AppPageRoute(page: ProfileScreen(userId: id, userName: name)),
                         );
                       }
                     },
@@ -649,7 +697,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
                 // 2. Characters & Staff Tabs
                 final name = item['name']?['userPreferred'] ?? item['name']?['full'] ?? 'Unknown';
                 final nativeName = item['name']?['native'] as String?;
-                final image = item['image']?['medium'] as String?;
+                final image = (item['image']?['large'] ?? item['image']?['medium']) as String?;
                 final occupations = (item['primaryOccupations'] as List?)?.join(', ');
 
                 return InkWell(
@@ -658,31 +706,31 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
                     if (id != null) {
                       if (_selectedTabIndex == 2) {
                         Navigator.of(context).push(
-                          MaterialPageRoute(builder: (context) => CharacterDetailScreen(characterId: id)),
+                          AppPageRoute(page: CharacterDetailScreen(characterId: id)),
                         );
                       } else {
                         Navigator.of(context).push(
-                          MaterialPageRoute(builder: (context) => StaffDetailScreen(staffId: id)),
+                          AppPageRoute(page: StaffDetailScreen(staffId: id)),
                         );
                       }
                     }
                   },
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(12),
                   child: Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
                       color: context.appSurface,
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: context.appBorder),
                     ),
                     child: Row(
                       children: [
                         ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: BorderRadius.circular(10),
                           child: AppNetworkImage(
                             imageUrl: image,
-                            width: 50,
-                            height: 50,
+                            width: 52,
+                            height: 68,
                             fit: BoxFit.cover,
                           ),
                         ),
@@ -729,7 +777,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
                       ],
                     ),
                   ),
-                );
+                ).animateEntrance(index: index);
               },
             ),
 

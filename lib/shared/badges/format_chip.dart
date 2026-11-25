@@ -15,7 +15,7 @@ class FormatChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.p6, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
       decoration: BoxDecoration(
         color: AppColors.darkCard.withValues(alpha: 0.9),
         borderRadius: AppSpacing.borderRadius4,
@@ -26,8 +26,8 @@ class FormatChip extends StatelessWidget {
         style: TextStyle(
           color: AppColors.brandBlue,
           fontSize: fontSize,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 0.3,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.2,
         ),
       ),
     );

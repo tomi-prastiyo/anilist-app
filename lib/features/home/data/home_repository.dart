@@ -11,101 +11,17 @@ class HomeRepository {
 
   HomeRepository(this._apiClient);
 
-  static const String homeDataQuery = r'''
-    query HomeDataQuery(
-      $season: MediaSeason,
-      $seasonYear: Int,
+  static const String homeAiringQuery = r'''
+    query HomeAiringQuery(
       $airingAtGreater: Int,
-      $airingAtLesser: Int
+      $airingAtLesser: Int,
+      $mediaIds: [Int]
     ) {
-      spotlightMedia: Page(page: 1, perPage: 5) {
-        media(type: ANIME, sort: [TRENDING_DESC], isAdult: false) {
-          ...HomeMediaFragment
-        }
-      }
-      trendingAnime: Page(page: 1, perPage: 10) {
-        media(type: ANIME, sort: [TRENDING_DESC], isAdult: false) {
-          ...HomeMediaFragment
-        }
-      }
-      popularSeason: Page(page: 1, perPage: 10) {
-        media(type: ANIME, season: $season, seasonYear: $seasonYear, sort: [POPULARITY_DESC], isAdult: false) {
-          ...HomeMediaFragment
-        }
-      }
-      trendingManga: Page(page: 1, perPage: 10) {
-        media(type: MANGA, sort: [TRENDING_DESC], isAdult: false) {
-          ...HomeMediaFragment
-        }
-      }
-      topRated: Page(page: 1, perPage: 10) {
-        media(type: ANIME, sort: [SCORE_DESC], isAdult: false) {
-          ...HomeMediaFragment
-        }
-      }
-      airingToday: Page(page: 1, perPage: 25) {
-        airingSchedules(airingAt_greater: $airingAtGreater, airingAt_lesser: $airingAtLesser, sort: [TIME]) {
-          id
-          airingAt
-          timeUntilAiring
-          episode
-          media {
-            id
-            title {
-              userPreferred
-              romaji
-              english
-            }
-            format
-            genres
-            coverImage {
-              large
-              medium
-            }
-          }
-        }
-      }
-    }
-
-    fragment HomeMediaFragment on Media {
-      id
-      title {
-        romaji
-        english
-        native
-        userPreferred
-      }
-      format
-      status
-      episodes
-      chapters
-      averageScore
-      bannerImage
-      genres
-      description(asHtml: false)
-      coverImage {
-        extraLarge
-        large
-        medium
-      }
-      nextAiringEpisode {
-        airingAt
-        timeUntilAiring
-        episode
-      }
-    }
-  ''';
-
-  static const String airingScheduleQuery = r'''
-    query AiringScheduleQuery($airingAtGreater: Int, $airingAtLesser: Int, $page: Int) {
-      Page(page: $page, perPage: 50) {
-        pageInfo {
-          hasNextPage
-          currentPage
-        }
+      airingToday: Page(page: 1, perPage: 30) {
         airingSchedules(
           airingAt_greater: $airingAtGreater,
           airingAt_lesser: $airingAtLesser,
+          mediaId_in: $mediaIds,
           sort: [TIME]
         ) {
           id
@@ -114,6 +30,46 @@ class HomeRepository {
           episode
           media {
             id
+            isAdult
+            title {
+              userPreferred
+              romaji
+              english
+            }
+            format
+            genres
+            bannerImage
+            coverImage {
+              extraLarge
+              large
+              medium
+            }
+          }
+        }
+      }
+    }
+  ''';
+
+  static const String airingScheduleQuery = r'''
+    query AiringScheduleQuery($airingAtGreater: Int, $airingAtLesser: Int, $mediaIds: [Int], $page: Int) {
+      Page(page: $page, perPage: 50) {
+        pageInfo {
+          hasNextPage
+          currentPage
+        }
+        airingSchedules(
+          airingAt_greater: $airingAtGreater,
+          airingAt_lesser: $airingAtLesser,
+          mediaId_in: $mediaIds,
+          sort: [TIME]
+        ) {
+          id
+          airingAt
+          timeUntilAiring
+          episode
+          media {
+            id
+            isAdult
             title {
               userPreferred
               romaji
@@ -122,7 +78,9 @@ class HomeRepository {
             format
             genres
             averageScore
+            bannerImage
             coverImage {
+              extraLarge
               large
               medium
             }
@@ -142,39 +100,54 @@ class HomeRepository {
 
   static int getCurrentYear() => DateTime.now().year;
 
-  Future<Map<String, dynamic>> fetchHomeData() async {
-    final season = getCurrentSeason();
-    final year = getCurrentYear();
+  Future<Map<String, dynamic>> fetchHomeData({List<int>? mediaIds}) async {
+    if (mediaIds == null || mediaIds.isEmpty) {
+      return {
+        'airingToday': {'airingSchedules': <Map<String, dynamic>>[]},
+      };
+    }
+
     final now = DateTime.now();
-    // Query airing anime from beginning of today up to 48 hours ahead for rich upcoming list
+    // Query airing anime in user's list from start of today up to 48 hours ahead
     final startOfDay = DateTime(now.year, now.month, now.day).millisecondsSinceEpoch ~/ 1000;
     final endOfWindow = now.add(const Duration(hours: 48)).millisecondsSinceEpoch ~/ 1000;
 
-    return await _apiClient.postGraphQL(
-      query: homeDataQuery,
+    final data = await _apiClient.postGraphQL(
+      query: homeAiringQuery,
       variables: {
-        'season': season,
-        'seasonYear': year,
         'airingAtGreater': startOfDay,
         'airingAtLesser': endOfWindow,
+        'mediaIds': mediaIds,
       },
     );
+    final raw = (data['airingToday']?['airingSchedules'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+    final safe = raw.where((s) => s['media']?['isAdult'] != true).toList();
+    return {
+      'airingToday': {'airingSchedules': safe},
+    };
   }
 
   Future<List<Map<String, dynamic>>> fetchAiringSchedule({
     required int airingAtGreater,
     required int airingAtLesser,
+    List<int>? mediaIds,
     int page = 1,
   }) async {
+    final vars = <String, dynamic>{
+      'airingAtGreater': airingAtGreater,
+      'airingAtLesser': airingAtLesser,
+      'page': page,
+    };
+    if (mediaIds != null && mediaIds.isNotEmpty) {
+      vars['mediaIds'] = mediaIds;
+    }
+
     final response = await _apiClient.postGraphQL(
       query: airingScheduleQuery,
-      variables: {
-        'airingAtGreater': airingAtGreater,
-        'airingAtLesser': airingAtLesser,
-        'page': page,
-      },
+      variables: vars,
     );
     final pageData = response['Page'] as Map<String, dynamic>?;
-    return (pageData?['airingSchedules'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+    final list = (pageData?['airingSchedules'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+    return list.where((s) => s['media']?['isAdult'] != true).toList();
   }
 }

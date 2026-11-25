@@ -6,6 +6,10 @@ final activityRepositoryProvider = Provider<ActivityRepository>((ref) {
   return ActivityRepository(apiClient);
 });
 
+/// Broadcasts authoritative like/unlike updates between HomeActivityFeed and ActivityScreen.
+final activityLikeSyncProvider =
+    StateProvider<({int id, bool isLiked, int likeCount})?>((ref) => null);
+
 class ActivityRepository {
   final ApiClient _apiClient;
 
@@ -67,6 +71,7 @@ class ActivityRepository {
                 romaji
                 english
               }
+              bannerImage
               coverImage {
                 medium
                 large
@@ -136,6 +141,26 @@ class ActivityRepository {
     mutation ToggleLikeMutation($id: Int, $type: LikeableType) {
       ToggleLikeV2(id: $id, type: $type) {
         __typename
+        ... on ListActivity {
+          id
+          likeCount
+          isLiked
+        }
+        ... on TextActivity {
+          id
+          likeCount
+          isLiked
+        }
+        ... on MessageActivity {
+          id
+          likeCount
+          isLiked
+        }
+        ... on ActivityReply {
+          id
+          likeCount
+          isLiked
+        }
       }
     }
   ''';
@@ -210,11 +235,10 @@ class ActivityRepository {
     }
   ''';
 
-  static const String saveTextActivityMutation = r'''
-    mutation SaveTextActivity($text: String) {
-      SaveTextActivity(text: $text) {
-        id
-        text
+  static const String deleteActivityMutation = r'''
+    mutation DeleteActivity($id: Int) {
+      DeleteActivity(id: $id) {
+        deleted
       }
     }
   ''';
@@ -240,21 +264,23 @@ class ActivityRepository {
     return response['Page'] as Map<String, dynamic>? ?? {};
   }
 
-  Future<void> toggleLike(int activityId) async {
-    await _apiClient.postGraphQL(
+  Future<Map<String, dynamic>?> toggleLike(int activityId) async {
+    final response = await _apiClient.postGraphQL(
       query: toggleLikeMutation,
       variables: {
         'id': activityId,
         'type': 'ACTIVITY',
       },
     );
+    return response['ToggleLikeV2'] as Map<String, dynamic>?;
   }
 
-  Future<void> saveTextActivity(String text) async {
-    await _apiClient.postGraphQL(
-      query: saveTextActivityMutation,
-      variables: {'text': text},
+  Future<bool> deleteActivity(int activityId) async {
+    final response = await _apiClient.postGraphQL(
+      query: deleteActivityMutation,
+      variables: {'id': activityId},
     );
+    return response['DeleteActivity']?['deleted'] as bool? ?? false;
   }
 
   Future<Map<String, dynamic>> fetchActivityReplies({
@@ -293,13 +319,14 @@ class ActivityRepository {
     return response['Activity'] as Map<String, dynamic>?;
   }
 
-  Future<void> toggleReplyLike(int replyId) async {
-    await _apiClient.postGraphQL(
+  Future<Map<String, dynamic>?> toggleReplyLike(int replyId) async {
+    final response = await _apiClient.postGraphQL(
       query: toggleLikeMutation,
       variables: {
         'id': replyId,
         'type': 'ACTIVITY_REPLY',
       },
     );
+    return response['ToggleLikeV2'] as Map<String, dynamic>?;
   }
 }

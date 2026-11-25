@@ -2,14 +2,17 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/animations/app_motion.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
+import '../../../core/theme/theme_provider.dart';
 import '../../../core/widgets/anilist_bio_widget.dart';
 import '../../../shared/cards/media_card.dart';
 import '../../../shared/feedback/empty_view.dart';
 import '../../../shared/feedback/error_view.dart';
-import '../../../shared/image/app_avatar.dart';
 import '../../../shared/image/app_network_image.dart';
+import '../../../shared/state/favourite_sync_store.dart';
+import '../../../shared/widgets/tactile_scale.dart';
 import '../../activity/presentation/activity_screen.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../character_staff/presentation/character_detail_screen.dart';
@@ -19,6 +22,7 @@ import '../../notifications/presentation/notifications_screen.dart';
 import '../../settings/presentation/settings_screen.dart';
 import '../data/profile_repository.dart';
 import 'user_follows_screen.dart';
+import 'widgets/reorder_favorites_sheet.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   final int? userId;
@@ -79,7 +83,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     return false;
   }
 
-  Future<void> _loadProfile() async {
+  Future<void> _loadProfile({bool silent = false}) async {
     final auth = ref.read(authControllerProvider);
     final authUser = auth is Authenticated ? auth.user : null;
     final isOwn = _isOwnProfile(authUser);
@@ -93,10 +97,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
+    if (!silent) {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
+    }
 
     try {
       final repo = ref.read(profileRepositoryProvider);
@@ -181,9 +187,23 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
   @override
   Widget build(BuildContext context) {
     final auth = ref.watch(authControllerProvider);
+    final themeMode = ref.watch(themeModeProvider);
+    final activeHeroine = ref.watch(yuyuyuHeroineProvider);
+    final themeBrightness = Theme.of(context).brightness;
+    final themePalette = context.appPalette;
+    final statsThemeKey = ValueKey(
+      'stats_${themeMode.name}_${activeHeroine.id}_${themeBrightness.name}',
+    );
     final isAuthenticated = auth is Authenticated;
     final authUser = isAuthenticated ? auth.user : null;
     final isOwn = _isOwnProfile(authUser);
+
+    ref.watch(favoritesRevisionProvider);
+    ref.listen<int>(favoritesRevisionProvider, (prev, next) {
+      if (mounted && isOwn && isAuthenticated) {
+        _loadProfile(silent: true);
+      }
+    });
 
     // Unauthenticated viewing own profile
     if (isOwn && !isAuthenticated) {
@@ -249,22 +269,60 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     final mangaGenres = (mangaStats?['genres'] as List?)?.cast<Map<String, dynamic>>() ?? [];
 
     final about = _userProfile?['about'] as String?;
+    final aboutHtml = _userProfile?['aboutHtml'] as String?;
 
     // Favourites
     final favs = _userProfile?['favourites'] as Map<String, dynamic>?;
-    final favAnime = (favs?['anime']?['nodes'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-    final favManga = (favs?['manga']?['nodes'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-    final favCharacters = (favs?['characters']?['nodes'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-    final favStaff = (favs?['staff']?['nodes'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+    final rawFavAnime = (favs?['anime']?['nodes'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+    final rawFavManga = (favs?['manga']?['nodes'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+    final rawFavCharacters = (favs?['characters']?['nodes'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+    final rawFavStaff = (favs?['staff']?['nodes'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+    final favStudios = (favs?['studios']?['nodes'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+
+    final favSync = ref.watch(favouriteSyncStoreProvider);
+    final favAnime = isOwn ? favSync.applyToList(FavouriteKind.anime, rawFavAnime) : rawFavAnime;
+    final favManga = isOwn ? favSync.applyToList(FavouriteKind.manga, rawFavManga) : rawFavManga;
+    final favCharacters = isOwn ? favSync.applyToList(FavouriteKind.character, rawFavCharacters) : rawFavCharacters;
+    final favStaff = isOwn ? favSync.applyToList(FavouriteKind.staff, rawFavStaff) : rawFavStaff;
 
     return Scaffold(
       backgroundColor: context.appBackground,
       body: NestedScrollView(
         headerSliverBuilder: (context, innerBoxIsScrolled) => [
           SliverAppBar(
-            expandedHeight: 225,
+            expandedHeight: 245,
             pinned: true,
             backgroundColor: context.appBackground,
+            title: innerBoxIsScrolled
+                ? Row(
+                    children: [
+                      if (userAvatar != null) ...[
+                        ClipOval(
+                          child: AppNetworkImage(
+                            imageUrl: userAvatar,
+                            width: 28,
+                            height: 28,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                      ],
+                      Expanded(
+                        child: Text(
+                          userName ?? '',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontFamily: 'Overpass',
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            color: context.appTextPrimary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  )
+                : null,
             leading: !isOwn
                 ? IconButton(
                     icon: Container(
@@ -333,19 +391,19 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                         ),
                       ),
                     ),
-                  // Dark Multi-stop Gradient Scrim
+                  // Dark Multi-stop Gradient Scrim (includes top scrim for status bar legibility)
                   Container(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
                         colors: [
-                          Colors.transparent,
-                          Colors.black.withValues(alpha: 0.2),
-                          Colors.black.withValues(alpha: 0.6),
+                          Colors.black.withValues(alpha: 0.48),
+                          Colors.black.withValues(alpha: 0.12),
+                          Colors.black.withValues(alpha: 0.45),
                           Colors.black.withValues(alpha: 0.85),
                         ],
-                        stops: const [0.0, 0.4, 0.75, 1.0],
+                        stops: const [0.0, 0.28, 0.65, 1.0],
                       ),
                     ),
                   ),
@@ -679,6 +737,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
               tabController: _tabController,
               accentColor: accentColor,
               isOwnProfile: isOwn,
+              brightness: themeBrightness,
+              palette: themePalette,
             ),
           ),
         ],
@@ -693,7 +753,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                   children: [
                     // Tab 1: Stats & Visual Charts
                     _buildStatsTab(
+                      statsKey: statsThemeKey,
                       about: about,
+                      aboutHtml: aboutHtml,
                       animeCount: count,
                       animeDays: days,
                       animeMeanScore: meanScore,
@@ -721,7 +783,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                       favManga: favManga,
                       favCharacters: favCharacters,
                       favStaff: favStaff,
+                      favStudios: favStudios,
                       accentColor: accentColor,
+                      canReorder: isOwn && isAuthenticated,
                     ),
 
                     // Tab 3: Personal Activity Feed (Only this user's activity)
@@ -737,7 +801,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
   }
 
   Widget _buildStatsTab({
+    required Key statsKey,
     String? about,
+    String? aboutHtml,
     required int animeCount,
     required String animeDays,
     required double animeMeanScore,
@@ -759,13 +825,39 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     required bool isOwn,
   }) {
     return ListView(
-      padding: const EdgeInsets.all(AppSpacing.p16),
+      key: statsKey,
+      padding: const EdgeInsets.fromLTRB(AppSpacing.p16, AppSpacing.p16, AppSpacing.p16, 24),
       children: [
         // 1. Expandable About Bio Card
         AniListBioWidget(
           bio: about,
+          bioHtml: aboutHtml,
           accentColor: accentColor,
           isOwn: isOwn,
+          onSaveBio: isOwn
+              ? (newBio) async {
+                  try {
+                    final res = await ref.read(profileRepositoryProvider).updateUserBio(newBio);
+                    if (mounted) {
+                      setState(() {
+                        _userProfile?['about'] = res['about'] ?? newBio;
+                        _userProfile?['aboutHtml'] = res['aboutHtml'];
+                      });
+                    }
+                    return true;
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Failed to update bio: $e'),
+                          backgroundColor: AppColors.statusDropped,
+                        ),
+                      );
+                    }
+                    return false;
+                  }
+                }
+              : null,
         ),
 
         // 2. Segmented Pill Switch: Anime Stats vs Manga Stats
@@ -1101,9 +1193,17 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
   }
 
   Widget _buildScoreHistogram(List<Map<String, dynamic>> scoreList, double meanScore, Color accentColor) {
-    final maxCount = scoreList
+    final sortedScores = List<Map<String, dynamic>>.from(scoreList)
+      ..sort((a, b) => ((a['score'] as num?) ?? 0).compareTo((b['score'] as num?) ?? 0));
+    final maxCount = sortedScores
         .map((e) => (e['count'] as num).toDouble())
         .fold(0.0, (a, b) => a > b ? a : b);
+
+    Color barColorForScore(num score) {
+      if (score >= 75) return AppColors.scoreHigh;
+      if (score >= 60) return AppColors.scoreMedium;
+      return AppColors.scoreLow;
+    }
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -1169,15 +1269,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                 maxY: maxCount * 1.25 + 2,
                 barTouchData: BarTouchData(
                   touchTooltipData: BarTouchTooltipData(
-                    getTooltipColor: (_) => AppColors.darkCard,
+                    getTooltipColor: (_) => context.appCard,
                     tooltipRoundedRadius: 6,
                     getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                      final score = scoreList[group.x]['score'];
+                      final score = sortedScores[group.x]['score'];
                       final count = rod.toY.toInt();
                       return BarTooltipItem(
                         '$score%: $count titles',
-                        const TextStyle(
-                          color: Colors.white,
+                        TextStyle(
+                          color: context.appTextPrimary,
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
                         ),
@@ -1194,11 +1294,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                       showTitles: true,
                       getTitlesWidget: (val, meta) {
                         final idx = val.toInt();
-                        if (idx >= 0 && idx < scoreList.length) {
+                        if (idx >= 0 && idx < sortedScores.length) {
                           return Padding(
                             padding: const EdgeInsets.only(top: 6),
                             child: Text(
-                              '${scoreList[idx]['score']}',
+                              '${sortedScores[idx]['score']}',
                               style: TextStyle(
                                 fontFamily: 'Overpass',
                                 fontSize: 10,
@@ -1215,9 +1315,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                 ),
                 gridData: const FlGridData(show: false),
                 borderData: FlBorderData(show: false),
-                barGroups: scoreList.asMap().entries.map((entry) {
+                barGroups: sortedScores.asMap().entries.map((entry) {
                   final idx = entry.key;
+                  final scoreVal = (entry.value['score'] as num?) ?? 0;
                   final countVal = (entry.value['count'] as num).toDouble();
+                  final barColor = barColorForScore(scoreVal);
                   return BarChartGroupData(
                     x: idx,
                     barRods: [
@@ -1227,8 +1329,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                           begin: Alignment.bottomCenter,
                           end: Alignment.topCenter,
                           colors: [
-                            accentColor.withValues(alpha: 0.65),
-                            accentColor,
+                            barColor.withValues(alpha: 0.65),
+                            barColor,
                           ],
                         ),
                         width: 15,
@@ -1483,19 +1585,68 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     );
   }
 
+  void _openReorderFavorites({
+    required List<Map<String, dynamic>> favAnime,
+    required List<Map<String, dynamic>> favManga,
+    required List<Map<String, dynamic>> favCharacters,
+    required List<Map<String, dynamic>> favStaff,
+    required List<Map<String, dynamic>> favStudios,
+    required Color accentColor,
+  }) {
+    final repo = ref.read(profileRepositoryProvider);
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => ReorderFavoritesSheet(
+        repo: repo,
+        accentColor: accentColor,
+        initialCategory: _favFilter == 'ALL' ? 'ANIME' : _favFilter,
+        favAnime: favAnime,
+        favManga: favManga,
+        favCharacters: favCharacters,
+        favStaff: favStaff,
+        favStudios: favStudios,
+        onSaved: (categoryKey, updated) {
+          final favs = _userProfile?['favourites'];
+          if (favs is! Map) return;
+          const keyMap = {
+            'ANIME': 'anime',
+            'MANGA': 'manga',
+            'CHARACTERS': 'characters',
+            'STAFF': 'staff',
+            'STUDIOS': 'studios',
+          };
+          final nodeKey = keyMap[categoryKey];
+          if (nodeKey != null && favs[nodeKey] is Map && mounted) {
+            setState(() {
+              favs[nodeKey]['nodes'] = updated;
+            });
+          }
+        },
+      ),
+    );
+  }
+
   Widget _buildFavoritesTab({
     required List<Map<String, dynamic>> favAnime,
     required List<Map<String, dynamic>> favManga,
     required List<Map<String, dynamic>> favCharacters,
     required List<Map<String, dynamic>> favStaff,
+    required List<Map<String, dynamic>> favStudios,
     required Color accentColor,
+    required bool canReorder,
   }) {
-    final allCount = favAnime.length + favManga.length + favCharacters.length + favStaff.length;
+    final allCount = favAnime.length +
+        favManga.length +
+        favCharacters.length +
+        favStaff.length +
+        favStudios.length;
 
     return ListView(
-      padding: const EdgeInsets.all(AppSpacing.p16),
+      padding: const EdgeInsets.fromLTRB(AppSpacing.p16, 14, AppSpacing.p16, 28),
       children: [
-        // Category Filter Chips
+        // Category Filter Chips + Optional Reorder Pill
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: Row(
@@ -1506,13 +1657,61 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
               const SizedBox(width: 8),
               _buildFavFilterChip('Manga (${favManga.length})', 'MANGA', accentColor),
               const SizedBox(width: 8),
-              _buildFavFilterChip('Characters (${favCharacters.length})', 'CHARACTERS', accentColor),
+              _buildFavFilterChip('Chars (${favCharacters.length})', 'CHARACTERS', accentColor),
               const SizedBox(width: 8),
               _buildFavFilterChip('Staff (${favStaff.length})', 'STAFF', accentColor),
+              if (favStudios.isNotEmpty) ...[
+                const SizedBox(width: 8),
+                _buildFavFilterChip('Studios (${favStudios.length})', 'STUDIOS', accentColor),
+              ],
             ],
           ),
         ),
-        const SizedBox(height: 16),
+        if (canReorder && allCount > 1) ...[
+          const SizedBox(height: 10),
+          Align(
+            alignment: Alignment.centerRight,
+            child: InkWell(
+              onTap: () {
+                HapticFeedback.selectionClick();
+                _openReorderFavorites(
+                  favAnime: favAnime,
+                  favManga: favManga,
+                  favCharacters: favCharacters,
+                  favStaff: favStaff,
+                  favStudios: favStudios,
+                  accentColor: accentColor,
+                );
+              },
+              borderRadius: BorderRadius.circular(10),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+                decoration: BoxDecoration(
+                  color: accentColor.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: accentColor.withValues(alpha: 0.4)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.swap_vert_rounded, size: 15, color: accentColor),
+                    const SizedBox(width: 5),
+                    Text(
+                      'Reorder',
+                      style: TextStyle(
+                        fontFamily: 'Overpass',
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w800,
+                        color: accentColor,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+        const SizedBox(height: 14),
 
         if (_favFilter == 'ALL') ...[
           if (favAnime.isNotEmpty)
@@ -1541,6 +1740,41 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
               isCharacter: false,
               onSeeAll: () => setState(() => _favFilter = 'STAFF'),
             ),
+          if (favStudios.isNotEmpty) ...[
+            Text(
+              'Favorite Studios',
+              style: TextStyle(
+                fontFamily: 'Overpass',
+                fontSize: 15.5,
+                fontWeight: FontWeight.w800,
+                color: context.appTextPrimary,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: favStudios.map((s) {
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: context.appSurface,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: context.appBorder),
+                  ),
+                  child: Text(
+                    s['name'] as String? ?? 'Studio',
+                    style: TextStyle(
+                      fontFamily: 'Overpass',
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: context.appTextPrimary,
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ],
         ] else if (_favFilter == 'ANIME') ...[
           _buildMediaGrid(favAnime, 'No Favorite Anime Added Yet'),
         ] else if (_favFilter == 'MANGA') ...[
@@ -1549,6 +1783,30 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
           _buildPersonGrid(favCharacters, isCharacter: true, emptyMessage: 'No Favorite Characters Added Yet'),
         ] else if (_favFilter == 'STAFF') ...[
           _buildPersonGrid(favStaff, isCharacter: false, emptyMessage: 'No Favorite Staff Added Yet'),
+        ] else if (_favFilter == 'STUDIOS') ...[
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: favStudios.map((s) {
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                decoration: BoxDecoration(
+                  color: context.appSurface,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: context.appBorder),
+                ),
+                child: Text(
+                  s['name'] as String? ?? 'Studio',
+                  style: TextStyle(
+                    fontFamily: 'Overpass',
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                    color: context.appTextPrimary,
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
         ],
 
         if (allCount == 0)
@@ -1568,22 +1826,32 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
         HapticFeedback.selectionClick();
         setState(() => _favFilter = key);
       },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: isSelected ? accentColor.withValues(alpha: 0.2) : context.appSurface,
-          borderRadius: BorderRadius.circular(16),
+          color: isSelected ? accentColor : context.appSurface,
+          borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color: isSelected ? accentColor : context.appBorder,
           ),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: accentColor.withValues(alpha: 0.28),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
         ),
         child: Text(
           label,
           style: TextStyle(
             fontFamily: 'Overpass',
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-            color: isSelected ? accentColor : context.appTextSecondary,
+            fontSize: 11.5,
+            fontWeight: FontWeight.w800,
+            color: isSelected ? Colors.white : context.appTextSecondary,
           ),
         ),
       ),
@@ -1601,7 +1869,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
               title,
               style: TextStyle(
                 fontFamily: 'Overpass',
-                fontSize: 16,
+                fontSize: 15.5,
                 fontWeight: FontWeight.w800,
                 color: context.appTextPrimary,
               ),
@@ -1610,11 +1878,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
               onTap: onSeeAll,
               child: Text(
                 'View All (${items.length}) →',
-                style: const TextStyle(
+                style: TextStyle(
                   fontFamily: 'Overpass',
                   fontSize: 11.5,
                   fontWeight: FontWeight.w700,
-                  color: AppColors.brandBlue,
+                  color: context.appAccent,
                 ),
               ),
             ),
@@ -1622,23 +1890,23 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
         ),
         const SizedBox(height: 10),
         SizedBox(
-          height: 190,
+          height: 196,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: items.length,
             separatorBuilder: (context, index) => const SizedBox(width: 10),
             itemBuilder: (context, index) {
               final media = items[index];
+              final id = media['id'] as int?;
               return SizedBox(
-                width: 110,
+                width: 132,
                 child: MediaCard(
                   media: media,
                   mode: MediaCardMode.grid,
                   onTap: () {
-                    final id = media['id'] as int?;
                     if (id != null) {
                       Navigator.of(context).push(
-                        MaterialPageRoute(builder: (context) => MediaDetailScreen(mediaId: id)),
+                        AppPageRoute(page: MediaDetailScreen(mediaId: id)),
                       );
                     }
                   },
@@ -1647,7 +1915,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
             },
           ),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 18),
       ],
     );
   }
@@ -1668,7 +1936,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
               title,
               style: TextStyle(
                 fontFamily: 'Overpass',
-                fontSize: 16,
+                fontSize: 15.5,
                 fontWeight: FontWeight.w800,
                 color: context.appTextPrimary,
               ),
@@ -1677,11 +1945,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
               onTap: onSeeAll,
               child: Text(
                 'View All (${items.length}) →',
-                style: const TextStyle(
+                style: TextStyle(
                   fontFamily: 'Overpass',
                   fontSize: 11.5,
                   fontWeight: FontWeight.w700,
-                  color: AppColors.brandBlue,
+                  color: context.appAccent,
                 ),
               ),
             ),
@@ -1689,56 +1957,85 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
         ),
         const SizedBox(height: 10),
         SizedBox(
-          height: 94,
+          height: 154,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: items.length,
-            separatorBuilder: (context, index) => const SizedBox(width: 12),
+            separatorBuilder: (context, index) => const SizedBox(width: 10),
             itemBuilder: (context, index) {
               final item = items[index];
-              final name = item['name']?['userPreferred'] ?? '';
-              final image = item['image']?['medium'] as String?;
+              final name = item['name']?['userPreferred'] ?? item['name']?['full'] ?? '';
+              final image = (item['image']?['large'] ?? item['image']?['medium']) as String?;
 
-              return InkWell(
+              return TactileScale(
                 onTap: () {
                   final id = item['id'] as int?;
                   if (id != null) {
                     Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (context) => isCharacter
+                      AppPageRoute(
+                        page: isCharacter
                             ? CharacterDetailScreen(characterId: id)
                             : StaffDetailScreen(staffId: id),
                       ),
                     );
                   }
                 },
-                borderRadius: BorderRadius.circular(8),
-                child: Column(
-                  children: [
-                    AppAvatar(imageUrl: image, size: 52),
-                    const SizedBox(height: 6),
-                    SizedBox(
-                      width: 68,
-                      child: Text(
-                        name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontFamily: 'Overpass',
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: context.appTextPrimary,
+                child: Container(
+                  width: 108,
+                  decoration: BoxDecoration(
+                    color: context.appSurface,
+                    borderRadius: BorderRadius.circular(11),
+                    border: Border.all(color: context.appBorder),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      if (image != null)
+                        AppNetworkImage(imageUrl: image, fit: BoxFit.cover, borderRadius: BorderRadius.zero)
+                      else
+                        Center(child: Icon(Icons.person_rounded, size: 32, color: context.appTextMuted)),
+                      Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            stops: const [0.45, 1.0],
+                            colors: [
+                              Colors.transparent,
+                              Colors.black.withValues(alpha: 0.90),
+                            ],
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                      Positioned(
+                        left: 7,
+                        right: 7,
+                        bottom: 7,
+                        child: Text(
+                          name,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontFamily: 'Overpass',
+                            fontSize: 11,
+                            height: 1.15,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                            shadows: [
+                              Shadow(color: Colors.black87, blurRadius: 4, offset: Offset(0, 1)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               );
             },
           ),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 18),
       ],
     );
   }
@@ -1756,14 +2053,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       );
     }
 
+    final isTablet = MediaQuery.sizeOf(context).width >= 600;
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       itemCount: items.length,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        childAspectRatio: 0.62,
-        crossAxisSpacing: 10,
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: isTablet ? 3 : 2,
+        childAspectRatio: 0.67,
+        crossAxisSpacing: 12,
         mainAxisSpacing: 12,
       ),
       itemBuilder: (context, index) {
@@ -1775,7 +2073,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
             final id = media['id'] as int?;
             if (id != null) {
               Navigator.of(context).push(
-                MaterialPageRoute(builder: (context) => MediaDetailScreen(mediaId: id)),
+                AppPageRoute(page: MediaDetailScreen(mediaId: id)),
               );
             }
           },
@@ -1797,30 +2095,30 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       );
     }
 
+    final isTablet = MediaQuery.sizeOf(context).width >= 600;
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       itemCount: items.length,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: isTablet ? 3 : 2,
         childAspectRatio: 0.72,
-        crossAxisSpacing: 10,
+        crossAxisSpacing: 12,
         mainAxisSpacing: 12,
       ),
       itemBuilder: (context, index) {
         final item = items[index];
         final name = item['name']?['userPreferred'] ?? item['name']?['full'] ?? '';
-        final image = item['image']?['large'] ?? item['image']?['medium'] as String?;
+        final image = (item['image']?['large'] ?? item['image']?['medium']) as String?;
         final occupations = (item['primaryOccupations'] as List?)?.cast<String>() ?? [];
 
-        return InkWell(
-          borderRadius: BorderRadius.circular(10),
+        return TactileScale(
           onTap: () {
             final id = item['id'] as int?;
             if (id != null) {
               Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => isCharacter
+                AppPageRoute(
+                  page: isCharacter
                       ? CharacterDetailScreen(characterId: id)
                       : StaffDetailScreen(staffId: id),
                 ),
@@ -1830,34 +2128,51 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
           child: Container(
             decoration: BoxDecoration(
               color: context.appSurface,
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(12),
               border: Border.all(color: context.appBorder),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
+            clipBehavior: Clip.antiAlias,
+            child: Stack(
+              fit: StackFit.expand,
               children: [
-                Expanded(
-                  child: ClipRRect(
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(10)),
-                    child: image != null
-                        ? AppNetworkImage(imageUrl: image, fit: BoxFit.cover, width: double.infinity)
-                        : Icon(Icons.person, color: context.appTextSecondary),
+                if (image != null)
+                  AppNetworkImage(imageUrl: image, fit: BoxFit.cover, borderRadius: BorderRadius.zero)
+                else
+                  Center(child: Icon(Icons.person_rounded, size: 42, color: context.appTextMuted)),
+                Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      stops: const [0.48, 1.0],
+                      colors: [
+                        Colors.transparent,
+                        Colors.black.withValues(alpha: 0.92),
+                      ],
+                    ),
                   ),
                 ),
-                Padding(
-                  padding: const EdgeInsets.all(6),
+                Positioned(
+                  left: 9,
+                  right: 9,
+                  bottom: 9,
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
                         name,
-                        maxLines: 1,
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontFamily: 'Overpass',
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: context.appTextPrimary,
+                          fontSize: 12.5,
+                          height: 1.16,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                          shadows: [
+                            Shadow(color: Colors.black87, blurRadius: 4, offset: Offset(0, 1)),
+                          ],
                         ),
                       ),
                       if (occupations.isNotEmpty) ...[
@@ -1868,8 +2183,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             fontFamily: 'Overpass',
-                            fontSize: 9.5,
-                            color: context.appTextSecondary,
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white.withValues(alpha: 0.8),
                           ),
                         ),
                       ],
@@ -1886,9 +2202,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
 
   Widget _statCard(String label, String value, IconData icon, Color accentColor, [Color? iconColor]) {
     final effectiveColor = iconColor ?? accentColor;
+    final match = RegExp(r'^(\d+(?:\.\d+)?)(.*)$').firstMatch(value.trim());
+    final parsedTarget = match != null ? double.tryParse(match.group(1)!) : null;
+    final decimals = match != null && match.group(1)!.contains('.') ? match.group(1)!.split('.').last.length : 0;
+    final suffix = match?.group(2) ?? '';
+
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.all(AppSpacing.p12),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
           color: context.appSurface,
           borderRadius: BorderRadius.circular(12),
@@ -1905,23 +2226,44 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
-              padding: const EdgeInsets.all(6),
+              padding: const EdgeInsets.all(5),
               decoration: BoxDecoration(
                 color: effectiveColor.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(7),
               ),
-              child: Icon(icon, size: 16, color: effectiveColor),
+              child: Icon(icon, size: 15, color: effectiveColor),
             ),
-            const SizedBox(height: 8),
-            Text(
-              value,
-              style: TextStyle(
-                fontFamily: 'Overpass',
-                fontSize: 17,
-                fontWeight: FontWeight.w900,
-                color: context.appTextPrimary,
+            const SizedBox(height: 6),
+            if (parsedTarget != null)
+              TweenAnimationBuilder<double>(
+                tween: Tween(begin: 0, end: parsedTarget),
+                duration: const Duration(milliseconds: 650),
+                curve: Curves.easeOutCubic,
+                builder: (context, animatedValue, _) {
+                  final formatted = decimals > 0
+                      ? animatedValue.toStringAsFixed(decimals)
+                      : animatedValue.round().toString();
+                  return Text(
+                    '$formatted$suffix',
+                    style: TextStyle(
+                      fontFamily: 'Overpass',
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                      color: context.appTextPrimary,
+                    ),
+                  );
+                },
+              )
+            else
+              Text(
+                value,
+                style: TextStyle(
+                  fontFamily: 'Overpass',
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                  color: context.appTextPrimary,
+                ),
               ),
-            ),
             const SizedBox(height: 2),
             Text(
               label,
@@ -1934,7 +2276,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
             ),
           ],
         ),
-      ),
+      ).animateEntrance(),
     );
   }
 }
@@ -1943,17 +2285,21 @@ class _ProfilePillTabsDelegate extends SliverPersistentHeaderDelegate {
   final TabController tabController;
   final Color accentColor;
   final bool isOwnProfile;
+  final Brightness brightness;
+  final AppThemePalette palette;
 
   _ProfilePillTabsDelegate({
     required this.tabController,
     required this.accentColor,
     required this.isOwnProfile,
+    required this.brightness,
+    required this.palette,
   });
 
   @override
-  double get minExtent => 52;
+  double get minExtent => 48;
   @override
-  double get maxExtent => 52;
+  double get maxExtent => 48;
 
   @override
   Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
@@ -1987,6 +2333,7 @@ class _ProfilePillTabsDelegate extends SliverPersistentHeaderDelegate {
         },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(horizontal: 6),
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: isSelected ? accentColor : context.appSurface,
@@ -2006,22 +2353,25 @@ class _ProfilePillTabsDelegate extends SliverPersistentHeaderDelegate {
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
             children: [
               Icon(
                 icon,
-                size: 14,
+                size: 13,
                 color: isSelected ? Colors.white : context.appTextSecondary,
               ),
-              const SizedBox(width: 5),
-              Text(
-                title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontFamily: 'Overpass',
-                  fontSize: 12,
-                  fontWeight: FontWeight.w800,
-                  color: isSelected ? Colors.white : context.appTextSecondary,
+              const SizedBox(width: 4),
+              Flexible(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: 'Overpass',
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w800,
+                    color: isSelected ? Colors.white : context.appTextSecondary,
+                  ),
                 ),
               ),
             ],
@@ -2035,6 +2385,8 @@ class _ProfilePillTabsDelegate extends SliverPersistentHeaderDelegate {
   bool shouldRebuild(_ProfilePillTabsDelegate oldDelegate) {
     return oldDelegate.accentColor != accentColor ||
         oldDelegate.isOwnProfile != isOwnProfile ||
-        oldDelegate.tabController != tabController;
+        oldDelegate.tabController != tabController ||
+        oldDelegate.brightness != brightness ||
+        oldDelegate.palette != palette;
   }
 }

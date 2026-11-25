@@ -1,4 +1,123 @@
 import 'package:flutter/material.dart';
+import 'yuyuyu_assets.dart';
+
+@immutable
+class AppThemePalette extends ThemeExtension<AppThemePalette> {
+  final Color background;
+  final Color surface;
+  final Color card;
+  final Color border;
+  final Color inputSurface;
+  final Color textPrimary;
+  final Color textSecondary;
+  final Color textMuted;
+  final Color accent;
+  final Color secondaryAccent;
+  final bool isYuYuYu;
+
+  const AppThemePalette({
+    required this.background,
+    required this.surface,
+    required this.card,
+    required this.border,
+    required this.inputSurface,
+    required this.textPrimary,
+    required this.textSecondary,
+    required this.textMuted,
+    required this.accent,
+    required this.secondaryAccent,
+    this.isYuYuYu = false,
+  });
+
+  static const dark = AppThemePalette(
+    background: AppColors.darkBackground,
+    surface: AppColors.darkSurface,
+    card: AppColors.darkCard,
+    border: Color(0x14FFFFFF),
+    inputSurface: AppColors.darkSurfaceInput,
+    textPrimary: AppColors.darkTextPrimary,
+    textSecondary: AppColors.darkTextSecondary,
+    textMuted: AppColors.darkTextMuted,
+    accent: AppColors.brandBlue,
+    secondaryAccent: AppColors.brandDarkBlue,
+    isYuYuYu: false,
+  );
+
+  static const light = AppThemePalette(
+    background: AppColors.lightBackground,
+    surface: AppColors.lightSurface,
+    card: AppColors.lightCard,
+    border: AppColors.lightBorder,
+    inputSurface: Colors.white,
+    textPrimary: AppColors.lightTextPrimary,
+    textSecondary: AppColors.lightTextSecondary,
+    textMuted: AppColors.lightTextMuted,
+    accent: AppColors.brandBlue,
+    secondaryAccent: AppColors.brandDarkBlue,
+    isYuYuYu: false,
+  );
+
+  static AppThemePalette yuyuyu([Color accent = const Color(0xFFF472B6)]) => AppThemePalette(
+        background: YuYuYuAssets.twilightBg,
+        surface: YuYuYuAssets.twilightSurface,
+        card: YuYuYuAssets.twilightCard,
+        border: YuYuYuAssets.twilightBorder,
+        inputSurface: YuYuYuAssets.twilightInput,
+        textPrimary: YuYuYuAssets.blossomTextPrimary,
+        textSecondary: YuYuYuAssets.blossomTextSecondary,
+        textMuted: YuYuYuAssets.blossomTextMuted,
+        accent: accent,
+        secondaryAccent: YuYuYuAssets.shinjuGold,
+        isYuYuYu: true,
+      );
+
+  @override
+  AppThemePalette copyWith({
+    Color? background,
+    Color? surface,
+    Color? card,
+    Color? border,
+    Color? inputSurface,
+    Color? textPrimary,
+    Color? textSecondary,
+    Color? textMuted,
+    Color? accent,
+    Color? secondaryAccent,
+    bool? isYuYuYu,
+  }) {
+    return AppThemePalette(
+      background: background ?? this.background,
+      surface: surface ?? this.surface,
+      card: card ?? this.card,
+      border: border ?? this.border,
+      inputSurface: inputSurface ?? this.inputSurface,
+      textPrimary: textPrimary ?? this.textPrimary,
+      textSecondary: textSecondary ?? this.textSecondary,
+      textMuted: textMuted ?? this.textMuted,
+      accent: accent ?? this.accent,
+      secondaryAccent: secondaryAccent ?? this.secondaryAccent,
+      isYuYuYu: isYuYuYu ?? this.isYuYuYu,
+    );
+  }
+
+  @override
+  AppThemePalette lerp(ThemeExtension<AppThemePalette>? other, double t) {
+    if (other is! AppThemePalette) return this;
+    return AppThemePalette(
+      background: Color.lerp(background, other.background, t)!,
+      surface: Color.lerp(surface, other.surface, t)!,
+      card: Color.lerp(card, other.card, t)!,
+      border: Color.lerp(border, other.border, t)!,
+      inputSurface: Color.lerp(inputSurface, other.inputSurface, t)!,
+      textPrimary: Color.lerp(textPrimary, other.textPrimary, t)!,
+      textSecondary: Color.lerp(textSecondary, other.textSecondary, t)!,
+      textMuted: Color.lerp(textMuted, other.textMuted, t)!,
+      accent: Color.lerp(accent, other.accent, t)!,
+      secondaryAccent: Color.lerp(secondaryAccent, other.secondaryAccent, t)!,
+      isYuYuYu: t < 0.5 ? isYuYuYu : other.isYuYuYu,
+    );
+  }
+}
 
 class AppColors {
   AppColors._();
@@ -108,13 +227,20 @@ class AppColors {
 extension ThemeContext on BuildContext {
   bool get isDark => Theme.of(this).brightness == Brightness.dark;
 
-  Color get appBackground => isDark ? AppColors.darkBackground : AppColors.lightBackground;
-  Color get appSurface => isDark ? AppColors.darkSurface : AppColors.lightSurface;
-  Color get appCard => isDark ? AppColors.darkCard : AppColors.lightCard;
-  Color get appBorder => isDark ? const Color(0x14FFFFFF) : AppColors.lightBorder;
-  Color get appTextPrimary => isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary;
-  Color get appTextSecondary => isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary;
-  Color get appTextMuted => isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted;
-  Color get appInputSurface => isDark ? AppColors.darkSurfaceInput : Colors.white;
+  AppThemePalette get appPalette =>
+      Theme.of(this).extension<AppThemePalette>() ??
+      (isDark ? AppThemePalette.dark : AppThemePalette.light);
+
+  Color get appBackground => appPalette.background;
+  Color get appSurface => appPalette.surface;
+  Color get appCard => appPalette.card;
+  Color get appBorder => appPalette.border;
+  Color get appTextPrimary => appPalette.textPrimary;
+  Color get appTextSecondary => appPalette.textSecondary;
+  Color get appTextMuted => appPalette.textMuted;
+  Color get appInputSurface => appPalette.inputSurface;
+  Color get appAccent => appPalette.accent;
+  Color get appSecondaryAccent => appPalette.secondaryAccent;
+  bool get isYuYuYu => appPalette.isYuYuYu;
 }
 

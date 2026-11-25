@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/utils/date_util.dart';
+import '../../../../core/utils/text_util.dart';
 
 class MediaInfoGrid extends StatelessWidget {
   final Map<String, dynamic> media;
@@ -36,14 +37,18 @@ class MediaInfoGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final format = media['format'] as String? ?? '?';
-    final status = media['status'] as String? ?? '?';
+    final isAnime = media['type'] == 'ANIME';
+    final format = TextUtil.formatMediaFormat(media['format'] as String?);
+    final status = TextUtil.formatMediaStatus(media['status'] as String?, isAnime: isAnime);
     final episodes = media['episodes'] as int?;
     final duration = media['duration'] as int?;
     final chapters = media['chapters'] as int?;
     final volumes = media['volumes'] as int?;
     final season = media['season'] as String?;
     final seasonYear = media['seasonYear'] as int?;
+    final seasonDisplay = season != null
+        ? '${TextUtil.toTitleCase(season)}${seasonYear != null ? ' $seasonYear' : ''}'
+        : null;
     final startDate = DateUtil.formatFuzzyDate(media['startDate'] as Map<String, dynamic>?);
     final endDate = DateUtil.formatFuzzyDate(media['endDate'] as Map<String, dynamic>?);
     final source = _formatSource(media['source'] as String?);
@@ -76,13 +81,13 @@ class MediaInfoGrid extends StatelessWidget {
     }
 
     final items = <Map<String, String>>[
-      {'label': 'Format', 'value': format},
+      {'label': 'Format', 'value': format.isNotEmpty ? format : '?'},
       if (episodes != null) {'label': 'Episodes', 'value': '$episodes eps'},
       if (chapters != null) {'label': 'Chapters', 'value': '$chapters chs'},
       if (volumes != null) {'label': 'Volumes', 'value': '$volumes vols'},
       if (duration != null) {'label': 'Duration', 'value': '$duration mins'},
-      {'label': 'Status', 'value': status},
-      if (season != null) {'label': 'Season', 'value': '$season ${seasonYear ?? ''}'},
+      {'label': 'Status', 'value': status.isNotEmpty ? status : '?'},
+      if (seasonDisplay != null) {'label': 'Season', 'value': seasonDisplay},
       if (startDate.isNotEmpty) {'label': 'Start Date', 'value': startDate},
       if (endDate.isNotEmpty) {'label': 'End Date', 'value': endDate},
       if (mainStudio != null) {'label': 'Main Studio', 'value': mainStudio},
@@ -138,43 +143,48 @@ class MediaInfoGrid extends StatelessWidget {
             ),
           ],
 
-          // Grid rows
+          // Grid rows (exact 2-column layout using actual available width)
           Padding(
             padding: const EdgeInsets.all(14),
-            child: Wrap(
-              spacing: 12,
-              runSpacing: 10,
-              children: items.map((item) {
-                return SizedBox(
-                  width: (MediaQuery.of(context).size.width - 68) / 2,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        item['label']!,
-                        style: TextStyle(
-                          fontFamily: 'Overpass',
-                          fontSize: 11,
-                          color: context.appTextMuted,
-                          fontWeight: FontWeight.w600,
-                        ),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final colWidth = (constraints.maxWidth - 12) / 2;
+                return Wrap(
+                  spacing: 12,
+                  runSpacing: 10,
+                  children: items.map((item) {
+                    return SizedBox(
+                      width: colWidth,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            item['label']!,
+                            style: TextStyle(
+                              fontFamily: 'Overpass',
+                              fontSize: 11,
+                              color: context.appTextMuted,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            item['value']!,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontFamily: 'Overpass',
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: context.appTextPrimary,
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        item['value']!,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontFamily: 'Overpass',
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: context.appTextPrimary,
-                        ),
-                      ),
-                    ],
-                  ),
+                    );
+                  }).toList(),
                 );
-              }).toList(),
+              },
             ),
           ),
         ],

@@ -1,13 +1,18 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../../core/animations/app_motion.dart';
 import '../../../core/constants/api_constants.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/constants/yuyuyu_assets.dart';
 import '../../../core/storage/local_storage_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_provider.dart';
 import '../../../shared/image/app_avatar.dart';
+import '../../../shared/image/app_network_image.dart';
+import '../../../shared/widgets/tactile_scale.dart';
 import '../../auth/presentation/auth_controller.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -26,19 +31,37 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _calculateCacheSize();
   }
 
-  void _calculateCacheSize() {
-    Future.delayed(const Duration(milliseconds: 250), () {
-      if (mounted) {
-        setState(() => _cacheSizeText = '38.4 MB');
+  Future<void> _calculateCacheSize() async {
+    int totalBytes = PaintingBinding.instance.imageCache.currentSizeBytes;
+    try {
+      final cacheDir = Directory('${Directory.systemTemp.path}/libCachedImageData');
+      if (await cacheDir.exists()) {
+        await for (final entity in cacheDir.list(recursive: true, followLinks: false)) {
+          if (entity is File) {
+            totalBytes += await entity.length();
+          }
+        }
       }
-    });
+    } catch (_) {}
+
+    if (mounted) {
+      final mb = (totalBytes / (1024 * 1024)).toStringAsFixed(1);
+      setState(() => _cacheSizeText = '$mb MB');
+    }
   }
 
-  void _clearCache() {
+  Future<void> _clearCache() async {
     HapticFeedback.mediumImpact();
     PaintingBinding.instance.imageCache.clear();
     PaintingBinding.instance.imageCache.clearLiveImages();
-    setState(() => _cacheSizeText = '0.0 MB');
+    try {
+      final cacheDir = Directory('${Directory.systemTemp.path}/libCachedImageData');
+      if (await cacheDir.exists()) {
+        await cacheDir.delete(recursive: true);
+      }
+    } catch (_) {}
+    await _calculateCacheSize();
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: const Row(
@@ -101,14 +124,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget build(BuildContext context) {
     final auth = ref.watch(authControllerProvider);
     final themeMode = ref.watch(themeModeProvider);
+    final activeHeroine = ref.watch(yuyuyuHeroineProvider);
     final localStorage = ref.watch(localStorageServiceProvider);
     final isAuthenticated = auth is Authenticated;
     final user = isAuthenticated ? auth.user : null;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    final cardBg = isDark ? AppColors.darkSurface : Colors.white;
-    final cardBorder = isDark ? Colors.white.withValues(alpha: 0.07) : AppColors.lightBorder;
-    final textSecondary = isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary;
+    final cardBg = context.appSurface;
+    final cardBorder = context.appBorder;
+    final textSecondary = context.appTextSecondary;
 
     return Scaffold(
       appBar: AppBar(
@@ -289,6 +313,100 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ),
                   ],
                 ),
+                const SizedBox(height: 10),
+                // Special Anime Theme Showcase Card: Yuuki Yuuna wa Yuusha de Aru
+                _buildYuYuYuThemeCard(
+                  selected: themeMode == AppThemeMode.yuyuyu,
+                  heroine: activeHeroine,
+                ),
+                // Hero Club Companion Picker (visible when YuYuYu theme is active)
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 240),
+                  curve: Curves.easeOutCubic,
+                  child: themeMode == AppThemeMode.yuyuyu
+                      ? Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const SizedBox(height: 14),
+                            Text(
+                              'Hero Club Companion & Accent',
+                              style: TextStyle(
+                                fontFamily: 'Overpass',
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w800,
+                                color: context.appTextPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            SizedBox(
+                              height: 92,
+                              child: ListView.separated(
+                                scrollDirection: Axis.horizontal,
+                                itemCount: YuYuYuAssets.heroines.length,
+                                separatorBuilder: (context, index) => const SizedBox(width: 8),
+                                itemBuilder: (context, index) {
+                                  final h = YuYuYuAssets.heroines[index];
+                                  final isChosen = h.id == activeHeroine.id;
+                                  return TactileScale(
+                                    onTap: () {
+                                      HapticFeedback.selectionClick();
+                                      ref.read(yuyuyuHeroineProvider.notifier).setHeroine(h);
+                                    },
+                                    child: AnimatedContainer(
+                                      duration: const Duration(milliseconds: 200),
+                                      width: 78,
+                                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                                      decoration: BoxDecoration(
+                                        color: isChosen
+                                            ? h.accentColor.withValues(alpha: 0.16)
+                                            : context.appInputSurface,
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: isChosen ? h.accentColor : context.appBorder,
+                                          width: isChosen ? 1.8 : 1,
+                                        ),
+                                      ),
+                                      child: Column(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Container(
+                                            padding: const EdgeInsets.all(1.5),
+                                            decoration: BoxDecoration(
+                                              shape: BoxShape.circle,
+                                              border: Border.all(color: h.accentColor, width: 1.5),
+                                            ),
+                                            child: ClipOval(
+                                              child: AppNetworkImage(
+                                                imageUrl: h.imageUrl,
+                                                width: 44,
+                                                height: 44,
+                                                fit: BoxFit.cover,
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(height: 5),
+                                          Text(
+                                            h.name.split(' ').first,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              fontFamily: 'Overpass',
+                                              fontSize: 10.5,
+                                              fontWeight: isChosen ? FontWeight.w900 : FontWeight.w700,
+                                              color: isChosen ? h.accentColor : context.appTextPrimary,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ).animateEntrance(index: index, horizontal: true);
+                                },
+                              ),
+                            ),
+                          ],
+                        )
+                      : const SizedBox.shrink(),
+                ),
                 const SizedBox(height: 16),
                 Divider(color: cardBorder, height: 1),
                 const SizedBox(height: 14),
@@ -337,43 +455,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
           const SizedBox(height: 22),
 
-          // 3. CONTENT PREFERENCES
-          _buildSectionHeader('CONTENT PREFERENCES'),
-          Container(
-            decoration: BoxDecoration(
-              color: cardBg,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: cardBorder),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.03),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: SwitchListTile(
-              secondary: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: AppColors.brandBlue.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(Icons.explicit_outlined, color: AppColors.brandBlue, size: 20),
-              ),
-              title: const Text('18+ Adult Content', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
-              subtitle: Text(
-                'Show mature anime, manga, and adult tags in search & shelves',
-                style: TextStyle(fontSize: 11.5, color: textSecondary),
-              ),
-              value: localStorage.displayAdultContent,
-              activeTrackColor: AppColors.brandBlue,
-              onChanged: (val) => setState(() => localStorage.displayAdultContent = val),
-            ),
-          ),
-          const SizedBox(height: 22),
-
-          // 4. STORAGE & CACHE
+          // 3. STORAGE & CACHE
           _buildSectionHeader('STORAGE & CACHE'),
           Container(
             padding: const EdgeInsets.all(16),
@@ -490,12 +572,147 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       padding: const EdgeInsets.only(left: 4, bottom: 8),
       child: Text(
         title,
-        style: const TextStyle(
+        style: TextStyle(
           fontFamily: 'Overpass',
           fontSize: 11.5,
           fontWeight: FontWeight.w900,
-          color: AppColors.brandBlue,
+          color: context.appAccent,
           letterSpacing: 0.9,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildYuYuYuThemeCard({
+    required bool selected,
+    required YuYuYuHeroine heroine,
+  }) {
+    final accent = heroine.accentColor;
+    return TactileScale(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        ref.read(themeModeProvider.notifier).setThemeMode(AppThemeMode.yuyuyu);
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        height: 78,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: selected ? accent : context.appBorder,
+            width: selected ? 2 : 1,
+          ),
+          boxShadow: selected
+              ? [
+                  BoxShadow(
+                    color: accent.withValues(alpha: 0.25),
+                    blurRadius: 10,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            const AppNetworkImage(
+              imageUrl: YuYuYuAssets.bannerUrl,
+              fit: BoxFit.cover,
+              borderRadius: BorderRadius.zero,
+            ),
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                  colors: [
+                    YuYuYuAssets.twilightBg.withValues(alpha: 0.92),
+                    YuYuYuAssets.twilightSurface.withValues(alpha: 0.78),
+                    YuYuYuAssets.twilightBg.withValues(alpha: 0.55),
+                  ],
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(1.5),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: accent, width: 2),
+                    ),
+                    child: ClipOval(
+                      child: AppNetworkImage(
+                        imageUrl: heroine.imageUrl,
+                        width: 44,
+                        height: 44,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                'YuYuYu • Mankai',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontFamily: 'Overpass',
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 13.5,
+                                  color: selected ? accent : Colors.white,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 5),
+                            Icon(Icons.local_florist_rounded, size: 13.5, color: accent),
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Sakura Twilight Theme',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontFamily: 'Overpass',
+                            fontSize: 10.5,
+                            color: Colors.white.withValues(alpha: 0.82),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: selected ? accent : Colors.white.withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      selected ? 'Active' : 'Apply',
+                      style: const TextStyle(
+                        fontFamily: 'Overpass',
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -509,6 +726,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     required bool selected,
     required bool isDark,
   }) {
+    final activeAccent = context.appAccent;
     return Expanded(
       child: GestureDetector(
         onTap: () {
@@ -520,11 +738,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
           decoration: BoxDecoration(
             color: selected
-                ? AppColors.brandBlue.withValues(alpha: 0.12)
-                : (isDark ? AppColors.darkBackground : const Color(0xFFF8FAFC)),
+                ? activeAccent.withValues(alpha: 0.12)
+                : context.appInputSurface,
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
-              color: selected ? AppColors.brandBlue : (isDark ? Colors.white10 : AppColors.lightBorder),
+              color: selected ? activeAccent : context.appBorder,
               width: selected ? 2 : 1,
             ),
           ),
@@ -534,7 +752,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               Icon(
                 icon,
                 size: 24,
-                color: selected ? AppColors.brandBlue : (isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary),
+                color: selected ? activeAccent : context.appTextSecondary,
               ),
               const SizedBox(height: 6),
               Text(
@@ -543,7 +761,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   fontFamily: 'Overpass',
                   fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
                   fontSize: 12.5,
-                  color: selected ? AppColors.brandBlue : (isDark ? Colors.white : AppColors.lightTextPrimary),
+                  color: selected ? activeAccent : context.appTextPrimary,
                 ),
               ),
               const SizedBox(height: 2),
@@ -551,7 +769,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 subtitle,
                 style: TextStyle(
                   fontSize: 10,
-                  color: selected ? AppColors.brandBlue.withValues(alpha: 0.8) : (isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
+                  color: selected ? activeAccent.withValues(alpha: 0.85) : context.appTextMuted,
                 ),
               ),
             ],

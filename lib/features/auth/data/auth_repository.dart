@@ -31,7 +31,6 @@ class AuthRepository {
         bannerImage
         options {
           titleLanguage
-          displayAdultContent
           profileColor
         }
         mediaListOptions {
@@ -54,7 +53,6 @@ class AuthRepository {
     _localStorage.setInt(LocalStorageService.keyViewerId, user.id);
     _localStorage.titleLanguage = user.titleLanguage;
     _localStorage.scoreFormat = user.scoreFormat;
-    _localStorage.displayAdultContent = user.displayAdultContent;
 
     return user;
   }

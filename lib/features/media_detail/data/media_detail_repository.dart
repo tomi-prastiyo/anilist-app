@@ -188,6 +188,16 @@ class MediaDetailRepository {
           repeat
           notes
           private
+          startedAt {
+            year
+            month
+            day
+          }
+          completedAt {
+            year
+            month
+            day
+          }
         }
       }
     }

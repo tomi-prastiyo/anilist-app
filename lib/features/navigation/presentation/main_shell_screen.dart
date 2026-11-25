@@ -28,42 +28,51 @@ class _MainShellScreenState extends State<MainShellScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: context.appBackground,
-      body: IndexedStack(
-        index: _currentIndex,
-        children: _screens,
+      body: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 200),
+        switchInCurve: Curves.easeOutCubic,
+        child: KeyedSubtree(
+          key: ValueKey(_currentIndex),
+          child: _screens[_currentIndex],
+        ),
       ),
       bottomNavigationBar: Container(
         color: context.appBackground,
         child: SafeArea(
           top: false,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
             child: Container(
-              height: 60,
+              height: 56,
               decoration: BoxDecoration(
-                color: context.isDark ? null : Colors.white,
+                color: context.isYuYuYu ? null : (context.isDark ? null : Colors.white),
                 gradient: context.isDark
-                    ? const LinearGradient(
+                    ? LinearGradient(
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
-                        colors: [
-                          Color(0xFF172334),
-                          Color(0xFF121B28),
-                        ],
+                        colors: context.isYuYuYu
+                            ? [
+                                context.appCard,
+                                context.appSurface,
+                              ]
+                            : const [
+                                Color(0xFF172334),
+                                Color(0xFF121B28),
+                              ],
                       )
                     : null,
-                borderRadius: BorderRadius.circular(24),
+                borderRadius: BorderRadius.circular(20),
                 border: Border.all(
-                  color: context.isDark ? Colors.white.withValues(alpha: 0.09) : AppColors.lightBorder,
+                  color: context.isDark ? context.appBorder : AppColors.lightBorder,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.45),
+                    color: Colors.black.withValues(alpha: context.isDark ? 0.45 : 0.10),
                     blurRadius: 18,
                     offset: const Offset(0, 6),
                   ),
                   BoxShadow(
-                    color: AppColors.brandBlue.withValues(alpha: 0.05),
+                    color: context.appAccent.withValues(alpha: 0.08),
                     blurRadius: 12,
                     offset: const Offset(0, 0),
                   ),
@@ -88,58 +97,62 @@ class _MainShellScreenState extends State<MainShellScreen> {
 
   Widget _buildNavItem(int index, IconData outlineIcon, IconData activeIcon, String label) {
     final isSelected = _currentIndex == index;
+    final activeColor = context.appAccent;
 
     return Expanded(
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () {
-          if (_currentIndex != index) {
-            HapticFeedback.lightImpact();
-            setState(() => _currentIndex = index);
-          }
-        },
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              padding: EdgeInsets.symmetric(
-                horizontal: isSelected ? 12 : 8,
-                vertical: 4,
-              ),
-              decoration: isSelected
-                  ? BoxDecoration(
-                      color: AppColors.brandBlue.withValues(alpha: 0.14),
-                      borderRadius: BorderRadius.circular(12),
-                    )
-                  : null,
-              child: Icon(
-                isSelected ? activeIcon : outlineIcon,
-                key: ValueKey<bool>(isSelected),
-                size: 21,
-                color: isSelected ? AppColors.brandBlue : context.appTextSecondary,
-              ),
-            ),
-            const SizedBox(height: 2),
-            if (isSelected)
-              Container(
-                width: 4,
-                height: 4,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: AppColors.brandBlue,
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.brandBlue,
-                      blurRadius: 6,
-                      spreadRadius: 1,
-                    ),
-                  ],
+      child: Semantics(
+        label: label,
+        selected: isSelected,
+        button: true,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () {
+            if (_currentIndex != index) {
+              HapticFeedback.lightImpact();
+              setState(() => _currentIndex = index);
+            }
+          },
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOutCubic,
+                padding: EdgeInsets.symmetric(
+                  horizontal: isSelected ? 12 : 8,
+                  vertical: 3,
                 ),
-              )
-            else
-              const SizedBox(height: 4),
-          ],
+                decoration: isSelected
+                    ? BoxDecoration(
+                        color: activeColor.withValues(alpha: 0.16),
+                        borderRadius: BorderRadius.circular(12),
+                      )
+                    : null,
+                child: AnimatedScale(
+                  scale: isSelected ? 1.08 : 1.0,
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeOutBack,
+                  child: Icon(
+                    isSelected ? activeIcon : outlineIcon,
+                    key: ValueKey<bool>(isSelected),
+                    size: 20,
+                    color: isSelected ? activeColor : context.appTextSecondary,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                label,
+                maxLines: 1,
+                style: TextStyle(
+                  fontFamily: 'Overpass',
+                  fontSize: 9.5,
+                  fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                  color: isSelected ? activeColor : context.appTextMuted,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

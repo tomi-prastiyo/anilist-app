@@ -26,6 +26,17 @@ class MediaListRepository {
             progressVolumes
             repeat
             notes
+            private
+            startedAt {
+              year
+              month
+              day
+            }
+            completedAt {
+              year
+              month
+              day
+            }
             updatedAt
             media {
               id
@@ -42,7 +53,9 @@ class MediaListRepository {
               chapters
               volumes
               averageScore
+              bannerImage
               coverImage {
+                extraLarge
                 large
                 medium
               }
@@ -67,7 +80,9 @@ class MediaListRepository {
       $progressVolumes: Int,
       $repeat: Int,
       $notes: String,
-      $isPrivate: Boolean
+      $isPrivate: Boolean,
+      $startedAt: FuzzyDateInput,
+      $completedAt: FuzzyDateInput
     ) {
       SaveMediaListEntry(
         id: $id,
@@ -78,7 +93,9 @@ class MediaListRepository {
         progressVolumes: $progressVolumes,
         repeat: $repeat,
         notes: $notes,
-        private: $isPrivate
+        private: $isPrivate,
+        startedAt: $startedAt,
+        completedAt: $completedAt
       ) {
         id
         status
@@ -87,6 +104,17 @@ class MediaListRepository {
         progressVolumes
         repeat
         notes
+        private
+        startedAt {
+          year
+          month
+          day
+        }
+        completedAt {
+          year
+          month
+          day
+        }
         updatedAt
       }
     }
@@ -127,6 +155,8 @@ class MediaListRepository {
     int? repeat,
     String? notes,
     bool? isPrivate,
+    Map<String, int>? startedAt,
+    Map<String, int>? completedAt,
   }) async {
     final Map<String, dynamic> vars = {'mediaId': mediaId};
     if (id != null) vars['id'] = id;
@@ -137,6 +167,8 @@ class MediaListRepository {
     if (repeat != null) vars['repeat'] = repeat;
     if (notes != null) vars['notes'] = notes;
     if (isPrivate != null) vars['isPrivate'] = isPrivate;
+    if (startedAt != null) vars['startedAt'] = startedAt;
+    if (completedAt != null) vars['completedAt'] = completedAt;
 
     final response = await _apiClient.postGraphQL(
       query: saveMediaListEntryMutation,

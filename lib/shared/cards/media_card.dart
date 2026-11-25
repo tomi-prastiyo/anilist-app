@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
-import '../../core/constants/app_spacing.dart';
+import '../../core/theme/app_typography.dart';
 import '../../core/utils/score_util.dart';
 import '../../core/utils/text_util.dart';
 import '../badges/format_chip.dart';
 import '../image/app_network_image.dart';
+import '../widgets/media_progress_bar.dart';
+import '../widgets/progress_increment_pills.dart';
+import '../widgets/tactile_scale.dart';
 
 enum MediaCardMode { grid, list, compact }
 
@@ -13,13 +16,16 @@ class MediaCard extends StatelessWidget {
   final MediaCardMode mode;
   final VoidCallback? onTap;
   final VoidCallback? onIncrementProgress;
+  final VoidCallback? onIncrementVolume;
   final VoidCallback? onUpdateScore;
   final int? userProgress;
+  final int? userVolumeProgress;
   final double? userScore;
   final String scoreFormat;
   final String titlePreference;
   final Color? accentColor;
   final String? listStatus;
+  final String? inListBadge;
 
   const MediaCard({
     super.key,
@@ -27,13 +33,16 @@ class MediaCard extends StatelessWidget {
     this.mode = MediaCardMode.list,
     this.onTap,
     this.onIncrementProgress,
+    this.onIncrementVolume,
     this.onUpdateScore,
     this.userProgress,
+    this.userVolumeProgress,
     this.userScore,
     this.scoreFormat = 'POINT_100',
     this.titlePreference = 'ROMAJI',
     this.accentColor,
     this.listStatus,
+    this.inListBadge,
   });
 
   @override
@@ -51,15 +60,16 @@ class MediaCard extends StatelessWidget {
   /// Model 1: Neo-Card Detailed (Matching Home Screen Progress Cards)
   Widget _buildNeoCard(BuildContext context) {
     final title = TextUtil.getPreferredTitle(media['title'], preference: titlePreference);
-    final coverUrl = media['coverImage']?['large'] ?? media['coverImage']?['medium'];
+    final coverUrl = media['coverImage']?['extraLarge'] ??
+        media['coverImage']?['large'] ??
+        media['coverImage']?['medium'];
+    final bannerUrl = media['bannerImage'] as String?;
+    final backdrop = bannerUrl ?? coverUrl;
     final format = media['format'] as String? ?? 'TV';
     final episodes = media['episodes'] as int?;
     final chapters = media['chapters'] as int?;
     final totalUnits = episodes ?? chapters;
     final progress = userProgress ?? 0;
-    final progressPercent = totalUnits != null && totalUnits > 0
-        ? (progress / totalUnits).clamp(0.0, 1.0)
-        : null;
 
     final color = accentColor ?? AppColors.brandBlue;
 
@@ -84,59 +94,90 @@ class MediaCard extends StatelessWidget {
     final year = media['seasonYear'] ?? media['startDate']?['year'];
     final rawGenres = (media['genres'] as List?)?.cast<String>() ?? [];
 
-    return GestureDetector(
+    return TactileScale(
       onTap: onTap,
       child: Container(
         decoration: BoxDecoration(
           color: context.appSurface,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(color: context.appBorder),
           boxShadow: [
             BoxShadow(
               color: context.isDark ? Colors.black.withValues(alpha: 0.25) : Colors.black.withValues(alpha: 0.04),
-              blurRadius: 6,
+              blurRadius: 8,
               offset: const Offset(0, 2),
             ),
           ],
         ),
-        padding: const EdgeInsets.all(10),
-        child: Row(
+        clipBehavior: Clip.antiAlias,
+        child: Stack(
           children: [
-            // Cover Image with Format Pill
-            Stack(
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
+            if (backdrop != null)
+              Positioned.fill(
+                child: Opacity(
+                  opacity: context.isDark ? 0.14 : 0.07,
                   child: AppNetworkImage(
-                    imageUrl: coverUrl,
-                    width: 62,
-                    height: 94,
+                    imageUrl: backdrop,
                     fit: BoxFit.cover,
+                    borderRadius: BorderRadius.zero,
                   ),
                 ),
-                Positioned(
-                  top: 3,
-                  left: 3,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1.5),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.75),
-                      borderRadius: BorderRadius.circular(3),
-                    ),
-                    child: Text(
-                      format,
-                      style: const TextStyle(
-                        fontFamily: 'Overpass',
-                        fontSize: 8,
-                        fontWeight: FontWeight.w900,
-                        color: Colors.white,
-                      ),
-                    ),
+              ),
+            Positioned.fill(
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
+                    colors: [
+                      context.appSurface.withValues(alpha: 0.94),
+                      context.appSurface.withValues(alpha: 0.76),
+                    ],
                   ),
                 ),
-              ],
+              ),
             ),
-            const SizedBox(width: 10),
+            Padding(
+              padding: const EdgeInsets.all(10),
+              child: IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Cover Image with Format Pill
+                    Stack(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(9),
+                          child: AppNetworkImage(
+                            imageUrl: coverUrl,
+                            width: 72,
+                            height: 102,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      Positioned(
+                        top: 3,
+                        left: 3,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1.5),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.75),
+                            borderRadius: BorderRadius.circular(3),
+                          ),
+                          child: Text(
+                            format,
+                            style: const TextStyle(
+                              fontFamily: 'Overpass',
+                              fontSize: 8,
+                              fontWeight: FontWeight.w900,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(width: 10),
 
             // Details Column
             Expanded(
@@ -148,10 +189,13 @@ class MediaCard extends StatelessWidget {
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // Top Row: Global Average Score + Status Pill
-                            Row(
+                            // Top Row: Global Average Score + Status Pill (Wrap prevents collision)
+                            Wrap(
+                              spacing: 6,
+                              runSpacing: 4,
+                              crossAxisAlignment: WrapCrossAlignment.center,
                               children: [
-                                if (avgScore != null && avgScore > 0) ...[
+                                if (avgScore != null && avgScore > 0)
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                     decoration: BoxDecoration(
@@ -180,8 +224,7 @@ class MediaCard extends StatelessWidget {
                                         const SizedBox(width: 3),
                                         Text(
                                           '$avgScore%',
-                                          style: TextStyle(
-                                            fontFamily: 'Overpass',
+                                          style: AppTypography.style(
                                             fontSize: 10,
                                             fontWeight: FontWeight.w900,
                                             color: avgScore >= 75
@@ -192,24 +235,40 @@ class MediaCard extends StatelessWidget {
                                       ],
                                     ),
                                   ),
-                                  const SizedBox(width: 6),
-                                ],
                                 if (status != null)
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
                                     decoration: BoxDecoration(
                                       color: status == 'RELEASING'
                                           ? const Color(0xFF46C07B).withValues(alpha: 0.12)
-                                          : AppColors.brandBlue.withValues(alpha: 0.12),
+                                          : context.appAccent.withValues(alpha: 0.12),
                                       borderRadius: BorderRadius.circular(4),
                                     ),
                                     child: Text(
-                                      status == 'RELEASING' ? 'AIRING' : status,
-                                      style: TextStyle(
-                                        fontFamily: 'Overpass',
+                                      TextUtil.formatMediaStatus(status, isAnime: !isManga).toUpperCase(),
+                                      style: AppTypography.style(
                                         fontSize: 8.5,
                                         fontWeight: FontWeight.w800,
-                                        color: status == 'RELEASING' ? const Color(0xFF46C07B) : AppColors.brandBlue,
+                                        color: status == 'RELEASING' ? const Color(0xFF46C07B) : context.appAccent,
+                                      ),
+                                    ),
+                                  ),
+                                if (inListBadge != null && inListBadge!.isNotEmpty)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                    decoration: BoxDecoration(
+                                      color: _badgeColorForListStatus(inListBadge!).withValues(alpha: 0.16),
+                                      borderRadius: BorderRadius.circular(4),
+                                      border: Border.all(
+                                        color: _badgeColorForListStatus(inListBadge!).withValues(alpha: 0.45),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      _formatInListShort(inListBadge!),
+                                      style: AppTypography.style(
+                                        fontSize: 8.5,
+                                        fontWeight: FontWeight.w800,
+                                        color: _badgeColorForListStatus(inListBadge!),
                                       ),
                                     ),
                                   ),
@@ -220,12 +279,12 @@ class MediaCard extends StatelessWidget {
                             // Title
                             Text(
                               title,
-                              maxLines: 1,
+                              maxLines: 2,
                               overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontFamily: 'Overpass',
+                              style: AppTypography.style(
                                 fontWeight: FontWeight.w800,
                                 fontSize: 13,
+                                height: 1.16,
                                 color: context.appTextPrimary,
                               ),
                             ),
@@ -370,12 +429,12 @@ class MediaCard extends StatelessWidget {
                               decoration: BoxDecoration(
                                 color: userScore != null && userScore! > 0
                                     ? const Color(0xFFE5A158).withValues(alpha: 0.16)
-                                    : AppColors.darkSurfaceInput,
+                                    : context.appInputSurface,
                                 borderRadius: BorderRadius.circular(5),
                                 border: Border.all(
                                   color: userScore != null && userScore! > 0
                                       ? const Color(0xFFE5A158).withValues(alpha: 0.4)
-                                      : Colors.white.withValues(alpha: 0.08),
+                                      : context.appBorder,
                                 ),
                               ),
                               child: Row(
@@ -388,7 +447,7 @@ class MediaCard extends StatelessWidget {
                                     size: 13,
                                     color: userScore != null && userScore! > 0
                                         ? const Color(0xFFE5A158)
-                                        : AppColors.darkTextMuted,
+                                        : context.appTextMuted,
                                   ),
                                   const SizedBox(width: 3),
                                   Text(
@@ -400,8 +459,8 @@ class MediaCard extends StatelessWidget {
                                       fontSize: 10,
                                       fontWeight: FontWeight.w800,
                                       color: userScore != null && userScore! > 0
-                                        ? const Color(0xFFE5A158)
-                                        : AppColors.darkTextMuted,
+                                          ? const Color(0xFFE5A158)
+                                          : context.appTextMuted,
                                     ),
                                   ),
                                 ],
@@ -415,20 +474,24 @@ class MediaCard extends StatelessWidget {
                       // Title
                       Text(
                         title,
-                        maxLines: 1,
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontFamily: 'Overpass',
+                        style: AppTypography.style(
                           fontWeight: FontWeight.w800,
                           fontSize: 12.5,
+                          height: 1.15,
                           color: context.appTextPrimary,
                         ),
                       ),
-                      const SizedBox(height: 1),
+                      const SizedBox(height: 2),
 
                       // Subtitle
                       Text(
-                        '$unitLabel $progress of ${totalUnits ?? '?'}',
+                        (isManga && userVolumeProgress != null)
+                            ? 'Ch $progress/${totalUnits ?? '?'} • Vol $userVolumeProgress/${media['volumes'] ?? '?'}'
+                            : '$unitLabel $progress of ${totalUnits ?? '?'}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontFamily: 'Overpass',
                           fontSize: 10.5,
@@ -439,50 +502,348 @@ class MediaCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 6),
 
-                  // Progress Bar + Quick Increment (+1)
+                  // Progress Bar + Quick Increment (+1 / +Ch & +Vol)
                   Row(
                     children: [
                       Expanded(
-                        child: ClipRRect(
+                        child: MediaProgressBar(
+                          progress: progress,
+                          total: totalUnits,
+                          color: color,
+                        ),
+                      ),
+                        if (onIncrementProgress != null) ...[
+                          const SizedBox(width: 8),
+                          ProgressIncrementPills(
+                            accentColor: color,
+                            primaryTextColor: color.computeLuminance() > 0.55
+                                ? AppColors.darkBackground
+                                : Colors.white,
+                            onIncrementPrimary: onIncrementProgress!,
+                            onIncrementVolume: onIncrementVolume,
+                          ),
+                        ],
+                      ],
+                    ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    ),
+  ),
+  );
+  }
+
+  Widget _buildCompactCard(BuildContext context) {
+    final title = TextUtil.getPreferredTitle(media['title'], preference: titlePreference);
+    final coverUrl = media['coverImage']?['medium'] ?? media['coverImage']?['large'];
+    final format = media['format'] as String?;
+    final episodes = media['episodes'] as int? ?? media['chapters'] as int?;
+    final color = accentColor ?? AppColors.brandBlue;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: context.appSurface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: context.appBorder),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          child: Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: AppNetworkImage(
+                  imageUrl: coverUrl,
+                  width: 40,
+                  height: 54,
+                  fit: BoxFit.cover,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.style(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: context.appTextPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Row(
+                      children: [
+                        if (format != null) ...[
+                          Text(
+                            format,
+                            style: TextStyle(
+                              fontFamily: 'Overpass',
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w700,
+                              color: context.appTextMuted,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                        ],
+                        if (userProgress != null)
+                          Expanded(
+                            child: Text(
+                              (userVolumeProgress != null &&
+                                      (media['chapters'] != null || media['type'] == 'MANGA'))
+                                  ? 'Ch $userProgress/${episodes ?? '?'} • Vol $userVolumeProgress/${media['volumes'] ?? '?'}'
+                                  : 'Prog: $userProgress / ${episodes ?? '?'}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontFamily: 'Overpass',
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: context.appTextSecondary,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: onUpdateScore,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: userScore != null && userScore! > 0
+                        ? const Color(0xFFE5A158).withValues(alpha: 0.16)
+                        : context.appInputSurface,
+                    borderRadius: BorderRadius.circular(5),
+                    border: Border.all(
+                      color: userScore != null && userScore! > 0
+                          ? const Color(0xFFE5A158).withValues(alpha: 0.35)
+                          : context.appBorder,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.star_rounded,
+                        size: 12,
+                        color: userScore != null && userScore! > 0 ? const Color(0xFFE5A158) : context.appTextMuted,
+                      ),
+                      const SizedBox(width: 3),
+                      Text(
+                        userScore != null && userScore! > 0
+                            ? ScoreUtil.formatScore(userScore, format: scoreFormat)
+                            : '-',
+                        style: TextStyle(
+                          fontFamily: 'Overpass',
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          color: userScore != null && userScore! > 0 ? const Color(0xFFE5A158) : context.appTextMuted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              if (onIncrementProgress != null) ...[
+                const SizedBox(width: 6),
+                ProgressIncrementPills(
+                  accentColor: color,
+                  primaryTextColor: color.computeLuminance() > 0.55
+                      ? AppColors.darkBackground
+                      : Colors.white,
+                  compact: true,
+                  onIncrementPrimary: onIncrementProgress!,
+                  onIncrementVolume: onIncrementVolume,
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGridCard(BuildContext context) {
+    final title = TextUtil.getPreferredTitle(media['title'], preference: titlePreference);
+    final coverUrl = media['coverImage']?['extraLarge'] ??
+        media['coverImage']?['large'] ??
+        media['coverImage']?['medium'];
+    final format = media['format'] as String?;
+    final color = accentColor ?? context.appAccent;
+
+    return TactileScale(
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(11),
+          border: Border.all(color: context.appBorder),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: context.isDark ? 0.25 : 0.08),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            AppNetworkImage(
+              imageUrl: coverUrl,
+              width: double.infinity,
+              height: double.infinity,
+              borderRadius: BorderRadius.zero,
+            ),
+            // Smooth bottom artwork overlay so poster fills 100% of card
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  stops: const [0.0, 0.42, 1.0],
+                  colors: [
+                    Colors.black.withValues(alpha: 0.20),
+                    Colors.transparent,
+                    Colors.black.withValues(alpha: 0.94),
+                  ],
+                ),
+              ),
+            ),
+            // Non-overlapping Top Badges Row
+            if (format != null ||
+                (userScore != null && userScore! > 0) ||
+                (media['averageScore'] != null && (media['averageScore'] as num) > 0))
+              Positioned(
+                top: 7,
+                left: 7,
+                right: 7,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    if (format != null)
+                      Flexible(
+                        child: FormatChip(format: format, fontSize: 8.5),
+                      )
+                    else
+                      const SizedBox.shrink(),
+                    if ((userScore != null && userScore! > 0) ||
+                        (media['averageScore'] != null && (media['averageScore'] as num) > 0)) ...[
+                      const SizedBox(width: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 5.5, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.82),
                           borderRadius: BorderRadius.circular(4),
-                          child: LinearProgressIndicator(
-                            value: progressPercent,
-                            backgroundColor: context.appInputSurface,
-                            valueColor: AlwaysStoppedAnimation<Color>(color),
-                            minHeight: 6,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.star_rounded,
+                              size: 11,
+                              color: userScore != null && userScore! > 0
+                                  ? const Color(0xFFE5A158)
+                                  : ((media['averageScore'] as num) >= 75
+                                      ? const Color(0xFF46C07B)
+                                      : const Color(0xFFE5A158)),
+                            ),
+                            const SizedBox(width: 2),
+                            Text(
+                              userScore != null && userScore! > 0
+                                  ? ScoreUtil.formatScore(userScore, format: scoreFormat)
+                                  : '${(media['averageScore'] as num).toInt()}%',
+                              style: AppTypography.style(
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w800,
+                                color: userScore != null && userScore! > 0
+                                    ? Colors.white
+                                    : ((media['averageScore'] as num) >= 75
+                                        ? const Color(0xFF46C07B)
+                                        : Colors.white),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            // Bottom title & optional quick +1 button
+            Positioned(
+              left: 8,
+              right: 8,
+              bottom: 8,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (inListBadge != null && inListBadge!.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 5.5, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: _badgeColorForListStatus(inListBadge!).withValues(alpha: 0.90),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          _formatInListShort(inListBadge!),
+                          style: AppTypography.style(
+                            fontSize: 8.5,
+                            fontWeight: FontWeight.w900,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTypography.style(
+                            fontSize: 12,
+                            height: 1.16,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                            shadows: const [
+                              Shadow(color: Colors.black87, blurRadius: 4, offset: Offset(0, 1)),
+                            ],
                           ),
                         ),
                       ),
                       if (onIncrementProgress != null) ...[
-                        const SizedBox(width: 8),
-                        InkWell(
-                          onTap: onIncrementProgress,
-                          borderRadius: BorderRadius.circular(8),
-                          child: Container(
-                            width: 30,
-                            height: 30,
-                            decoration: BoxDecoration(
-                              color: color,
-                              borderRadius: BorderRadius.circular(8),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: color.withValues(alpha: 0.35),
-                                  blurRadius: 6,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
-                            ),
-                            alignment: Alignment.center,
-                            child: Text(
-                              '+1',
-                              style: TextStyle(
-                                fontFamily: 'Overpass',
-                                fontWeight: FontWeight.w900,
-                                fontSize: 12.5,
-                                color: isManga ? Colors.white : AppColors.darkBackground,
-                              ),
-                            ),
-                          ),
+                        const SizedBox(width: 6),
+                        ProgressIncrementPills(
+                          accentColor: color,
+                          primaryTextColor: color.computeLuminance() > 0.55
+                              ? AppColors.darkBackground
+                              : Colors.white,
+                          compact: true,
+                          stacked: onIncrementVolume != null,
+                          onIncrementPrimary: onIncrementProgress!,
+                          onIncrementVolume: onIncrementVolume,
                         ),
                       ],
                     ],
@@ -496,249 +857,41 @@ class MediaCard extends StatelessWidget {
     );
   }
 
-  Widget _buildCompactCard(BuildContext context) {
-    final title = TextUtil.getPreferredTitle(media['title'], preference: titlePreference);
-    final coverUrl = media['coverImage']?['medium'] ?? media['coverImage']?['large'];
-    final format = media['format'] as String?;
-    final episodes = media['episodes'] as int? ?? media['chapters'] as int?;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: context.appSurface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: context.appBorder),
-      ),
-      child: ListTile(
-        onTap: onTap,
-        dense: true,
-        contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.p12, vertical: 2),
-        leading: ClipRRect(
-          borderRadius: BorderRadius.circular(4),
-          child: AppNetworkImage(
-            imageUrl: coverUrl,
-            width: 38,
-            height: 50,
-            fit: BoxFit.cover,
-          ),
-        ),
-        title: Text(
-          title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontFamily: 'Overpass',
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
-            color: context.appTextPrimary,
-          ),
-        ),
-        subtitle: Row(
-          children: [
-            if (format != null) ...[
-              Text(
-                format,
-                style: TextStyle(
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w600,
-                  color: context.appTextMuted,
-                ),
-              ),
-              const SizedBox(width: 6),
-            ],
-            if (userProgress != null)
-              Text(
-                'Prog: $userProgress / ${episodes ?? '?'}',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500,
-                  color: context.appTextSecondary,
-                ),
-              ),
-          ],
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Personal Score Badge
-            GestureDetector(
-              onTap: onUpdateScore,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                decoration: BoxDecoration(
-                  color: userScore != null && userScore! > 0
-                      ? const Color(0xFFE5A158).withValues(alpha: 0.16)
-                      : context.appInputSurface,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.star_rounded,
-                      size: 12,
-                      color: userScore != null && userScore! > 0 ? const Color(0xFFE5A158) : context.appTextMuted,
-                    ),
-                    const SizedBox(width: 2),
-                    Text(
-                      userScore != null && userScore! > 0
-                          ? ScoreUtil.formatScore(userScore, format: scoreFormat)
-                          : '-',
-                      style: TextStyle(
-                        fontFamily: 'Overpass',
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        color: userScore != null && userScore! > 0 ? const Color(0xFFE5A158) : context.appTextMuted,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            if (onIncrementProgress != null) ...[
-              const SizedBox(width: 6),
-              InkWell(
-                onTap: onIncrementProgress,
-                borderRadius: BorderRadius.circular(6),
-                child: Container(
-                  width: 26,
-                  height: 26,
-                  decoration: BoxDecoration(
-                    color: accentColor ?? AppColors.brandBlue,
-                    borderRadius: BorderRadius.circular(5),
-                  ),
-                  alignment: Alignment.center,
-                  child: const Text(
-                    '+1',
-                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
-                  ),
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
+  static Color _badgeColorForListStatus(String status) {
+    switch (status.toUpperCase()) {
+      case 'CURRENT':
+        return AppColors.statusWatching;
+      case 'COMPLETED':
+        return AppColors.statusCompleted;
+      case 'PLANNING':
+        return AppColors.statusPlanning;
+      case 'PAUSED':
+        return AppColors.statusPaused;
+      case 'DROPPED':
+        return AppColors.statusDropped;
+      case 'REPEATING':
+        return const Color(0xFF7C57E8);
+      default:
+        return AppColors.brandBlue;
+    }
   }
 
-  Widget _buildGridCard(BuildContext context) {
-    final title = TextUtil.getPreferredTitle(media['title'], preference: titlePreference);
-    final coverUrl = media['coverImage']?['large'] ?? media['coverImage']?['medium'];
-    final format = media['format'] as String?;
-    final color = accentColor ?? AppColors.brandBlue;
-
-    return GestureDetector(
-      onTap: onTap,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                AppNetworkImage(
-                  imageUrl: coverUrl,
-                  width: double.infinity,
-                  height: double.infinity,
-                  borderRadius: AppSpacing.borderRadius8,
-                ),
-                if (format != null)
-                  Positioned(
-                    top: 5,
-                    left: 5,
-                    child: FormatChip(format: format),
-                  ),
-                // Personal or Global Average Score badge on top right
-                if ((userScore != null && userScore! > 0) || (media['averageScore'] != null && (media['averageScore'] as num) > 0))
-                  Positioned(
-                    top: 5,
-                    right: 5,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.8),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.star_rounded,
-                            size: 11,
-                            color: userScore != null
-                                ? const Color(0xFFE5A158)
-                                : ((media['averageScore'] as num) >= 75
-                                    ? const Color(0xFF46C07B)
-                                    : const Color(0xFFE5A158)),
-                          ),
-                          const SizedBox(width: 2),
-                          Text(
-                            userScore != null && userScore! > 0
-                                ? ScoreUtil.formatScore(userScore, format: scoreFormat)
-                                : '${(media['averageScore'] as num).toInt()}%',
-                            style: TextStyle(
-                              fontFamily: 'Overpass',
-                              fontSize: 9.5,
-                              fontWeight: FontWeight.bold,
-                              color: userScore != null
-                                  ? Colors.white
-                                  : ((media['averageScore'] as num) >= 75
-                                      ? const Color(0xFF46C07B)
-                                      : Colors.white),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                // Quick +1 button on bottom right of poster
-                if (onIncrementProgress != null)
-                  Positioned(
-                    bottom: 5,
-                    right: 5,
-                    child: InkWell(
-                      onTap: onIncrementProgress,
-                      borderRadius: BorderRadius.circular(5),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: color,
-                          borderRadius: BorderRadius.circular(5),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.5),
-                              blurRadius: 4,
-                            ),
-                          ],
-                        ),
-                        child: const Text(
-                          '+1',
-                          style: TextStyle(
-                            fontFamily: 'Overpass',
-                            fontSize: 10,
-                            fontWeight: FontWeight.w900,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 5),
-          Text(
-            title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontFamily: 'Overpass',
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: context.appTextPrimary,
-            ),
-          ),
-        ],
-      ),
-    );
+  static String _formatInListShort(String status) {
+    switch (status.toUpperCase()) {
+      case 'CURRENT':
+        return 'WATCHING';
+      case 'COMPLETED':
+        return 'DONE';
+      case 'PLANNING':
+        return 'PLAN';
+      case 'PAUSED':
+        return 'PAUSED';
+      case 'DROPPED':
+        return 'DROPPED';
+      case 'REPEATING':
+        return 'REPEAT';
+      default:
+        return status.toUpperCase();
+    }
   }
 }

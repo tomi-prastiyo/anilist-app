@@ -59,7 +59,9 @@ class SearchRepository {
           startDate {
             year
           }
+          bannerImage
           coverImage {
+            extraLarge
             large
             medium
           }

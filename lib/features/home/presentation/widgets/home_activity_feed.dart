@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/animations/app_motion.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/utils/date_util.dart';
@@ -10,6 +11,7 @@ import '../../../../shared/image/app_network_image.dart';
 import '../../../activity/data/activity_repository.dart';
 import '../../../activity/presentation/widgets/activity_comments_bottom_sheet.dart';
 import '../../../activity/presentation/widgets/activity_likes_bottom_sheet.dart';
+import '../../../activity/presentation/widgets/delete_activity_dialog.dart';
 import '../../../auth/presentation/auth_controller.dart';
 import '../../../media_detail/presentation/media_detail_screen.dart';
 import '../../../profile/presentation/profile_screen.dart';
@@ -29,6 +31,7 @@ class HomeActivityFeedState extends ConsumerState<HomeActivityFeed> {
   int _currentPage = 1;
   bool _hasNextPage = true;
   List<Map<String, dynamic>> _activities = [];
+  final Set<int> _togglingLikeIds = {};
 
   @override
   void initState() {
@@ -79,21 +82,80 @@ class HomeActivityFeedState extends ConsumerState<HomeActivityFeed> {
     await loadActivities(page: _currentPage + 1, reset: false);
   }
 
-  Future<void> _toggleLike(int index) async {
-    HapticFeedback.lightImpact();
+  Future<void> _deleteActivity(int index) async {
     final activity = _activities[index];
+    final id = activity['id'] as int?;
+    if (id == null) return;
+
+    final confirmed = await showDeleteActivityConfirmDialog(context);
+    if (!confirmed || !mounted) return;
+
+    final removed = _activities[index];
+    setState(() => _activities.removeAt(index));
+
+    try {
+      final ok = await ref.read(activityRepositoryProvider).deleteActivity(id);
+      if (!ok) throw Exception('Failed to delete');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Activity deleted'), duration: Duration(seconds: 2)),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _activities.insert(index.clamp(0, _activities.length), removed));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not delete activity: $e'), backgroundColor: AppColors.statusDropped),
+        );
+      }
+    }
+  }
+
+  Future<void> _toggleLike(int index) async {
+    final isAuthenticated = ref.read(authControllerProvider) is Authenticated;
+    if (!isAuthenticated) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Sign in with AniList to like activities.'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    final activity = _activities[index];
+    final activityId = activity['id'] as int?;
+    if (activityId == null || _togglingLikeIds.contains(activityId)) return;
+
+    HapticFeedback.lightImpact();
+    _togglingLikeIds.add(activityId);
     final isLiked = activity['isLiked'] as bool? ?? false;
     final currentLikes = activity['likeCount'] as int? ?? 0;
+    final optimisticLiked = !isLiked;
+    final optimisticCount = isLiked ? (currentLikes > 0 ? currentLikes - 1 : 0) : currentLikes + 1;
 
     // Optimistic UI update
     setState(() {
-      activity['isLiked'] = !isLiked;
-      activity['likeCount'] = isLiked ? (currentLikes > 0 ? currentLikes - 1 : 0) : currentLikes + 1;
+      activity['isLiked'] = optimisticLiked;
+      activity['likeCount'] = optimisticCount;
     });
 
     try {
       final repo = ref.read(activityRepositoryProvider);
-      await repo.toggleLike(activity['id'] as int);
+      final updated = await repo.toggleLike(activityId);
+      if (mounted) {
+        final finalLiked = updated?['isLiked'] as bool? ?? optimisticLiked;
+        final finalCount = updated?['likeCount'] as int? ?? optimisticCount;
+        setState(() {
+          activity['isLiked'] = finalLiked;
+          activity['likeCount'] = finalCount;
+        });
+        ref.read(activityLikeSyncProvider.notifier).state = (
+          id: activityId,
+          isLiked: finalLiked,
+          likeCount: finalCount,
+        );
+      }
     } catch (e) {
       // Revert if API fails
       if (mounted) {
@@ -109,6 +171,8 @@ class HomeActivityFeedState extends ConsumerState<HomeActivityFeed> {
           ),
         );
       }
+    } finally {
+      _togglingLikeIds.remove(activityId);
     }
   }
 
@@ -173,6 +237,22 @@ class HomeActivityFeedState extends ConsumerState<HomeActivityFeed> {
         ? AppColors.getProfileAccentColor(auth.user.profileColor)
         : AppColors.brandBlue;
 
+    ref.listen<({int id, bool isLiked, int likeCount})?>(
+      activityLikeSyncProvider,
+      (_, next) {
+        if (next == null || !mounted) return;
+        final idx = _activities.indexWhere((a) => a['id'] == next.id);
+        if (idx != -1 &&
+            (_activities[idx]['isLiked'] != next.isLiked ||
+                _activities[idx]['likeCount'] != next.likeCount)) {
+          setState(() {
+            _activities[idx]['isLiked'] = next.isLiked;
+            _activities[idx]['likeCount'] = next.likeCount;
+          });
+        }
+      },
+    );
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -180,10 +260,19 @@ class HomeActivityFeedState extends ConsumerState<HomeActivityFeed> {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.p16),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
+              Container(
+                width: 7,
+                height: 7,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: context.appAccent,
+                ),
+              ),
+              const SizedBox(width: 8),
               Text(
-                'COMMUNITY ACTIVITY',
+                'ACTIVITY',
+                maxLines: 1,
                 style: TextStyle(
                   fontFamily: 'Overpass',
                   color: context.appTextPrimary,
@@ -192,10 +281,11 @@ class HomeActivityFeedState extends ConsumerState<HomeActivityFeed> {
                   letterSpacing: 0.6,
                 ),
               ),
+              const Spacer(),
 
               // Segmented Toggle: Following (Default) vs Global
               Container(
-                height: 30,
+                height: 28,
                 padding: const EdgeInsets.all(2.5),
                 decoration: BoxDecoration(
                   color: context.appInputSurface,
@@ -212,7 +302,7 @@ class HomeActivityFeedState extends ConsumerState<HomeActivityFeed> {
                         }
                       },
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        padding: const EdgeInsets.symmetric(horizontal: 9),
                         decoration: BoxDecoration(
                           color: _isFollowing ? context.appSurface : Colors.transparent,
                           borderRadius: BorderRadius.circular(6),
@@ -405,21 +495,37 @@ class HomeActivityFeedState extends ConsumerState<HomeActivityFeed> {
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                   const SizedBox(height: 1),
-                                  Text(
-                                    DateUtil.timeAgo(createdAt),
-                                    style: TextStyle(
-                                      fontFamily: 'Overpass',
-                                      fontSize: 10,
-                                      color: context.appTextMuted,
+                                    Text(
+                                      DateUtil.timeAgo(createdAt),
+                                      style: TextStyle(
+                                        fontFamily: 'Overpass',
+                                        fontSize: 10,
+                                        color: context.appTextMuted,
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
-                            ),
-                          ],
+                              if (auth is Authenticated && userId != null && userId == auth.user.id)
+                                IconButton(
+                                  style: IconButton.styleFrom(
+                                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                    minimumSize: const Size(28, 28),
+                                    padding: EdgeInsets.zero,
+                                  ),
+                                  constraints: const BoxConstraints.tightFor(width: 28, height: 28),
+                                  icon: Icon(
+                                    Icons.delete_outline_rounded,
+                                    size: 16,
+                                    color: context.appTextMuted,
+                                  ),
+                                  tooltip: 'Delete activity',
+                                  onPressed: () => _deleteActivity(index),
+                                ),
+                            ],
+                          ),
                         ),
                       ),
-                    ),
 
                     // Content: text or media preview
                     if (isText) ...[
@@ -440,42 +546,71 @@ class HomeActivityFeedState extends ConsumerState<HomeActivityFeed> {
                           final mediaId = item['media']['id'] as int?;
                           if (mediaId != null) {
                             Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (context) => MediaDetailScreen(mediaId: mediaId),
-                              ),
+                              AppPageRoute(page: MediaDetailScreen(mediaId: mediaId)),
                             );
                           }
                         },
                         child: Container(
-                          padding: const EdgeInsets.all(7),
+                          height: 76,
                           decoration: BoxDecoration(
                             color: context.appBackground,
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(color: Colors.white.withValues(alpha: 0.04)),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: context.appBorder),
                           ),
-                          child: Row(
+                          clipBehavior: Clip.antiAlias,
+                          child: Stack(
+                            fit: StackFit.expand,
                             children: [
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(4),
-                                child: AppNetworkImage(
-                                  imageUrl: item['media']['coverImage']?['medium'],
-                                  width: 32,
-                                  height: 44,
-                                  fit: BoxFit.cover,
+                              if ((item['media']['bannerImage'] ?? item['media']['coverImage']?['large']) != null)
+                                Opacity(
+                                  opacity: context.isDark ? 0.22 : 0.12,
+                                  child: AppNetworkImage(
+                                    imageUrl: item['media']['bannerImage'] ?? item['media']['coverImage']?['large'],
+                                    fit: BoxFit.cover,
+                                    borderRadius: BorderRadius.zero,
+                                  ),
+                                ),
+                              Container(
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.centerLeft,
+                                    end: Alignment.centerRight,
+                                    colors: [
+                                      context.appBackground.withValues(alpha: 0.92),
+                                      context.appBackground.withValues(alpha: 0.65),
+                                    ],
+                                  ),
                                 ),
                               ),
-                              const SizedBox(width: 9),
-                              Expanded(
-                                child: Text(
-                                  item['media']['title']?['userPreferred'] ?? '',
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontFamily: 'Overpass',
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 12,
-                                    color: context.appTextPrimary,
-                                  ),
+                              Padding(
+                                padding: const EdgeInsets.all(6),
+                                child: Row(
+                                  children: [
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(6),
+                                      child: AppNetworkImage(
+                                        imageUrl: item['media']['coverImage']?['large'] ??
+                                            item['media']['coverImage']?['medium'],
+                                        width: 44,
+                                        height: 64,
+                                        fit: BoxFit.cover,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Text(
+                                        item['media']['title']?['userPreferred'] ?? '',
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontFamily: 'Overpass',
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 12.5,
+                                          color: context.appTextPrimary,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ],

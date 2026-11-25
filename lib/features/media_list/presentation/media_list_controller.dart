@@ -90,6 +90,47 @@ class MediaListController extends StateNotifier<AsyncValue<List<Map<String, dyna
     }
   }
 
+  /// Increments manga volume progress (`progressVolumes`) by 1 optimistically.
+  Future<void> incrementVolume({
+    required int entryId,
+    required int mediaId,
+    required int currentVolumes,
+    int? maxVolumes,
+  }) async {
+    final nextVolumes = maxVolumes != null && currentVolumes >= maxVolumes
+        ? maxVolumes
+        : currentVolumes + 1;
+    if (nextVolumes == currentVolumes) return;
+
+    final nowTimestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    final previousState = state;
+    if (state.hasValue) {
+      final currentLists = List<Map<String, dynamic>>.from(state.value!);
+      for (var list in currentLists) {
+        final entries = (list['entries'] as List?)?.cast<Map<String, dynamic>>();
+        if (entries != null) {
+          for (var entry in entries) {
+            if (entry['id'] == entryId) {
+              entry['progressVolumes'] = nextVolumes;
+              entry['updatedAt'] = nowTimestamp;
+            }
+          }
+        }
+      }
+      state = AsyncValue.data(currentLists);
+    }
+
+    try {
+      await _repo.saveMediaListEntry(
+        id: entryId,
+        mediaId: mediaId,
+        progressVolumes: nextVolumes,
+      );
+    } catch (e) {
+      state = previousState;
+    }
+  }
+
   /// Updates personal score with instant optimistic UI update
   Future<void> updateScore({
     required int entryId,

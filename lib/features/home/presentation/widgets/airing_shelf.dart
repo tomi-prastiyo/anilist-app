@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import '../../../../core/animations/app_motion.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_spacing.dart';
+import '../../../../core/theme/app_typography.dart';
 import '../../../../core/utils/date_util.dart';
 import '../../../../core/utils/text_util.dart';
 import '../../../../shared/image/app_network_image.dart';
+import '../../../../shared/widgets/tactile_scale.dart';
 import '../../../media_detail/presentation/media_detail_screen.dart';
 import '../airing_schedule_screen.dart';
 
+/// Visual-first Airing shelf with poster-dominant tall cards & crisp gradient overlays.
 class AiringShelf extends StatelessWidget {
   final List<Map<String, dynamic>> schedules;
 
@@ -19,7 +24,6 @@ class AiringShelf extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Section Header
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.p16),
           child: Row(
@@ -49,21 +53,17 @@ class AiringShelf extends StatelessWidget {
                 ],
               ),
               InkWell(
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (context) => const AiringScheduleScreen(),
-                    ),
-                  );
-                },
+                onTap: () => Navigator.of(context).push(
+                  AppPageRoute(page: const AiringScheduleScreen()),
+                ),
                 borderRadius: BorderRadius.circular(4),
-                child: const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                   child: Text(
                     'Schedule →',
                     style: TextStyle(
                       fontFamily: 'Overpass',
-                      color: AppColors.brandBlue,
+                      color: context.appAccent,
                       fontSize: 11.5,
                       fontWeight: FontWeight.w700,
                     ),
@@ -74,10 +74,8 @@ class AiringShelf extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 10),
-
-        // Horizontal Carousel
         SizedBox(
-          height: 172,
+          height: 208,
           child: ListView.separated(
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.p16),
             scrollDirection: Axis.horizontal,
@@ -86,103 +84,143 @@ class AiringShelf extends StatelessWidget {
             itemBuilder: (context, index) {
               final schedule = schedules[index];
               final media = schedule['media'] as Map<String, dynamic>?;
+              final mediaId = media?['id'] as int?;
               final title = TextUtil.getPreferredTitle(media?['title']);
-              final cover = (media?['coverImage']?['large'] ?? media?['coverImage']?['medium']) as String?;
+              final cover = (media?['coverImage']?['extraLarge'] ??
+                  media?['coverImage']?['large'] ??
+                  media?['coverImage']?['medium']) as String?;
               final episode = schedule['episode'] as int? ?? 1;
               final timeUntil = schedule['timeUntilAiring'] as int?;
+              final airingAt = schedule['airingAt'] as int?;
+              final isAired = timeUntil != null && timeUntil <= 0;
               final countdownText = DateUtil.formatCountdown(timeUntil);
+              final exactTime = airingAt != null
+                  ? DateFormat('h:mm a').format(DateTime.fromMillisecondsSinceEpoch(airingAt * 1000))
+                  : '';
+              final subText = isAired
+                  ? (exactTime.isNotEmpty ? 'Aired $exactTime' : 'Released Today')
+                  : (exactTime.isNotEmpty ? 'Airing $exactTime' : 'Episode $episode Soon');
 
-              return GestureDetector(
-                onTap: () {
-                  final id = media?['id'] as int?;
-                  if (id != null) {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (context) => MediaDetailScreen(mediaId: id),
-                      ),
-                    );
-                  }
-                },
+              return TactileScale(
+                onTap: mediaId == null
+                    ? null
+                    : () => Navigator.of(context).push(
+                          AppPageRoute(page: MediaDetailScreen(mediaId: mediaId)),
+                        ),
                 child: Container(
-                  width: 130,
+                  width: 144,
                   decoration: BoxDecoration(
                     color: context.appSurface,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
-                  ),
-                  padding: const EdgeInsets.all(7),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Cover image with countdown badge
-                      Stack(
-                        children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(7),
-                            child: AppNetworkImage(
-                              imageUrl: cover,
-                              width: 116,
-                              height: 110,
-                              fit: BoxFit.cover,
-                            ),
-                          ),
-                          Positioned(
-                            top: 4,
-                            right: 4,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
-                              decoration: BoxDecoration(
-                                gradient: const LinearGradient(
-                                  colors: [Color(0xFFE91E63), Color(0xFFC2185B)],
-                                ),
-                                borderRadius: BorderRadius.circular(6),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: const Color(0xFFE91E63).withValues(alpha: 0.4),
-                                    blurRadius: 4,
-                                    offset: const Offset(0, 1),
-                                  ),
-                                ],
-                              ),
-                              child: Text(
-                                'Ep $episode • $countdownText',
-                                style: const TextStyle(
-                                  fontFamily: 'Overpass',
-                                  fontSize: 8.5,
-                                  fontWeight: FontWeight.w900,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
+                    borderRadius: BorderRadius.circular(13),
+                    border: Border.all(color: context.appBorder),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: context.isDark ? 0.25 : 0.08),
+                        blurRadius: 8,
+                        offset: const Offset(0, 3),
                       ),
-                      const SizedBox(height: 6),
-                      // Title
-                      Text(
-                        title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontFamily: 'Overpass',
-                          fontWeight: FontWeight.w700,
-                          fontSize: 11.5,
-                          color: context.appTextPrimary,
+                    ],
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Hero(
+                        tag: HeroTags.mediaCover(mediaId ?? index, 'airing'),
+                        child: AppNetworkImage(
+                          imageUrl: cover,
+                          fit: BoxFit.cover,
+                          borderRadius: BorderRadius.zero,
                         ),
                       ),
-                      const SizedBox(height: 1),
-                      Text(
-                        'Episode $episode Airing',
-                        style: TextStyle(
-                          fontFamily: 'Overpass',
-                          fontSize: 10,
-                          color: context.appTextSecondary,
+                      // Bottom Artwork Scrim
+                      Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            stops: const [0.0, 0.48, 1.0],
+                            colors: [
+                              Colors.black.withValues(alpha: 0.10),
+                              Colors.transparent,
+                              Colors.black.withValues(alpha: 0.90),
+                            ],
+                          ),
+                        ),
+                      ),
+                      // Top-Right Badge
+                      Positioned(
+                        top: 7,
+                        right: 7,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
+                          decoration: BoxDecoration(
+                            gradient: isAired
+                                ? const LinearGradient(
+                                    colors: [Color(0xFF2E9E60), Color(0xFF227848)],
+                                  )
+                                : const LinearGradient(
+                                    colors: [Color(0xFFE91E63), Color(0xFFC2185B)],
+                                  ),
+                            borderRadius: BorderRadius.circular(6),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.35),
+                                blurRadius: 4,
+                              ),
+                            ],
+                          ),
+                          child: Text(
+                            'Ep $episode • $countdownText',
+                            style: AppTypography.style(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w900,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                      // Bottom Title & Airing Time Overlay
+                      Positioned(
+                        left: 9,
+                        right: 9,
+                        bottom: 9,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              title,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTypography.style(
+                                fontWeight: FontWeight.w800,
+                                fontSize: 12,
+                                height: 1.16,
+                                color: Colors.white,
+                                shadows: const [
+                                  Shadow(color: Colors.black87, blurRadius: 4, offset: Offset(0, 1)),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              subText,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTypography.style(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white.withValues(alpha: 0.82),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
                   ),
                 ),
-              );
+              ).animateEntrance(index: index, horizontal: true);
             },
           ),
         ),
