@@ -1,0 +1,35 @@
+{
+    "name": "Mankai",
+    "short_name": "Mankai",
+    "start_url": ".",
+    "display": "standalone",
+    "background_color": "#120B1C",
+    "theme_color": "#F472B6",
+    "description": "Mankai — Yuuki Yuuna wa Yuusha de Aru inspired AniList tracker for anime and manga.",
+    "orientation": "portrait-primary",
+    "prefer_related_applications": false,
+    "icons": [
+        {
+            "src": "icons/Icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "icons/Icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        },
+        {
+            "src": "icons/Icon-maskable-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "maskable"
+        },
+        {
+            "src": "icons/Icon-maskable-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "maskable"
+        }
+    ]
+}
