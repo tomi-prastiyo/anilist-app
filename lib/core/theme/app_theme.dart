@@ -14,13 +14,17 @@ enum AppThemeMode {
 class AppTheme {
   AppTheme._();
 
+  static final ThemeData lightTheme = _buildLightTheme();
+  static final ThemeData darkTheme = _buildDarkTheme();
+  static final Map<YuYuYuHeroine, ThemeData> _yuyuyuCache = {};
+
   static ThemeData getTheme([AppThemeMode? mode, YuYuYuHeroine? heroine]) {
     if (mode == AppThemeMode.light) return lightTheme;
     if (mode == AppThemeMode.yuyuyu) return yuyuyuTheme(heroine);
     return darkTheme;
   }
 
-  static ThemeData get lightTheme {
+  static ThemeData _buildLightTheme() {
     const scaffoldBg = AppColors.lightBackground; // #EDF1F5
     const surfaceColor = AppColors.lightSurface;  // #FFFFFF
     const cardColor = AppColors.lightCard;        // #FFFFFF
@@ -130,7 +134,7 @@ class AppTheme {
     );
   }
 
-  static ThemeData get darkTheme {
+  static ThemeData _buildDarkTheme() {
     const scaffoldBg = AppColors.darkBackground; // #0B1622
     const surfaceColor = AppColors.darkSurface;  // #151F2E
     const cardColor = AppColors.darkSurface;     // #151F2E
@@ -243,6 +247,13 @@ class AppTheme {
   /// Dedicated *Yuuki Yuuna wa Yuusha de Aru* (Mankai Twilight) theme.
   static ThemeData yuyuyuTheme([YuYuYuHeroine? heroine]) {
     final activeHeroine = heroine ?? YuYuYuAssets.heroines.first;
+    return _yuyuyuCache.putIfAbsent(
+      activeHeroine,
+      () => _buildYuYuYuTheme(activeHeroine),
+    );
+  }
+
+  static ThemeData _buildYuYuYuTheme(YuYuYuHeroine activeHeroine) {
     final palette = AppThemePalette.yuyuyu(activeHeroine.accentColor);
     final accent = palette.accent;
 

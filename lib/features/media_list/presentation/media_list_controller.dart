@@ -43,6 +43,41 @@ class MediaListController extends StateNotifier<AsyncValue<List<Map<String, dyna
     }
   }
 
+  Future<void> _updateEntryOptimistically({
+    required int entryId,
+    required Map<String, dynamic> Function(Map<String, dynamic> entry) transform,
+    required Future<void> Function() request,
+  }) async {
+    final previousState = state;
+    if (state.hasValue) {
+      final updatedLists = state.value!.map((group) {
+        final entries = (group['entries'] as List?)?.cast<Map<String, dynamic>>();
+        if (entries == null) return group;
+
+        var groupModified = false;
+        final updatedEntries = entries.map((entry) {
+          if (entry['id'] != entryId) return entry;
+          groupModified = true;
+          return transform(Map<String, dynamic>.from(entry));
+        }).toList();
+
+        if (!groupModified) return group;
+        return {
+          ...group,
+          'entries': updatedEntries,
+        };
+      }).toList();
+
+      state = AsyncValue.data(updatedLists);
+    }
+
+    try {
+      await request();
+    } catch (_) {
+      state = previousState;
+    }
+  }
+
   /// Increments progress by 1 with instant optimistic UI update
   Future<void> incrementProgress({
     required int entryId,
@@ -55,39 +90,23 @@ class MediaListController extends StateNotifier<AsyncValue<List<Map<String, dyna
     final nextStatus = isNowCompleted ? 'COMPLETED' : null;
     final nowTimestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000;
 
-    // Apply optimistic update to local state
-    final previousState = state;
-    if (state.hasValue) {
-      final currentLists = List<Map<String, dynamic>>.from(state.value!);
-      for (var list in currentLists) {
-        final entries = (list['entries'] as List?)?.cast<Map<String, dynamic>>();
-        if (entries != null) {
-          for (var entry in entries) {
-            if (entry['id'] == entryId) {
-              entry['progress'] = nextProgress;
-              entry['updatedAt'] = nowTimestamp;
-              if (nextStatus != null) {
-                entry['status'] = nextStatus;
-              }
-            }
-          }
+    await _updateEntryOptimistically(
+      entryId: entryId,
+      transform: (entry) {
+        entry['progress'] = nextProgress;
+        entry['updatedAt'] = nowTimestamp;
+        if (nextStatus != null) {
+          entry['status'] = nextStatus;
         }
-      }
-      state = AsyncValue.data(currentLists);
-    }
-
-    // Dispatch background mutation
-    try {
-      await _repo.saveMediaListEntry(
+        return entry;
+      },
+      request: () => _repo.saveMediaListEntry(
         id: entryId,
         mediaId: mediaId,
         progress: nextProgress,
         status: nextStatus,
-      );
-    } catch (e) {
-      // Revert optimistic update on error
-      state = previousState;
-    }
+      ),
+    );
   }
 
   /// Increments manga volume progress (`progressVolumes`) by 1 optimistically.
@@ -103,32 +122,19 @@ class MediaListController extends StateNotifier<AsyncValue<List<Map<String, dyna
     if (nextVolumes == currentVolumes) return;
 
     final nowTimestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-    final previousState = state;
-    if (state.hasValue) {
-      final currentLists = List<Map<String, dynamic>>.from(state.value!);
-      for (var list in currentLists) {
-        final entries = (list['entries'] as List?)?.cast<Map<String, dynamic>>();
-        if (entries != null) {
-          for (var entry in entries) {
-            if (entry['id'] == entryId) {
-              entry['progressVolumes'] = nextVolumes;
-              entry['updatedAt'] = nowTimestamp;
-            }
-          }
-        }
-      }
-      state = AsyncValue.data(currentLists);
-    }
-
-    try {
-      await _repo.saveMediaListEntry(
+    await _updateEntryOptimistically(
+      entryId: entryId,
+      transform: (entry) {
+        entry['progressVolumes'] = nextVolumes;
+        entry['updatedAt'] = nowTimestamp;
+        return entry;
+      },
+      request: () => _repo.saveMediaListEntry(
         id: entryId,
         mediaId: mediaId,
         progressVolumes: nextVolumes,
-      );
-    } catch (e) {
-      state = previousState;
-    }
+      ),
+    );
   }
 
   /// Updates personal score with instant optimistic UI update
@@ -138,31 +144,18 @@ class MediaListController extends StateNotifier<AsyncValue<List<Map<String, dyna
     required double score,
   }) async {
     final nowTimestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-    final previousState = state;
-    if (state.hasValue) {
-      final currentLists = List<Map<String, dynamic>>.from(state.value!);
-      for (var list in currentLists) {
-        final entries = (list['entries'] as List?)?.cast<Map<String, dynamic>>();
-        if (entries != null) {
-          for (var entry in entries) {
-            if (entry['id'] == entryId) {
-              entry['score'] = score;
-              entry['updatedAt'] = nowTimestamp;
-            }
-          }
-        }
-      }
-      state = AsyncValue.data(currentLists);
-    }
-
-    try {
-      await _repo.saveMediaListEntry(
+    await _updateEntryOptimistically(
+      entryId: entryId,
+      transform: (entry) {
+        entry['score'] = score;
+        entry['updatedAt'] = nowTimestamp;
+        return entry;
+      },
+      request: () => _repo.saveMediaListEntry(
         id: entryId,
         mediaId: mediaId,
         score: score,
-      );
-    } catch (e) {
-      state = previousState;
-    }
+      ),
+    );
   }
 }

@@ -12,15 +12,25 @@ class SecureStorageService {
 
   static const String keyAccessToken = 'anilist_access_token';
 
+  String? _cachedToken;
+  bool _hasLoadedToken = false;
+
   Future<void> saveAccessToken(String token) async {
+    _cachedToken = token;
+    _hasLoadedToken = true;
     await _storage.write(key: keyAccessToken, value: token);
   }
 
   Future<String?> getAccessToken() async {
-    return await _storage.read(key: keyAccessToken);
+    if (_hasLoadedToken) return _cachedToken;
+    _cachedToken = await _storage.read(key: keyAccessToken);
+    _hasLoadedToken = true;
+    return _cachedToken;
   }
 
   Future<void> clearAccessToken() async {
+    _cachedToken = null;
+    _hasLoadedToken = true;
     await _storage.delete(key: keyAccessToken);
   }
 

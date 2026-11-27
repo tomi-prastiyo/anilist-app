@@ -15,6 +15,7 @@ class MainShellScreen extends StatefulWidget {
 
 class _MainShellScreenState extends State<MainShellScreen> {
   int _currentIndex = 0;
+  final Set<int> _activatedTabs = {0};
 
   final List<Widget> _screens = const [
     HomeScreen(),
@@ -28,12 +29,11 @@ class _MainShellScreenState extends State<MainShellScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: context.appBackground,
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 200),
-        switchInCurve: Curves.easeOutCubic,
-        child: KeyedSubtree(
-          key: ValueKey(_currentIndex),
-          child: _screens[_currentIndex],
+      body: IndexedStack(
+        index: _currentIndex,
+        children: List.generate(
+          _screens.length,
+          (i) => _activatedTabs.contains(i) ? _screens[i] : const SizedBox.shrink(),
         ),
       ),
       bottomNavigationBar: Container(
@@ -109,7 +109,10 @@ class _MainShellScreenState extends State<MainShellScreen> {
           onTap: () {
             if (_currentIndex != index) {
               HapticFeedback.lightImpact();
-              setState(() => _currentIndex = index);
+              setState(() {
+                _currentIndex = index;
+                _activatedTabs.add(index);
+              });
             }
           },
           child: Column(

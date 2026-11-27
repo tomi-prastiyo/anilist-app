@@ -1,6 +1,5 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:shimmer/shimmer.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_spacing.dart';
 
@@ -30,11 +29,17 @@ class AppNetworkImage extends StatelessWidget {
         child: Container(
           width: width,
           height: height,
-          color: AppColors.darkCard,
-          child: const Icon(Icons.image_not_supported_outlined, color: AppColors.darkTextMuted),
+          color: context.appCard,
+          child: Icon(Icons.image_not_supported_outlined, color: context.appTextMuted),
         ),
       );
     }
+
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+    final cacheW =
+        (width != null && width!.isFinite) ? (width! * dpr).round().clamp(32, 1200) : null;
+    final cacheH =
+        (height != null && height!.isFinite) ? (height! * dpr).round().clamp(32, 1200) : null;
 
     return ClipRRect(
       borderRadius: effectiveRadius,
@@ -43,20 +48,20 @@ class AppNetworkImage extends StatelessWidget {
         width: width,
         height: height,
         fit: fit,
-        placeholder: (context, url) => Shimmer.fromColors(
-          baseColor: AppColors.shimmerBase,
-          highlightColor: AppColors.shimmerHighlight,
-          child: Container(
-            width: width,
-            height: height,
-            color: AppColors.darkCard,
-          ),
+        memCacheWidth: cacheW,
+        memCacheHeight: cacheH,
+        fadeInDuration: const Duration(milliseconds: 150),
+        fadeOutDuration: const Duration(milliseconds: 80),
+        placeholder: (context, url) => SizedBox(
+          width: width,
+          height: height,
+          child: ColoredBox(color: context.appInputSurface),
         ),
         errorWidget: (context, url, error) => Container(
           width: width,
           height: height,
-          color: AppColors.darkCard,
-          child: const Icon(Icons.broken_image_outlined, color: AppColors.darkTextMuted),
+          color: context.appCard,
+          child: Icon(Icons.broken_image_outlined, color: context.appTextMuted),
         ),
       ),
     );

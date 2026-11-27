@@ -42,8 +42,9 @@ class AppPageRoute<T> extends PageRouteBuilder<T> {
 }
 
 extension AppMotionWidgetExt on Widget {
-  /// Clean, subtle staggered fade+slide entrance (capped at index 6 so lists stay snappy).
+  /// Clean, subtle staggered fade+slide entrance (capped at index 6 so scrolled lists stay snappy).
   Widget animateEntrance({int index = 0, bool horizontal = false}) {
+    if (index > 6) return this;
     final delayMs = (index.clamp(0, 6)) * 35;
     final anim = animate(delay: Duration(milliseconds: delayMs)).fadeIn(
       duration: 240.ms,

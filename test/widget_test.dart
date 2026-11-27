@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:anilist_app/core/animations/app_motion.dart';
+import 'package:anilist_app/core/constants/yuyuyu_assets.dart';
 import 'package:anilist_app/core/network/api_client.dart';
 import 'package:anilist_app/core/storage/local_storage_service.dart';
 import 'package:anilist_app/core/storage/secure_storage_service.dart';
+import 'package:anilist_app/core/theme/app_theme.dart';
 import 'package:anilist_app/core/utils/score_util.dart';
 import 'package:anilist_app/core/utils/date_util.dart';
 import 'package:anilist_app/core/utils/text_util.dart';
@@ -14,9 +17,16 @@ import 'package:anilist_app/features/auth/data/auth_repository.dart';
 import 'package:anilist_app/features/auth/presentation/auth_controller.dart';
 import 'package:anilist_app/features/auth/presentation/login_screen.dart';
 import 'package:anilist_app/features/auth/presentation/splash_loading_screen.dart';
+import 'package:anilist_app/features/home/presentation/home_screen.dart';
 import 'package:anilist_app/features/home/presentation/widgets/home_activity_feed.dart';
+import 'package:anilist_app/features/media_list/data/media_list_repository.dart';
+import 'package:anilist_app/features/media_list/presentation/media_list_controller.dart';
+import 'package:anilist_app/features/media_list/presentation/media_list_screen.dart';
+import 'package:anilist_app/features/navigation/presentation/main_shell_screen.dart';
 import 'package:anilist_app/features/notifications/data/notifications_repository.dart';
 import 'package:anilist_app/features/notifications/presentation/notification_read_controller.dart';
+import 'package:anilist_app/features/profile/presentation/profile_screen.dart';
+import 'package:anilist_app/features/search/presentation/search_screen.dart';
 import 'package:anilist_app/shared/state/favourite_sync_store.dart';
 import 'package:anilist_app/shared/widgets/mankai_logo_emblem.dart';
 
@@ -335,6 +345,113 @@ void main() {
       expect(find.text('Friends Only'), findsNothing);
     });
   });
+
+  group('Performance & Maintainability Optimization Tests', () {
+    testWidgets('AppTheme caches ThemeData instances across repeated calls', (tester) async {
+      final heroine = YuYuYuAssets.heroines.first;
+      expect(identical(AppTheme.lightTheme, AppTheme.lightTheme), isTrue);
+      expect(identical(AppTheme.darkTheme, AppTheme.darkTheme), isTrue);
+      expect(
+        identical(AppTheme.yuyuyuTheme(heroine), AppTheme.yuyuyuTheme(heroine)),
+        isTrue,
+      );
+    });
+
+    test('animateEntrance skips animation wrapper beyond staggered cap', () {
+      const marker = SizedBox(key: ValueKey('marker'));
+      expect(identical(marker.animateEntrance(index: 10), marker), isTrue);
+      expect(identical(marker.animateEntrance(index: 0), marker), isFalse);
+    });
+
+    test('MediaListController optimistic updates deep-clone and cleanly revert on error', () async {
+      final repo = _FakeMediaListRepository();
+      final controller = MediaListController(repo, 123, 'MANGA');
+
+      // Wait for initial async loadLists() triggered in constructor
+      await Future<void>.delayed(Duration.zero);
+
+      repo.shouldThrowOnSave = true;
+
+      // Capture optimistic value mid-flight before Future rejects or verify clean revert
+      await controller.incrementProgress(
+        entryId: 10,
+        mediaId: 200,
+        currentProgress: 5,
+        maxEpisodesOrChapters: 12,
+      );
+
+      final entryAfterProgFail =
+          (controller.state.value!.first['entries'] as List).first as Map<String, dynamic>;
+      expect(entryAfterProgFail['progress'], 5);
+      expect(entryAfterProgFail['status'], 'CURRENT');
+
+      await controller.incrementVolume(
+        entryId: 10,
+        mediaId: 200,
+        currentVolumes: 2,
+        maxVolumes: 5,
+      );
+
+      final entryAfterVolFail =
+          (controller.state.value!.first['entries'] as List).first as Map<String, dynamic>;
+      expect(entryAfterVolFail['progressVolumes'], 2);
+
+      // Now allow save to succeed and verify optimistic state persists
+      repo.shouldThrowOnSave = false;
+      await controller.incrementProgress(
+        entryId: 10,
+        mediaId: 200,
+        currentProgress: 5,
+        maxEpisodesOrChapters: 12,
+      );
+      await controller.incrementVolume(
+        entryId: 10,
+        mediaId: 200,
+        currentVolumes: 2,
+        maxVolumes: 5,
+      );
+
+      final entrySuccess =
+          (controller.state.value!.first['entries'] as List).first as Map<String, dynamic>;
+      expect(entrySuccess['progress'], 6);
+      expect(entrySuccess['progressVolumes'], 3);
+    });
+
+    testWidgets('MainShellScreen lazily activates IndexedStack tabs on demand', (tester) async {
+      SharedPreferences.setMockInitialValues({'key_is_guest': true});
+      final prefs = await SharedPreferences.getInstance();
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            sharedPreferencesProvider.overrideWithValue(prefs),
+            apiClientProvider.overrideWithValue(_FakeApiClient()),
+            authControllerProvider.overrideWith((ref) {
+              final repo = ref.watch(authRepositoryProvider);
+              return _StaticGuestController(repo);
+            }),
+          ],
+          child: const MaterialApp(home: MainShellScreen()),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.byType(IndexedStack), findsOneWidget);
+      expect(find.byType(HomeScreen), findsOneWidget);
+      expect(find.byType(MediaListScreen, skipOffstage: false), findsNothing);
+      expect(find.byType(SearchScreen, skipOffstage: false), findsNothing);
+      expect(find.byType(ProfileScreen, skipOffstage: false), findsNothing);
+
+      // Tap Search tab to lazily mount SearchScreen while keeping HomeScreen alive offstage
+      await tester.tap(find.text('Search'));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.byType(HomeScreen, skipOffstage: false), findsOneWidget);
+      expect(find.byType(SearchScreen), findsOneWidget);
+      expect(find.byType(MediaListScreen, skipOffstage: false), findsNothing);
+      expect(find.byType(ProfileScreen, skipOffstage: false), findsNothing);
+    });
+  });
 }
 
 class _StaticUnauthController extends AuthController {
@@ -369,4 +486,69 @@ class _FakeNotificationsRepository extends NotificationsRepository {
   Future<void> resetServerUnreadCount() async {
     resetCalled = true;
   }
+}
+
+class _FakeMediaListRepository extends MediaListRepository {
+  bool shouldThrowOnSave = false;
+
+  _FakeMediaListRepository() : super(ApiClient(SecureStorageService()));
+
+  @override
+  Future<List<Map<String, dynamic>>> fetchUserMediaLists({
+    required int userId,
+    required String type,
+  }) async {
+    return [
+      {
+        'name': 'Reading',
+        'status': 'CURRENT',
+        'entries': [
+          {
+            'id': 10,
+            'status': 'CURRENT',
+            'progress': 5,
+            'progressVolumes': 2,
+            'score': 0,
+            'media': {'id': 200},
+          },
+        ],
+      },
+    ];
+  }
+
+  @override
+  Future<Map<String, dynamic>> saveMediaListEntry({
+    int? id,
+    required int mediaId,
+    String? status,
+    double? score,
+    int? progress,
+    int? progressVolumes,
+    int? repeat,
+    String? notes,
+    bool? isPrivate,
+    Map<String, int>? startedAt,
+    Map<String, int>? completedAt,
+  }) async {
+    if (shouldThrowOnSave) {
+      throw ApiException('Simulated save failure');
+    }
+    return {
+      'id': id,
+      'progress': progress,
+      'progressVolumes': progressVolumes,
+      'status': status,
+    };
+  }
+}
+
+class _FakeApiClient extends ApiClient {
+  _FakeApiClient() : super(SecureStorageService());
+
+  @override
+  Future<Map<String, dynamic>> postGraphQL({
+    required String query,
+    Map<String, dynamic>? variables,
+  }) async =>
+      {};
 }

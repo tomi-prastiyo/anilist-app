@@ -16,23 +16,29 @@ class AppAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cacheSize = (size * MediaQuery.devicePixelRatioOf(context)).round().clamp(32, 512);
+
     Widget avatar = Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: AppColors.darkCard,
-        border: Border.all(color: AppColors.darkBorder, width: 1.5),
+        color: context.appCard,
+        border: Border.all(color: context.appBorder, width: 1.5),
       ),
       child: ClipOval(
         child: imageUrl != null && imageUrl!.isNotEmpty
             ? CachedNetworkImage(
                 imageUrl: imageUrl!,
                 fit: BoxFit.cover,
-                placeholder: (context, url) => Container(color: AppColors.darkCard),
-                errorWidget: (context, url, error) => const Icon(Icons.person, color: AppColors.darkTextMuted),
+                memCacheWidth: cacheSize,
+                memCacheHeight: cacheSize,
+                fadeInDuration: const Duration(milliseconds: 140),
+                placeholder: (context, url) => ColoredBox(color: context.appInputSurface),
+                errorWidget: (context, url, error) =>
+                    Icon(Icons.person, color: context.appTextMuted),
               )
-            : const Icon(Icons.person, color: AppColors.darkTextMuted),
+            : Icon(Icons.person, color: context.appTextMuted),
       ),
     );
 
