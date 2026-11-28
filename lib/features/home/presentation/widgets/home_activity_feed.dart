@@ -4,7 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/animations/app_motion.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_spacing.dart';
+import '../../../../core/settings/content_settings_provider.dart';
 import '../../../../shared/feedback/shimmer_loading.dart';
+import '../../../../shared/widgets/mankai_motifs.dart';
 import '../../../activity/data/activity_repository.dart';
 import '../../../activity/presentation/widgets/activity_actions.dart';
 import '../../../activity/presentation/widgets/activity_card.dart';
@@ -50,7 +52,11 @@ class HomeActivityFeedState extends ConsumerState<HomeActivityFeed> {
     }
     try {
       final repo = ref.read(activityRepositoryProvider);
-      final data = await repo.fetchActivities(page: page, isFollowing: effectiveFollowing);
+      final data = await repo.fetchActivities(
+        page: page,
+        isFollowing: effectiveFollowing,
+        includeAdult: ref.read(adultContentProvider),
+      );
       final pageInfo = data['pageInfo'] as Map<String, dynamic>?;
       final list = (data['activities'] as List?)?.cast<Map<String, dynamic>>() ?? [];
       if (mounted) {
@@ -120,9 +126,11 @@ class HomeActivityFeedState extends ConsumerState<HomeActivityFeed> {
   @override
   Widget build(BuildContext context) {
     final auth = ref.watch(authControllerProvider);
-    final accentColor = auth is Authenticated
-        ? AppColors.getProfileAccentColor(auth.user.profileColor)
-        : AppColors.brandBlue;
+    final accentColor = context.isYuYuYu
+        ? context.appAccent
+        : (auth is Authenticated
+            ? AppColors.getProfileAccentColor(auth.user.profileColor)
+            : AppColors.brandBlue);
     final currentViewerId = auth is Authenticated ? auth.user.id : null;
 
     ref.listen<({int id, bool isLiked, int likeCount})?>(
@@ -141,6 +149,10 @@ class HomeActivityFeedState extends ConsumerState<HomeActivityFeed> {
       },
     );
 
+    ref.listen<bool>(adultContentProvider, (_, _) {
+      loadActivities();
+    });
+
     final isAuthenticated = auth is Authenticated;
     final effectiveFollowing = isAuthenticated && _isFollowing;
     ref.listen<AuthState>(authControllerProvider, (prev, next) {
@@ -155,33 +167,11 @@ class HomeActivityFeedState extends ConsumerState<HomeActivityFeed> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.p16),
-          child: Row(
-            children: [
-              Container(
-                width: 7,
-                height: 7,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: context.appAccent,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'ACTIVITY',
-                maxLines: 1,
-                style: TextStyle(
-                  fontFamily: 'Overpass',
-                  color: context.appTextPrimary,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.6,
-                ),
-              ),
-              const Spacer(),
-              if (!isAuthenticated)
-                Container(
+        MankaiSectionHeader(
+          title: 'ACTIVITY',
+          dotColor: context.appAccent,
+          trailing: !isAuthenticated
+              ? Container(
                   height: 28,
                   padding: const EdgeInsets.symmetric(horizontal: 10),
                   decoration: BoxDecoration(
@@ -211,8 +201,7 @@ class HomeActivityFeedState extends ConsumerState<HomeActivityFeed> {
                     ],
                   ),
                 )
-              else
-                Container(
+              : Container(
                   height: 28,
                   padding: const EdgeInsets.all(2.5),
                   decoration: BoxDecoration(
@@ -247,8 +236,6 @@ class HomeActivityFeedState extends ConsumerState<HomeActivityFeed> {
                     ],
                   ),
                 ),
-            ],
-          ),
         ),
         const SizedBox(height: 10),
         if (_isLoading)

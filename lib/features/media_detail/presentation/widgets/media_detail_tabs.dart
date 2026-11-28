@@ -92,10 +92,10 @@ class _MediaCharactersTabState extends State<MediaCharactersTab> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.brandBlue.withValues(alpha: 0.2) : context.appCard,
+          color: isSelected ? context.appAccent.withValues(alpha: 0.2) : context.appCard,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isSelected ? AppColors.brandBlue : context.appBorder,
+            color: isSelected ? context.appAccent : context.appBorder,
           ),
         ),
         child: Text(
@@ -104,7 +104,7 @@ class _MediaCharactersTabState extends State<MediaCharactersTab> {
             fontFamily: 'Overpass',
             fontSize: 11.5,
             fontWeight: FontWeight.w700,
-            color: isSelected ? AppColors.brandBlue : context.appTextSecondary,
+            color: isSelected ? context.appAccent : context.appTextSecondary,
           ),
         ),
       ),
@@ -223,13 +223,25 @@ class MediaStaffTab extends StatelessWidget {
 
 class MediaRelationsTab extends StatelessWidget {
   final Map<String, dynamic> media;
+  final String titlePreference;
+  final bool includeAdult;
 
-  const MediaRelationsTab({super.key, required this.media});
+  const MediaRelationsTab({
+    super.key,
+    required this.media,
+    this.titlePreference = 'ROMAJI',
+    this.includeAdult = false,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final relations =
+    final rawRelations =
         (media['relations']?['edges'] as List?)?.cast<Map<String, dynamic>>() ?? const [];
+    final relations = includeAdult
+        ? rawRelations
+        : rawRelations
+            .where((rel) => (rel['node'] as Map<String, dynamic>?)?['isAdult'] != true)
+            .toList();
     if (relations.isEmpty) {
       return Center(
         child: Text(
@@ -247,7 +259,10 @@ class MediaRelationsTab extends StatelessWidget {
         final rel = relations[index];
         final relType = rel['relationType'] as String? ?? '';
         final relNode = rel['node'] as Map<String, dynamic>?;
-        final relTitle = TextUtil.getPreferredTitle(relNode?['title']);
+        final relTitle = TextUtil.getPreferredTitle(
+          relNode?['title'],
+          preference: titlePreference,
+        );
         final relCover =
             (relNode?['coverImage']?['large'] ?? relNode?['coverImage']?['medium']) as String?;
         final relFormat = relNode?['format'] as String?;

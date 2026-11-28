@@ -253,6 +253,25 @@ class MediaCard extends StatelessWidget {
                                       ),
                                     ),
                                   ),
+                                if (media['isAdult'] == true)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.statusDropped.withValues(alpha: 0.18),
+                                      borderRadius: BorderRadius.circular(4),
+                                      border: Border.all(
+                                        color: AppColors.statusDropped.withValues(alpha: 0.45),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      '18+',
+                                      style: AppTypography.style(
+                                        fontSize: 8.5,
+                                        fontWeight: FontWeight.w900,
+                                        color: AppColors.statusDropped,
+                                      ),
+                                    ),
+                                  ),
                                 if (inListBadge != null && inListBadge!.isNotEmpty)
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
@@ -350,19 +369,42 @@ class MediaCard extends StatelessWidget {
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
                               decoration: BoxDecoration(
-                                color: (isManga ? const Color(0xFF7C57E8) : AppColors.brandBlue).withValues(alpha: 0.18),
+                                color: AppColors.statusRepeating.withValues(alpha: 0.18),
                                 borderRadius: BorderRadius.circular(4),
                                 border: Border.all(
-                                  color: (isManga ? const Color(0xFF7C57E8) : AppColors.brandBlue).withValues(alpha: 0.35),
+                                  color: AppColors.statusRepeating.withValues(alpha: 0.40),
                                 ),
                               ),
                               child: Text(
                                 isManga ? 'Rereading' : 'Rewatching',
+                                style: const TextStyle(
+                                  fontFamily: 'Overpass',
+                                  fontSize: 8.5,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColors.statusRepeating,
+                                ),
+                              ),
+                            )
+                          else if (listStatus != null &&
+                              listStatus != 'CURRENT' &&
+                              const {'COMPLETED', 'PLANNING', 'PAUSED', 'DROPPED'}
+                                  .contains(listStatus!.toUpperCase()))
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                              decoration: BoxDecoration(
+                                color: _badgeColorForListStatus(listStatus!).withValues(alpha: 0.16),
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(
+                                  color: _badgeColorForListStatus(listStatus!).withValues(alpha: 0.36),
+                                ),
+                              ),
+                              child: Text(
+                                '${listStatus![0].toUpperCase()}${listStatus!.substring(1).toLowerCase()}',
                                 style: TextStyle(
                                   fontFamily: 'Overpass',
                                   fontSize: 8.5,
                                   fontWeight: FontWeight.w800,
-                                  color: isManga ? const Color(0xFF7C57E8) : AppColors.brandBlue,
+                                  color: _badgeColorForListStatus(listStatus!),
                                 ),
                               ),
                             )
@@ -512,14 +554,15 @@ class MediaCard extends StatelessWidget {
                           color: color,
                         ),
                       ),
-                        if (onIncrementProgress != null) ...[
+                        if (onIncrementProgress != null || onIncrementVolume != null) ...[
                           const SizedBox(width: 8),
                           ProgressIncrementPills(
                             accentColor: color,
                             primaryTextColor: color.computeLuminance() > 0.55
                                 ? AppColors.darkBackground
                                 : Colors.white,
-                            onIncrementPrimary: onIncrementProgress!,
+                            isManga: isManga,
+                            onIncrementPrimary: onIncrementProgress,
                             onIncrementVolume: onIncrementVolume,
                           ),
                         ],
@@ -660,7 +703,7 @@ class MediaCard extends StatelessWidget {
                   ),
                 ),
               ),
-              if (onIncrementProgress != null) ...[
+              if (onIncrementProgress != null || onIncrementVolume != null) ...[
                 const SizedBox(width: 6),
                 ProgressIncrementPills(
                   accentColor: color,
@@ -668,7 +711,8 @@ class MediaCard extends StatelessWidget {
                       ? AppColors.darkBackground
                       : Colors.white,
                   compact: true,
-                  onIncrementPrimary: onIncrementProgress!,
+                  isManga: media['chapters'] != null || media['type'] == 'MANGA',
+                  onIncrementPrimary: onIncrementProgress,
                   onIncrementVolume: onIncrementVolume,
                 ),
               ],
@@ -795,25 +839,47 @@ class MediaCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (inListBadge != null && inListBadge!.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 4),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 5.5, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: _badgeColorForListStatus(inListBadge!).withValues(alpha: 0.90),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          _formatInListShort(inListBadge!),
-                          style: AppTypography.style(
-                            fontSize: 8.5,
-                            fontWeight: FontWeight.w900,
-                            color: Colors.white,
+                  Wrap(
+                    spacing: 4,
+                    runSpacing: 3,
+                    children: [
+                      if (media['isAdult'] == true)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 5.5, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppColors.statusDropped.withValues(alpha: 0.92),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            '18+',
+                            style: AppTypography.style(
+                              fontSize: 8.5,
+                              fontWeight: FontWeight.w900,
+                              color: Colors.white,
+                            ),
                           ),
                         ),
-                      ),
-                    ),
+                      if (inListBadge != null && inListBadge!.isNotEmpty)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 5.5, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: _badgeColorForListStatus(inListBadge!).withValues(alpha: 0.90),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            _formatInListShort(inListBadge!),
+                            style: AppTypography.style(
+                              fontSize: 8.5,
+                              fontWeight: FontWeight.w900,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  if ((media['isAdult'] == true) ||
+                      (inListBadge != null && inListBadge!.isNotEmpty))
+                    const SizedBox(height: 4),
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
@@ -833,7 +899,7 @@ class MediaCard extends StatelessWidget {
                           ),
                         ),
                       ),
-                      if (onIncrementProgress != null) ...[
+                      if (onIncrementProgress != null || onIncrementVolume != null) ...[
                         const SizedBox(width: 6),
                         ProgressIncrementPills(
                           accentColor: color,
@@ -841,8 +907,9 @@ class MediaCard extends StatelessWidget {
                               ? AppColors.darkBackground
                               : Colors.white,
                           compact: true,
-                          stacked: onIncrementVolume != null,
-                          onIncrementPrimary: onIncrementProgress!,
+                          isManga: media['chapters'] != null || media['type'] == 'MANGA',
+                          stacked: onIncrementProgress != null && onIncrementVolume != null,
+                          onIncrementPrimary: onIncrementProgress,
                           onIncrementVolume: onIncrementVolume,
                         ),
                       ],

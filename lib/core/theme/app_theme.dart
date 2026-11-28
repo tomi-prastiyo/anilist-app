@@ -256,6 +256,7 @@ class AppTheme {
   static ThemeData _buildYuYuYuTheme(YuYuYuHeroine activeHeroine) {
     final palette = AppThemePalette.yuyuyu(activeHeroine.accentColor);
     final accent = palette.accent;
+    final terminalBorder = Color.lerp(palette.border, YuYuYuAssets.shinjuGold, 0.16)!;
 
     final baseTextTheme = ThemeData.dark().textTheme;
     final textTheme = GoogleFonts.overpassTextTheme(baseTextTheme).apply(
@@ -302,7 +303,7 @@ class AppTheme {
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(10),
-          side: BorderSide(color: palette.border, width: 1),
+          side: BorderSide(color: terminalBorder, width: 1),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
@@ -353,7 +354,7 @@ class AppTheme {
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          side: BorderSide(color: palette.border),
+          side: BorderSide(color: terminalBorder),
         ),
       ),
     );

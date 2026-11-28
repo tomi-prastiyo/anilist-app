@@ -100,7 +100,10 @@ class HomeRepository {
 
   static int getCurrentYear() => DateTime.now().year;
 
-  Future<Map<String, dynamic>> fetchHomeData({List<int>? mediaIds}) async {
+  Future<Map<String, dynamic>> fetchHomeData({
+    List<int>? mediaIds,
+    bool includeAdult = false,
+  }) async {
     if (mediaIds == null || mediaIds.isEmpty) {
       return {
         'airingToday': {'airingSchedules': <Map<String, dynamic>>[]},
@@ -121,7 +124,9 @@ class HomeRepository {
       },
     );
     final raw = (data['airingToday']?['airingSchedules'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-    final safe = raw.where((s) => s['media']?['isAdult'] != true).toList();
+    final safe = includeAdult
+        ? raw
+        : raw.where((s) => s['media']?['isAdult'] != true).toList();
     return {
       'airingToday': {'airingSchedules': safe},
     };
@@ -132,6 +137,7 @@ class HomeRepository {
     required int airingAtLesser,
     List<int>? mediaIds,
     int page = 1,
+    bool includeAdult = false,
   }) async {
     final vars = <String, dynamic>{
       'airingAtGreater': airingAtGreater,
@@ -148,6 +154,8 @@ class HomeRepository {
     );
     final pageData = response['Page'] as Map<String, dynamic>?;
     final list = (pageData?['airingSchedules'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-    return list.where((s) => s['media']?['isAdult'] != true).toList();
+    return includeAdult
+        ? list
+        : list.where((s) => s['media']?['isAdult'] != true).toList();
   }
 }

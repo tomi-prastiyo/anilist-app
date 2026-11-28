@@ -5,6 +5,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/animations/app_motion.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
+import '../../../core/constants/yuyuyu_assets.dart';
+import '../../../core/settings/content_settings_provider.dart';
+import '../../../core/utils/media_progress_util.dart';
+import '../../../core/utils/score_util.dart';
 import '../../../core/utils/text_util.dart';
 import '../../../shared/cards/media_card.dart';
 import '../../../shared/feedback/empty_view.dart';
@@ -13,6 +17,8 @@ import '../../../shared/feedback/shimmer_loading.dart';
 import '../../../shared/widgets/random_pick_sheet.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../media_detail/presentation/media_detail_screen.dart';
+import '../../search/presentation/search_screen.dart';
+import '../../seasonal/presentation/seasonal_screen.dart';
 import 'media_list_controller.dart';
 
 enum ListSortOption {
@@ -116,7 +122,15 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
     });
   }
 
+  Color _resolveAccentColor(BuildContext context) {
+    final isAnime = widget.type == 'ANIME';
+    return context.isYuYuYu
+        ? (isAnime ? context.appAccent : YuYuYuAssets.shinjuGold)
+        : (isAnime ? AppColors.brandBlue : const Color(0xFF7C57E8));
+  }
+
   void _showSortMenu(BuildContext context) {
+    final accentColor = _resolveAccentColor(context);
     showModalBottomSheet(
       context: context,
       backgroundColor: context.appSurface,
@@ -148,9 +162,7 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
                   return ListTile(
                     leading: Icon(
                       isSelected ? Icons.radio_button_checked_rounded : Icons.radio_button_off_rounded,
-                      color: isSelected
-                          ? (widget.type == 'ANIME' ? AppColors.brandBlue : const Color(0xFF7C57E8))
-                          : context.appTextSecondary,
+                      color: isSelected ? accentColor : context.appTextSecondary,
                       size: 20,
                     ),
                     title: Text(
@@ -158,9 +170,7 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
                       style: TextStyle(
                         fontFamily: 'Overpass',
                         fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                        color: isSelected
-                            ? (widget.type == 'ANIME' ? AppColors.brandBlue : const Color(0xFF7C57E8))
-                            : context.appTextPrimary,
+                        color: isSelected ? accentColor : context.appTextPrimary,
                         fontSize: 14,
                       ),
                     ),
@@ -178,15 +188,52 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
     );
   }
 
+  String _getLayoutLabel() {
+    switch (_cardMode) {
+      case MediaCardMode.list:
+        return 'List';
+      case MediaCardMode.compact:
+        return 'Compact';
+      case MediaCardMode.grid:
+        return 'Grid';
+    }
+  }
+
+  double _maxScoreForFormat(String format) {
+    switch (format) {
+      case 'POINT_10_DECIMAL':
+      case 'POINT_10':
+        return 10.0;
+      case 'POINT_5':
+        return 5.0;
+      case 'POINT_3':
+        return 3.0;
+      case 'POINT_100':
+      default:
+        return 100.0;
+    }
+  }
+
+  double _stepForFormat(String format) =>
+      format == 'POINT_10_DECIMAL' ? 0.5 : 1.0;
+
+  double _normalizedScoreValue(String format, double raw) {
+    final max = _maxScoreForFormat(format);
+    if (raw <= max) return raw;
+    return ((raw / 100.0) * max).clamp(0.0, max);
+  }
+
   void _showScoreDialog(BuildContext context, Map<String, dynamic> entry, String scoreFormat) {
     final media = entry['media'] as Map<String, dynamic>;
-    final title = TextUtil.getPreferredTitle(media['title']);
-    final currentScore = (entry['score'] as num?)?.toDouble() ?? 0.0;
-    double tempScore = currentScore;
-
-    final is10Point = scoreFormat == 'POINT_10' || scoreFormat == 'POINT_10_DECIMAL';
-    final maxScore = is10Point ? 10.0 : 100.0;
-    final divisions = is10Point ? (scoreFormat == 'POINT_10_DECIMAL' ? 100 : 10) : 100;
+    final titleLang = ref.read(titleLanguageProvider);
+    final title = TextUtil.getPreferredTitle(media['title'], preference: titleLang);
+    final accentColor = _resolveAccentColor(context);
+    final maxScore = _maxScoreForFormat(scoreFormat);
+    final step = _stepForFormat(scoreFormat);
+    double tempScore = _normalizedScoreValue(
+      scoreFormat,
+      (entry['score'] as num?)?.toDouble() ?? 0.0,
+    );
 
     showDialog(
       context: context,
@@ -198,10 +245,11 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
             'Rate: $title',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
+            style: TextStyle(
               fontFamily: 'Overpass',
               fontWeight: FontWeight.w800,
               fontSize: 15,
+              color: context.appTextPrimary,
             ),
           ),
           content: Column(
@@ -210,32 +258,46 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.star_rounded, color: Color(0xFFE5A158), size: 28),
-                  const SizedBox(width: 8),
+                  IconButton.filledTonal(
+                    onPressed: tempScore > 0
+                        ? () => setDialogState(
+                              () => tempScore = (tempScore - step).clamp(0.0, maxScore),
+                            )
+                        : null,
+                    icon: const Icon(Icons.remove_rounded, size: 18),
+                  ),
+                  const SizedBox(width: 12),
+                  const Icon(Icons.star_rounded, color: Color(0xFFE5A158), size: 26),
+                  const SizedBox(width: 6),
                   Text(
                     tempScore > 0
-                        ? (is10Point
-                            ? (scoreFormat == 'POINT_10_DECIMAL'
-                                ? tempScore.toStringAsFixed(1)
-                                : tempScore.round().toString())
-                            : '${tempScore.round()}%')
+                        ? ScoreUtil.formatScore(tempScore, format: scoreFormat)
                         : 'Unrated',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontFamily: 'Overpass',
                       fontWeight: FontWeight.w900,
                       fontSize: 22,
-                      color: Colors.white,
+                      color: context.appTextPrimary,
                     ),
+                  ),
+                  const SizedBox(width: 12),
+                  IconButton.filledTonal(
+                    onPressed: tempScore < maxScore
+                        ? () => setDialogState(
+                              () => tempScore = (tempScore + step).clamp(0.0, maxScore),
+                            )
+                        : null,
+                    icon: const Icon(Icons.add_rounded, size: 18),
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
               Slider(
                 value: tempScore.clamp(0.0, maxScore),
                 min: 0,
                 max: maxScore,
-                divisions: divisions,
-                activeColor: widget.type == 'ANIME' ? AppColors.brandBlue : const Color(0xFF7C57E8),
+                divisions: (maxScore / step).round(),
+                activeColor: accentColor,
                 inactiveColor: context.appInputSurface,
                 onChanged: (val) {
                   setDialogState(() => tempScore = val);
@@ -244,6 +306,14 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
             ],
           ),
           actions: [
+            if (tempScore > 0)
+              TextButton(
+                onPressed: () => setDialogState(() => tempScore = 0.0),
+                child: const Text(
+                  'Clear',
+                  style: TextStyle(color: AppColors.statusDropped),
+                ),
+              ),
             TextButton(
               onPressed: () => Navigator.pop(context),
               child: Text('Cancel', style: TextStyle(color: context.appTextSecondary)),
@@ -261,8 +331,8 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
                     );
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: widget.type == 'ANIME' ? AppColors.brandBlue : const Color(0xFF7C57E8),
-                foregroundColor: widget.type == 'ANIME' ? context.appBackground : Colors.white,
+                backgroundColor: accentColor,
+                foregroundColor: accentColor.computeLuminance() > 0.55 ? Colors.black : Colors.white,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
               child: const Text('Save Score', style: TextStyle(fontWeight: FontWeight.w800)),
@@ -276,10 +346,12 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authControllerProvider);
+    final titleLang = ref.watch(titleLanguageProvider);
     final isGuest = authState is! Authenticated;
 
     final isAnime = widget.type == 'ANIME';
-    final accentColor = isAnime ? AppColors.brandBlue : const Color(0xFF7C57E8);
+    final accentColor = _resolveAccentColor(context);
+    final accentForeground = accentColor.computeLuminance() > 0.55 ? Colors.black : Colors.white;
     final listTitle = isAnime ? 'Anime List' : 'Manga List';
 
     if (isGuest) {
@@ -290,15 +362,39 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
           title: 'Sign in to access your list',
           subtitle: 'Keep track of what you are watching, set scores, and update progress.',
           icon: Icons.bookmark_border_rounded,
-          action: ElevatedButton(
-            onPressed: () {
-              ref.read(authControllerProvider.notifier).logout();
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: accentColor,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Sign In to AniList'),
+          action: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ElevatedButton(
+                onPressed: () {
+                  ref.read(authControllerProvider.notifier).logout();
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: accentColor,
+                  foregroundColor: accentForeground,
+                ),
+                child: const Text('Sign In to AniList'),
+              ),
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.of(context).push(
+                    AppPageRoute(
+                      page: isAnime ? const SeasonalScreen() : const SearchScreen(),
+                    ),
+                  );
+                },
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: accentColor,
+                  side: BorderSide(color: accentColor.withValues(alpha: 0.45)),
+                ),
+                icon: Icon(
+                  isAnime ? Icons.auto_awesome_rounded : Icons.explore_rounded,
+                  size: 16,
+                ),
+                label: Text(isAnime ? 'Explore Seasonal Chart' : 'Explore Popular Manga'),
+              ),
+            ],
           ),
         ),
       );
@@ -368,10 +464,10 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
           IconButton(
             style: IconButton.styleFrom(
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              minimumSize: const Size(34, 34),
+              minimumSize: const Size(40, 40),
               padding: EdgeInsets.zero,
             ),
-            constraints: const BoxConstraints.tightFor(width: 34, height: 34),
+            constraints: const BoxConstraints.tightFor(width: 40, height: 40),
             padding: EdgeInsets.zero,
             icon: Icon(_isSearchVisible ? Icons.search_off_rounded : Icons.search_rounded, size: 20),
             tooltip: 'Search list',
@@ -389,10 +485,10 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
           IconButton(
             style: IconButton.styleFrom(
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              minimumSize: const Size(34, 34),
+              minimumSize: const Size(40, 40),
               padding: EdgeInsets.zero,
             ),
-            constraints: const BoxConstraints.tightFor(width: 34, height: 34),
+            constraints: const BoxConstraints.tightFor(width: 40, height: 40),
             padding: EdgeInsets.zero,
             icon: const Icon(Icons.casino_rounded, size: 20),
             tooltip: 'Random Pick',
@@ -420,10 +516,10 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
           IconButton(
             style: IconButton.styleFrom(
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              minimumSize: const Size(34, 34),
+              minimumSize: const Size(40, 40),
               padding: EdgeInsets.zero,
             ),
-            constraints: const BoxConstraints.tightFor(width: 34, height: 34),
+            constraints: const BoxConstraints.tightFor(width: 40, height: 40),
             padding: EdgeInsets.zero,
             icon: const Icon(Icons.sort_rounded, size: 20),
             tooltip: 'Sort by',
@@ -432,10 +528,10 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
           IconButton(
             style: IconButton.styleFrom(
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              minimumSize: const Size(34, 34),
+              minimumSize: const Size(40, 40),
               padding: EdgeInsets.zero,
             ),
-            constraints: const BoxConstraints.tightFor(width: 34, height: 34),
+            constraints: const BoxConstraints.tightFor(width: 40, height: 40),
             padding: EdgeInsets.zero,
             icon: Icon(_getLayoutIcon(), size: 20),
             tooltip: 'Switch layout',
@@ -445,47 +541,53 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
       ),
       body: Column(
         children: [
-          // Recessed Search Input (Home Theme)
-          if (_isSearchVisible)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: Container(
-                height: 40,
-                decoration: BoxDecoration(
-                  color: context.appInputSurface,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: context.appBorder),
-                ),
-                child: TextField(
-                  controller: _searchController,
-                  autofocus: true,
-                  style: TextStyle(fontSize: 13, color: context.appTextPrimary),
-                  decoration: InputDecoration(
-                    hintText: 'Search $listTitle...',
-                    hintStyle: TextStyle(color: context.appTextMuted, fontSize: 13),
-                    prefixIcon: Icon(Icons.search_rounded, size: 18, color: context.appTextSecondary),
-                    suffixIcon: _searchQuery.isNotEmpty
-                        ? IconButton(
-                            icon: Icon(Icons.clear_rounded, size: 16, color: context.appTextSecondary),
-                            onPressed: () {
-                              _searchDebounce?.cancel();
-                              _searchController.clear();
-                              setState(() => _searchQuery = '');
-                            },
-                          )
-                        : null,
-                    border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 10),
-                  ),
-                  onChanged: (val) {
-                    _searchDebounce?.cancel();
-                    _searchDebounce = Timer(const Duration(milliseconds: 250), () {
-                      if (mounted) setState(() => _searchQuery = val);
-                    });
-                  },
-                ),
-              ),
-            ),
+          // Smooth Search Reveal
+          AnimatedSize(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOutCubic,
+            child: _isSearchVisible
+                ? Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                    child: Container(
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: context.appInputSurface,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: context.appBorder),
+                      ),
+                      child: TextField(
+                        controller: _searchController,
+                        autofocus: true,
+                        style: TextStyle(fontSize: 13, color: context.appTextPrimary),
+                        decoration: InputDecoration(
+                          hintText: 'Search $listTitle...',
+                          hintStyle: TextStyle(color: context.appTextMuted, fontSize: 13),
+                          prefixIcon: Icon(Icons.search_rounded, size: 18, color: context.appTextSecondary),
+                          suffixIcon: _searchController.text.isNotEmpty
+                              ? IconButton(
+                                  icon: Icon(Icons.clear_rounded, size: 16, color: context.appTextSecondary),
+                                  onPressed: () {
+                                    _searchDebounce?.cancel();
+                                    _searchController.clear();
+                                    setState(() => _searchQuery = '');
+                                  },
+                                )
+                              : null,
+                          border: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                        ),
+                        onChanged: (val) {
+                          setState(() {});
+                          _searchDebounce?.cancel();
+                          _searchDebounce = Timer(const Duration(milliseconds: 250), () {
+                            if (mounted) setState(() => _searchQuery = val);
+                          });
+                        },
+                      ),
+                    ),
+                  )
+                : const SizedBox.shrink(),
+          ),
 
           // Custom Pill Status Tabs Bar (Scrollable Pill Selector)
           Container(
@@ -537,7 +639,9 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
                             fontSize: 12,
                             fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
                             color: isSelected
-                                ? (isAnime ? context.appBackground : Colors.white)
+                                ? (accentColor.computeLuminance() > 0.55
+                                    ? Colors.black
+                                    : Colors.white)
                                 : context.appTextSecondary,
                           ),
                         ),
@@ -546,8 +650,8 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
                           padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
                           decoration: BoxDecoration(
                             color: isSelected
-                                ? (isAnime
-                                    ? Colors.black.withValues(alpha: 0.18)
+                                ? (accentColor.computeLuminance() > 0.55
+                                    ? Colors.black.withValues(alpha: 0.16)
                                     : Colors.white.withValues(alpha: 0.25))
                                 : (context.isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.06)),
                             borderRadius: BorderRadius.circular(8),
@@ -559,7 +663,9 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
                               fontSize: 10,
                               fontWeight: FontWeight.w800,
                               color: isSelected
-                                  ? (isAnime ? context.appBackground : Colors.white)
+                                  ? (accentColor.computeLuminance() > 0.55
+                                      ? Colors.black
+                                      : Colors.white)
                                   : context.appTextSecondary,
                             ),
                           ),
@@ -571,7 +677,69 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
               },
             ),
           ),
-          const SizedBox(height: 6),
+          // Compact Active Controls Strip (Sort, Layout & Search Indicator)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(AppSpacing.p16, 2, AppSpacing.p16, 4),
+            child: SizedBox(
+              height: 30,
+              child: Row(
+                children: [
+                  _buildControlPill(
+                    context,
+                    icon: Icons.sort_rounded,
+                    label: _selectedSort.label,
+                    accentColor: accentColor,
+                    onTap: () => _showSortMenu(context),
+                  ),
+                  const SizedBox(width: 8),
+                  _buildControlPill(
+                    context,
+                    icon: _getLayoutIcon(),
+                    label: _getLayoutLabel(),
+                    accentColor: accentColor,
+                    onTap: _cycleLayoutMode,
+                  ),
+                  const Spacer(),
+                  if (_searchQuery.trim().isNotEmpty)
+                    GestureDetector(
+                      onTap: () {
+                        _searchDebounce?.cancel();
+                        _searchController.clear();
+                        setState(() => _searchQuery = '');
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: accentColor.withValues(alpha: 0.14),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 110),
+                              child: Text(
+                                '"${_searchQuery.trim()}"',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontFamily: 'Overpass',
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: accentColor,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Icon(Icons.close_rounded, size: 12, color: accentColor),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
 
           // Main List View
           Expanded(
@@ -598,7 +766,10 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
                     // 1. Search Filter
                     var entries = rawEntries.where((entry) {
                       if (_searchQuery.isEmpty) return true;
-                      final title = TextUtil.getPreferredTitle(entry['media']?['title']);
+                      final title = TextUtil.getPreferredTitle(
+                        entry['media']?['title'],
+                        preference: titleLang,
+                      );
                       return title.toLowerCase().contains(_searchQuery.toLowerCase());
                     }).toList();
 
@@ -614,8 +785,14 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
                           if (scoreCmp != 0) return scoreCmp;
                           return (b['updatedAt'] as int? ?? 0).compareTo(a['updatedAt'] as int? ?? 0);
                         case ListSortOption.title:
-                          final titleA = TextUtil.getPreferredTitle(a['media']?['title']).toLowerCase();
-                          final titleB = TextUtil.getPreferredTitle(b['media']?['title']).toLowerCase();
+                          final titleA = TextUtil.getPreferredTitle(
+                            a['media']?['title'],
+                            preference: titleLang,
+                          ).toLowerCase();
+                          final titleB = TextUtil.getPreferredTitle(
+                            b['media']?['title'],
+                            preference: titleLang,
+                          ).toLowerCase();
                           return titleA.compareTo(titleB);
                         case ListSortOption.progress:
                           final progCmp = (b['progress'] as int? ?? 0).compareTo(a['progress'] as int? ?? 0);
@@ -648,14 +825,31 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
                             status: status,
                             accentColor: accentColor,
                             scoreFormat: scoreFormat,
-                            onIncrementProgress: (entryId, mediaId, currentProgress, maxCount) {
+                            titleLanguage: titleLang,
+                            onIncrementProgress:
+                                (entryId, mediaId, currentProgress, maxCount, maxVolumes, currentRepeat) {
                               HapticFeedback.lightImpact();
                               ref.read(provider.notifier).incrementProgress(
                                     entryId: entryId,
                                     mediaId: mediaId,
                                     currentProgress: currentProgress,
                                     maxEpisodesOrChapters: maxCount,
+                                    maxVolumes: maxVolumes,
+                                    currentStatus: status,
+                                    currentRepeat: currentRepeat,
                                   );
+                              if (maxCount != null && currentProgress + 1 >= maxCount) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      status == 'REPEATING'
+                                          ? 'Rewatch/Reread Completed (+1 Repeat, Finish Date set)!'
+                                          : 'Marked as Completed (Finish Date set)!',
+                                    ),
+                                    duration: const Duration(seconds: 2),
+                                  ),
+                                );
+                              }
                             },
                             onIncrementVolume: widget.type == 'MANGA'
                                 ? (entryId, mediaId, currentVols, maxVols) {
@@ -685,13 +879,60 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
     );
   }
 
+  Widget _buildControlPill(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required Color accentColor,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: context.appSurface,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: context.appBorder),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 13.5, color: accentColor),
+              const SizedBox(width: 5),
+              Text(
+                label,
+                style: TextStyle(
+                  fontFamily: 'Overpass',
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: context.appTextPrimary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildLayout(
     List<Map<String, dynamic>> entries, {
     required String status,
     required Color accentColor,
     required String scoreFormat,
-    required void Function(int entryId, int mediaId, int currentProgress, int? maxCount)
-        onIncrementProgress,
+    required String titleLanguage,
+    required void Function(
+      int entryId,
+      int mediaId,
+      int currentProgress,
+      int? maxCount,
+      int? maxVolumes,
+      int currentRepeat,
+    ) onIncrementProgress,
     void Function(int entryId, int mediaId, int currentVols, int? maxVols)?
         onIncrementVolume,
     required void Function(Map<String, dynamic> entry) onUpdateScore,
@@ -716,11 +957,24 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
             final maxCount = media['episodes'] as int? ?? media['chapters'] as int?;
             final volProgress = entry['progressVolumes'] as int? ?? 0;
             final maxVols = media['volumes'] as int?;
+            final repeatCount = entry['repeat'] as int? ?? 0;
+            final canIncProg = MediaProgressUtil.canIncrementProgress(
+              status: status,
+              progress: progress,
+              media: media,
+            );
+            final canIncVol = onIncrementVolume != null &&
+                MediaProgressUtil.canIncrementVolume(
+                  status: status,
+                  progressVolumes: volProgress,
+                  media: media,
+                );
 
             return MediaCard(
               media: media,
               mode: MediaCardMode.grid,
               accentColor: accentColor,
+              titlePreference: titleLanguage,
               listStatus: status,
               userProgress: progress,
               userVolumeProgress: isManga ? volProgress : null,
@@ -728,13 +982,17 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
               scoreFormat: scoreFormat,
               onTap: () => _navigateToDetail(context, media['id']),
               onUpdateScore: () => onUpdateScore(entry),
-              onIncrementProgress: () => onIncrementProgress(
-                entry['id'] as int,
-                media['id'] as int,
-                progress,
-                maxCount,
-              ),
-              onIncrementVolume: onIncrementVolume != null
+              onIncrementProgress: canIncProg
+                  ? () => onIncrementProgress(
+                        entry['id'] as int,
+                        media['id'] as int,
+                        progress,
+                        maxCount,
+                        maxVols,
+                        repeatCount,
+                      )
+                  : null,
+              onIncrementVolume: canIncVol
                   ? () => onIncrementVolume(
                         entry['id'] as int,
                         media['id'] as int,
@@ -758,11 +1016,24 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
             final maxCount = media['episodes'] as int? ?? media['chapters'] as int?;
             final volProgress = entry['progressVolumes'] as int? ?? 0;
             final maxVols = media['volumes'] as int?;
+            final repeatCount = entry['repeat'] as int? ?? 0;
+            final canIncProg = MediaProgressUtil.canIncrementProgress(
+              status: status,
+              progress: progress,
+              media: media,
+            );
+            final canIncVol = onIncrementVolume != null &&
+                MediaProgressUtil.canIncrementVolume(
+                  status: status,
+                  progressVolumes: volProgress,
+                  media: media,
+                );
 
             return MediaCard(
               media: media,
               mode: MediaCardMode.compact,
               accentColor: accentColor,
+              titlePreference: titleLanguage,
               listStatus: status,
               userProgress: progress,
               userVolumeProgress: isManga ? volProgress : null,
@@ -770,13 +1041,17 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
               scoreFormat: scoreFormat,
               onTap: () => _navigateToDetail(context, media['id']),
               onUpdateScore: () => onUpdateScore(entry),
-              onIncrementProgress: () => onIncrementProgress(
-                entry['id'] as int,
-                media['id'] as int,
-                progress,
-                maxCount,
-              ),
-              onIncrementVolume: onIncrementVolume != null
+              onIncrementProgress: canIncProg
+                  ? () => onIncrementProgress(
+                        entry['id'] as int,
+                        media['id'] as int,
+                        progress,
+                        maxCount,
+                        maxVols,
+                        repeatCount,
+                      )
+                  : null,
+              onIncrementVolume: canIncVol
                   ? () => onIncrementVolume(
                         entry['id'] as int,
                         media['id'] as int,
@@ -801,11 +1076,24 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
             final maxCount = media['episodes'] as int? ?? media['chapters'] as int?;
             final volProgress = entry['progressVolumes'] as int? ?? 0;
             final maxVols = media['volumes'] as int?;
+            final repeatCount = entry['repeat'] as int? ?? 0;
+            final canIncProg = MediaProgressUtil.canIncrementProgress(
+              status: status,
+              progress: progress,
+              media: media,
+            );
+            final canIncVol = onIncrementVolume != null &&
+                MediaProgressUtil.canIncrementVolume(
+                  status: status,
+                  progressVolumes: volProgress,
+                  media: media,
+                );
 
             return MediaCard(
               media: media,
               mode: MediaCardMode.list,
               accentColor: accentColor,
+              titlePreference: titleLanguage,
               listStatus: status,
               userProgress: progress,
               userVolumeProgress: isManga ? volProgress : null,
@@ -813,13 +1101,17 @@ class _MediaListScreenState extends ConsumerState<MediaListScreen>
               scoreFormat: scoreFormat,
               onTap: () => _navigateToDetail(context, media['id']),
               onUpdateScore: () => onUpdateScore(entry),
-              onIncrementProgress: () => onIncrementProgress(
-                entry['id'] as int,
-                media['id'] as int,
-                progress,
-                maxCount,
-              ),
-              onIncrementVolume: onIncrementVolume != null
+              onIncrementProgress: canIncProg
+                  ? () => onIncrementProgress(
+                        entry['id'] as int,
+                        media['id'] as int,
+                        progress,
+                        maxCount,
+                        maxVols,
+                        repeatCount,
+                      )
+                  : null,
+              onIncrementVolume: canIncVol
                   ? () => onIncrementVolume(
                         entry['id'] as int,
                         media['id'] as int,

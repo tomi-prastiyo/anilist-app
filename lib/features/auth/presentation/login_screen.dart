@@ -8,6 +8,7 @@ import '../../../core/constants/app_spacing.dart';
 import '../../../core/constants/yuyuyu_assets.dart';
 import '../../../core/theme/theme_provider.dart';
 import '../../../shared/image/app_network_image.dart';
+import '../../../shared/widgets/mankai_cute_companion.dart';
 import '../../../shared/widgets/mankai_logo_emblem.dart';
 import '../../../shared/widgets/sakura_petals_overlay.dart';
 import 'auth_controller.dart';
@@ -108,10 +109,26 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    MankaiLogoEmblem(
-                      size: 96,
-                      accentColor: accent,
-                      radius: 26,
+                    Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        MankaiLogoEmblem(
+                          size: 96,
+                          accentColor: accent,
+                          radius: 26,
+                        ),
+                        Positioned(
+                          right: -26,
+                          top: -10,
+                          child: MankaiFloatingMascot(
+                            assetPath: heroine.fairyAsset,
+                            accentColor: accent,
+                            greetingText: heroine.cuteGreeting,
+                            size: 40,
+                            showGlow: false,
+                          ),
+                        ),
+                      ],
                     ).animateEntrance(index: 0),
                     const SizedBox(height: 18),
                     const Text(

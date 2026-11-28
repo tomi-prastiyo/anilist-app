@@ -1,12 +1,14 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/settings/content_settings_provider.dart';
 import '../../media_list/presentation/media_list_controller.dart';
 import '../data/home_repository.dart';
 
 final homeDataProvider =
     StateNotifierProvider<HomeController, AsyncValue<Map<String, dynamic>>>((ref) {
   final repo = ref.watch(homeRepositoryProvider);
-  final controller = HomeController(repo);
+  final includeAdult = ref.watch(adultContentProvider);
+  final controller = HomeController(repo, includeAdult: includeAdult);
 
   void syncFromLists(AsyncValue<List<Map<String, dynamic>>> listState) {
     listState.whenData((lists) {
@@ -43,10 +45,13 @@ List<int> _extractPrioritizedIds(List<Map<String, dynamic>> animeLists) {
 
 class HomeController extends StateNotifier<AsyncValue<Map<String, dynamic>>> {
   final HomeRepository _repo;
+  final bool _includeAdult;
   List<int>? _lastMediaIds;
   bool _isFetching = false;
 
-  HomeController(this._repo) : super(const AsyncValue.loading());
+  HomeController(this._repo, {bool includeAdult = false})
+      : _includeAdult = includeAdult,
+        super(const AsyncValue.loading());
 
   Future<void> updateMediaIds(List<int> mediaIds) async {
     if (_lastMediaIds != null && listEquals(_lastMediaIds, mediaIds)) {
@@ -67,7 +72,10 @@ class HomeController extends StateNotifier<AsyncValue<Map<String, dynamic>>> {
       state = const AsyncValue.loading();
     }
     try {
-      final data = await _repo.fetchHomeData(mediaIds: _lastMediaIds ?? const []);
+      final data = await _repo.fetchHomeData(
+        mediaIds: _lastMediaIds ?? const [],
+        includeAdult: _includeAdult,
+      );
       if (mounted) {
         state = AsyncValue.data(data);
       }

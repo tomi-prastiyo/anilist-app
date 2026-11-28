@@ -73,6 +73,20 @@ class AuthController extends StateNotifier<AuthState> {
     state = GuestMode();
   }
 
+  void updateLocalAdultContent(bool enabled) {
+    final current = state;
+    if (current is Authenticated) {
+      state = Authenticated(current.user.copyWith(displayAdultContent: enabled));
+    }
+  }
+
+  void updateLocalTitleLanguage(String language) {
+    final current = state;
+    if (current is Authenticated) {
+      state = Authenticated(current.user.copyWith(titleLanguage: language));
+    }
+  }
+
   Future<void> logout() async {
     state = AuthLoading();
     await _repo.clearAuth();

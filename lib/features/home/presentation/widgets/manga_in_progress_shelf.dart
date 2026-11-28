@@ -3,7 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/animations/app_motion.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_spacing.dart';
+import '../../../../core/settings/content_settings_provider.dart';
+import '../../../../core/utils/media_progress_util.dart';
 import '../../../../core/utils/text_util.dart';
+import '../../../../shared/widgets/mankai_motifs.dart';
 import '../../../../shared/widgets/progress_shelf_card.dart';
 import '../../../media_detail/presentation/media_detail_screen.dart';
 import '../../../media_list/presentation/media_list_controller.dart';
@@ -17,72 +20,42 @@ class MangaInProgressShelf extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final mangaListState = ref.watch(mangaListControllerProvider);
+    final titleLang = ref.watch(titleLanguageProvider);
     final accent = context.isYuYuYu ? context.appSecondaryAccent : _mangaPurple;
 
     return mangaListState.maybeWhen(
       data: (lists) {
-        final currentList = lists.firstWhere(
-          (l) => (l['status'] as String?)?.toUpperCase() == 'CURRENT',
-          orElse: () => {'entries': []},
-        );
+        final seenIds = <int>{};
+        final combinedEntries = <Map<String, dynamic>>[];
+        for (final group in lists) {
+          final st = (group['status'] as String?)?.toUpperCase();
+          if (st != 'CURRENT' && st != 'REPEATING') continue;
+          final entries = (group['entries'] as List?)?.cast<Map<String, dynamic>>() ?? const [];
+          for (final entry in entries) {
+            final id = entry['id'] as int?;
+            if (id != null && !seenIds.add(id)) continue;
+            combinedEntries.add({
+              ...entry,
+              '_groupStatus': st,
+            });
+          }
+        }
+        if (combinedEntries.isEmpty) return const SizedBox.shrink();
 
-        final rawEntries = (currentList['entries'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-        if (rawEntries.isEmpty) return const SizedBox.shrink();
-
-        final allEntries = List<Map<String, dynamic>>.from(rawEntries)
+        final allEntries = List<Map<String, dynamic>>.from(combinedEntries)
           ..sort((a, b) => (b['updatedAt'] as int? ?? 0).compareTo(a['updatedAt'] as int? ?? 0));
-        final displayEntries = allEntries.take(5).toList();
+        final displayEntries = allEntries.take(8).toList();
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.p16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 7,
-                        height: 7,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: accent,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        'MANGA IN PROGRESS',
-                        style: TextStyle(
-                          fontFamily: 'Overpass',
-                          color: context.appTextPrimary,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.6,
-                        ),
-                      ),
-                    ],
-                  ),
-                  InkWell(
-                    onTap: () => Navigator.of(context).push(
-                      AppPageRoute(page: const MediaListScreen(type: 'MANGA')),
-                    ),
-                    borderRadius: BorderRadius.circular(4),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                      child: Text(
-                        'View All (${allEntries.length}) →',
-                        style: TextStyle(
-                          fontFamily: 'Overpass',
-                          color: accent,
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+            MankaiSectionHeader(
+              title: 'MANGA IN PROGRESS',
+              dotColor: accent,
+              actionLabel: 'View All (${allEntries.length}) →',
+              actionColor: accent,
+              onAction: () => Navigator.of(context).push(
+                AppPageRoute(page: const MediaListScreen(type: 'MANGA')),
               ),
             ),
             const SizedBox(height: 10),
@@ -97,7 +70,7 @@ class MangaInProgressShelf extends ConsumerWidget {
                   final item = displayEntries[index];
                   final media = item['media'] as Map<String, dynamic>;
                   final mediaId = media['id'] as int;
-                  final title = TextUtil.getPreferredTitle(media['title']);
+                  final title = TextUtil.getPreferredTitle(media['title'], preference: titleLang);
                   final coverUrl = (media['coverImage']?['extraLarge'] ??
                       media['coverImage']?['large'] ??
                       media['coverImage']?['medium']) as String?;
@@ -106,39 +79,62 @@ class MangaInProgressShelf extends ConsumerWidget {
                   final totalChapters = media['chapters'] as int?;
                   final progressVolumes = item['progressVolumes'] as int? ?? 0;
                   final totalVolumes = media['volumes'] as int?;
+                  final entryStatus = (item['status'] as String? ?? item['_groupStatus'] as String?)?.toUpperCase() ?? 'CURRENT';
+                  final isRereading = entryStatus == 'REPEATING';
+                  final repeatCount = item['repeat'] as int? ?? 0;
+
+                  final canIncCh = MediaProgressUtil.canIncrementProgress(
+                    status: entryStatus,
+                    progress: progress,
+                    media: media,
+                  );
+                  final canIncVol = MediaProgressUtil.canIncrementVolume(
+                    status: entryStatus,
+                    progressVolumes: progressVolumes,
+                    media: media,
+                  );
 
                   return ProgressShelfCard(
                     mediaId: mediaId,
                     title: title,
                     coverUrl: coverUrl,
                     bannerUrl: bannerUrl,
-                    badgeText: 'Reading',
-                    badgeColor: accent,
+                    badgeText: isRereading
+                        ? (repeatCount > 0 ? 'Rereading #${repeatCount + 1}' : 'Rereading')
+                        : 'Reading',
+                    badgeColor: isRereading ? AppColors.statusRepeating : accent,
                     subtitleText: 'Ch $progress/${totalChapters ?? '?'} • Vol $progressVolumes/${totalVolumes ?? '?'}',
                     progress: progress,
                     total: totalChapters,
                     accentColor: accent,
-                    incrementTextColor: context.isYuYuYu ? Colors.black : Colors.white,
+                    incrementTextColor: accent.computeLuminance() > 0.55 ? Colors.black : Colors.white,
+                    isManga: true,
                     heroScope: 'home_manga',
                     onTap: () => Navigator.of(context).push(
                       AppPageRoute(page: MediaDetailScreen(mediaId: mediaId)),
                     ),
-                    onIncrement: () {
-                      ref.read(mangaListControllerProvider.notifier).incrementProgress(
-                            entryId: item['id'] as int,
-                            mediaId: mediaId,
-                            currentProgress: progress,
-                            maxEpisodesOrChapters: totalChapters,
-                          );
-                    },
-                    onIncrementVolume: () {
-                      ref.read(mangaListControllerProvider.notifier).incrementVolume(
-                            entryId: item['id'] as int,
-                            mediaId: mediaId,
-                            currentVolumes: progressVolumes,
-                            maxVolumes: totalVolumes,
-                          );
-                    },
+                    onIncrement: canIncCh
+                        ? () {
+                            ref.read(mangaListControllerProvider.notifier).incrementProgress(
+                                  entryId: item['id'] as int,
+                                  mediaId: mediaId,
+                                  currentProgress: progress,
+                                  maxEpisodesOrChapters: totalChapters,
+                                  currentStatus: entryStatus,
+                                  currentRepeat: repeatCount,
+                                );
+                          }
+                        : null,
+                    onIncrementVolume: canIncVol
+                        ? () {
+                            ref.read(mangaListControllerProvider.notifier).incrementVolume(
+                                  entryId: item['id'] as int,
+                                  mediaId: mediaId,
+                                  currentVolumes: progressVolumes,
+                                  maxVolumes: totalVolumes,
+                                );
+                          }
+                        : null,
                   ).animateEntrance(index: index, horizontal: true);
                 },
               ),

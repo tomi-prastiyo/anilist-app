@@ -43,7 +43,7 @@ class _MediaThemeSongsCardState extends State<MediaThemeSongsCard> {
       SnackBar(
         content: Text('Copied "$songName" to clipboard'),
         duration: const Duration(seconds: 2),
-        backgroundColor: AppColors.brandBlue,
+        backgroundColor: context.appAccent,
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -198,13 +198,13 @@ class _MediaThemeSongsCardState extends State<MediaThemeSongsCard> {
 
           // Content
           if (widget.isLoading)
-            const Padding(
-              padding: EdgeInsets.all(24),
+            Padding(
+              padding: const EdgeInsets.all(24),
               child: Center(
                 child: SizedBox(
                   width: 22,
                   height: 22,
-                  child: CircularProgressIndicator(strokeWidth: 2.2, color: AppColors.brandBlue),
+                  child: CircularProgressIndicator(strokeWidth: 2.2, color: context.appAccent),
                 ),
               ),
             )

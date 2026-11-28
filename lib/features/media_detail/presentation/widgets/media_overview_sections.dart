@@ -217,10 +217,10 @@ class MediaTitlesCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
-                  color: AppColors.brandBlue.withValues(alpha: 0.12),
+                  color: context.appAccent.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Icon(Icons.translate_rounded, size: 16, color: AppColors.brandBlue),
+                child: Icon(Icons.translate_rounded, size: 16, color: context.appAccent),
               ),
               const SizedBox(width: 8),
               Text(

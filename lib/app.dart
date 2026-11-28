@@ -6,6 +6,7 @@ import 'features/auth/presentation/auth_controller.dart';
 import 'features/auth/presentation/login_screen.dart';
 import 'features/auth/presentation/splash_loading_screen.dart';
 import 'features/navigation/presentation/main_shell_screen.dart';
+import 'shared/widgets/mankai_motifs.dart';
 import 'shared/widgets/sakura_petals_overlay.dart';
 
 class AniListApp extends ConsumerWidget {
@@ -36,6 +37,9 @@ class AniListApp extends ConsumerWidget {
         return Stack(
           children: [
             child,
+            Positioned.fill(
+              child: MankaiJukaiBackdrop(accentColor: heroine.accentColor),
+            ),
             Positioned.fill(
               child: SakuraPetalsOverlay(petalColor: heroine.accentColor),
             ),

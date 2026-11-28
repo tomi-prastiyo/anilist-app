@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../../core/animations/app_motion.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/constants/yuyuyu_assets.dart';
 import '../../../../core/utils/date_util.dart';
 import '../../../../shared/image/app_avatar.dart';
 import '../../../../shared/image/app_network_image.dart';
@@ -124,7 +125,9 @@ class ActivityCard extends StatelessWidget {
                                           ? FontWeight.w800
                                           : FontWeight.bold,
                                       color: compact
-                                          ? AppColors.brandBlue
+                                          ? (context.isYuYuYu
+                                              ? YuYuYuAssets.shinjuGold
+                                              : AppColors.brandBlue)
                                           : accentColor,
                                     ),
                                   ),

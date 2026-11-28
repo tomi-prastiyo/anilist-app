@@ -27,10 +27,10 @@ class ThemeModeNotifier extends StateNotifier<AppThemeMode> {
   }
 
   static AppThemeMode _stringToThemeMode(String? val) {
-    if (val == AppThemeMode.system.name) return AppThemeMode.system;
+    if (val == AppThemeMode.dark.name) return AppThemeMode.dark;
     if (val == AppThemeMode.light.name) return AppThemeMode.light;
-    if (val == AppThemeMode.yuyuyu.name) return AppThemeMode.yuyuyu;
-    return AppThemeMode.dark;
+    if (val == AppThemeMode.system.name) return AppThemeMode.system;
+    return AppThemeMode.yuyuyu;
   }
 }
 

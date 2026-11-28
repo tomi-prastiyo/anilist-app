@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/animations/app_motion.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/settings/content_settings_provider.dart';
 import '../../../shared/feedback/empty_view.dart';
 import '../../../shared/feedback/shimmer_loading.dart';
 import '../../auth/presentation/auth_controller.dart';
@@ -67,6 +68,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
         page: page,
         userId: widget.userId,
         isFollowing: widget.userId == null ? effectiveFollowing : null,
+        includeAdult: ref.read(adultContentProvider),
       );
       final pageInfo = pageData['pageInfo'] as Map<String, dynamic>?;
       final list = (pageData['activities'] as List?)?.cast<Map<String, dynamic>>() ?? [];
@@ -139,10 +141,15 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<bool>(adultContentProvider, (_, _) {
+      _load(page: 1);
+    });
     final auth = ref.watch(authControllerProvider);
-    final accentColor = auth is Authenticated
-        ? AppColors.getProfileAccentColor(auth.user.profileColor)
-        : AppColors.brandBlue;
+    final accentColor = context.isYuYuYu
+        ? context.appAccent
+        : (auth is Authenticated
+            ? AppColors.getProfileAccentColor(auth.user.profileColor)
+            : AppColors.brandBlue);
     final currentViewerId = auth is Authenticated ? auth.user.id : null;
 
     ref.listen<({int id, bool isLiked, int likeCount})?>(

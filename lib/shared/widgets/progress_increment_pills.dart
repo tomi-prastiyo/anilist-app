@@ -8,36 +8,43 @@ import '../widgets/tactile_scale.dart';
 class ProgressIncrementPills extends StatelessWidget {
   final Color accentColor;
   final Color primaryTextColor;
-  final VoidCallback onIncrementPrimary;
+  final VoidCallback? onIncrementPrimary;
   final VoidCallback? onIncrementVolume;
   final bool compact;
   final bool stacked;
+  final bool isManga;
 
   const ProgressIncrementPills({
     super.key,
     required this.accentColor,
     required this.primaryTextColor,
-    required this.onIncrementPrimary,
+    this.onIncrementPrimary,
     this.onIncrementVolume,
     this.compact = false,
     this.stacked = false,
+    this.isManga = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    final hasPrimary = onIncrementPrimary != null;
     final hasVolume = onIncrementVolume != null;
-    final primaryLabel = hasVolume ? '+Ch' : '+1';
+    if (!hasPrimary && !hasVolume) return const SizedBox.shrink();
 
-    final primaryBtn = _buildPill(
-      label: primaryLabel,
-      onTap: onIncrementPrimary,
-      isOutlined: false,
-      height: compact ? 25 : 28,
-      minWidth: hasVolume ? (stacked ? 38 : 34) : (compact ? 28 : 32),
-      fontSize: hasVolume ? (compact || stacked ? 9.5 : 10.5) : (compact ? 11 : 12),
-    );
+    final primaryLabel = (hasVolume || isManga) ? '+Ch' : '+1';
 
-    if (!hasVolume) return primaryBtn;
+    final Widget? primaryBtn = hasPrimary
+        ? _buildPill(
+            label: primaryLabel,
+            onTap: onIncrementPrimary!,
+            isOutlined: false,
+            height: compact ? 25 : 28,
+            minWidth: hasVolume ? (stacked ? 38 : 34) : (compact ? 28 : 32),
+            fontSize: hasVolume ? (compact || stacked ? 9.5 : 10.5) : (compact ? 11 : 12),
+          )
+        : null;
+
+    if (!hasVolume) return primaryBtn!;
 
     final volBtn = _buildPill(
       label: '+Vol',
@@ -47,6 +54,8 @@ class ProgressIncrementPills extends StatelessWidget {
       minWidth: stacked ? 38 : 36,
       fontSize: compact || stacked ? 9.5 : 10.5,
     );
+
+    if (primaryBtn == null) return volBtn;
 
     if (stacked) {
       return Column(
@@ -78,7 +87,7 @@ class ProgressIncrementPills extends StatelessWidget {
     required double fontSize,
   }) {
     return TactileScale(
-      pressedScale: 0.90,
+      pressedScale: 0.86,
       onTap: () {
         HapticFeedback.lightImpact();
         onTap();

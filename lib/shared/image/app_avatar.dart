@@ -31,8 +31,8 @@ class AppAvatar extends StatelessWidget {
             ? CachedNetworkImage(
                 imageUrl: imageUrl!,
                 fit: BoxFit.cover,
+                alignment: const Alignment(0, -0.25),
                 memCacheWidth: cacheSize,
-                memCacheHeight: cacheSize,
                 fadeInDuration: const Duration(milliseconds: 140),
                 placeholder: (context, url) => ColoredBox(color: context.appInputSurface),
                 errorWidget: (context, url, error) =>

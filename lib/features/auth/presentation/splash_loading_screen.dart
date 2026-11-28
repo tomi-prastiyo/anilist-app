@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/yuyuyu_assets.dart';
 import '../../../core/theme/theme_provider.dart';
+import '../../../shared/widgets/mankai_cute_companion.dart';
 import '../../../shared/widgets/mankai_logo_emblem.dart';
 import '../../../shared/widgets/sakura_petals_overlay.dart';
 
@@ -85,13 +86,29 @@ class _SplashLoadingScreenState extends ConsumerState<SplashLoadingScreen>
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  ScaleTransition(
-                    scale: _scaleAnim,
-                    child: MankaiLogoEmblem(
-                      size: 112,
-                      accentColor: accent,
-                      radius: 28,
-                    ),
+                  Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      ScaleTransition(
+                        scale: _scaleAnim,
+                        child: MankaiLogoEmblem(
+                          size: 112,
+                          accentColor: accent,
+                          radius: 28,
+                        ),
+                      ),
+                      Positioned(
+                        right: -24,
+                        top: -10,
+                        child: MankaiFloatingMascot(
+                          assetPath: heroine.fairyAsset,
+                          accentColor: accent,
+                          size: 38,
+                          interactive: false,
+                          showGlow: false,
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 24),
                   const Text(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/constants/yuyuyu_assets.dart';
 import '../../../core/theme/theme_provider.dart';
 import '../../../shared/feedback/empty_view.dart';
 import '../../../shared/feedback/error_view.dart';
@@ -199,19 +200,37 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     if (isOwn && !isAuthenticated) {
       return Scaffold(
         backgroundColor: context.appBackground,
-        appBar: AppBar(title: const Text('Profile')),
+        appBar: AppBar(
+          title: const Text('Profile'),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.settings_outlined),
+              tooltip: 'Settings',
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (context) => const SettingsScreen()),
+                );
+              },
+            ),
+          ],
+        ),
         body: EmptyView(
           title: 'Sign in to see your profile',
           subtitle: 'View your anime & manga stats, favorites, friends, and personal activity.',
           icon: Icons.person_outline_rounded,
-          action: ElevatedButton(
-            onPressed: () => ref.read(authControllerProvider.notifier).logout(),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.brandBlue,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            child: const Text('Sign In with AniList'),
+          action: Builder(
+            builder: (context) {
+              final ctaColor = context.isYuYuYu ? context.appAccent : AppColors.brandBlue;
+              return ElevatedButton(
+                onPressed: () => ref.read(authControllerProvider.notifier).logout(),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: ctaColor,
+                  foregroundColor: ctaColor.computeLuminance() > 0.55 ? Colors.black : Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                child: const Text('Sign In with AniList'),
+              );
+            },
           ),
         ),
       );
@@ -358,11 +377,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                     AppNetworkImage(imageUrl: userBanner, borderRadius: BorderRadius.zero)
                   else
                     Container(
-                      decoration: const BoxDecoration(
+                      decoration: BoxDecoration(
                         gradient: LinearGradient(
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
-                          colors: [Color(0xFF0E2238), Color(0xFF162A44)],
+                          colors: context.isYuYuYu
+                              ? const [YuYuYuAssets.twilightCard, YuYuYuAssets.jukaiGlow]
+                              : const [Color(0xFF0E2238), Color(0xFF162A44)],
                         ),
                       ),
                     ),
@@ -397,7 +418,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                           height: 86,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            border: Border.all(color: context.appSurface, width: 3.5),
+                            border: Border.all(
+                              color: context.isYuYuYu
+                                  ? YuYuYuAssets.shinjuGold.withValues(alpha: 0.85)
+                                  : context.appSurface,
+                              width: context.isYuYuYu ? 3.0 : 3.5,
+                            ),
                             color: context.appSurface,
                             boxShadow: [
                               BoxShadow(
@@ -405,10 +431,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                                 blurRadius: 14,
                                 offset: const Offset(0, 4),
                               ),
-                              BoxShadow(
-                                color: accentColor.withValues(alpha: 0.35),
-                                blurRadius: 10,
-                              ),
+                              if (context.isYuYuYu)
+                                BoxShadow(
+                                  color: context.appAccent.withValues(alpha: 0.35),
+                                  blurRadius: 14,
+                                )
+                              else
+                                BoxShadow(
+                                  color: accentColor.withValues(alpha: 0.35),
+                                  blurRadius: 10,
+                                ),
                             ],
                           ),
                           child: ClipOval(

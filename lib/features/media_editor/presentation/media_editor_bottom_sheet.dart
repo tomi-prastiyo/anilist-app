@@ -5,6 +5,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/utils/date_util.dart';
+import '../../../core/utils/media_progress_util.dart';
 import '../../../core/utils/score_util.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../media_list/data/media_list_repository.dart';
@@ -14,6 +15,7 @@ class MediaEditorBottomSheet extends ConsumerStatefulWidget {
   final int mediaId;
   final String mediaType; // ANIME or MANGA
   final int? maxCount;
+  final int? maxVolumes;
   final Map<String, dynamic>? initialEntry;
   final VoidCallback onSaved;
 
@@ -22,6 +24,7 @@ class MediaEditorBottomSheet extends ConsumerStatefulWidget {
     required this.mediaId,
     required this.mediaType,
     this.maxCount,
+    this.maxVolumes,
     this.initialEntry,
     required this.onSaved,
   });
@@ -34,12 +37,17 @@ class _MediaEditorBottomSheetState extends ConsumerState<MediaEditorBottomSheet>
   late String _status;
   late double _score;
   late int _progress;
+  late int _progressVolumes;
   late int _repeat;
   late bool _isPrivate;
   Map<String, int>? _startedAt;
   Map<String, int>? _completedAt;
   late TextEditingController _notesController;
   bool _isSaving = false;
+  bool _repeatIncrementedThisSession = false;
+  bool _clearStartedAt = false;
+  bool _clearCompletedAt = false;
+  late final bool _isNewEntry;
 
   final List<String> _statuses = [
     'CURRENT',
@@ -54,27 +62,19 @@ class _MediaEditorBottomSheetState extends ConsumerState<MediaEditorBottomSheet>
   void initState() {
     super.initState();
     final entry = widget.initialEntry;
+    _isNewEntry = entry == null;
     _status = entry?['status'] as String? ?? 'CURRENT';
     _score = (entry?['score'] as num?)?.toDouble() ?? 0.0;
     _progress = entry?['progress'] as int? ?? 0;
+    _progressVolumes = entry?['progressVolumes'] as int? ?? 0;
     _repeat = entry?['repeat'] as int? ?? 0;
     _isPrivate = entry?['private'] as bool? ?? false;
-    _startedAt = _parseFuzzyDate(entry?['startedAt'] as Map<String, dynamic>?);
-    _completedAt = _parseFuzzyDate(entry?['completedAt'] as Map<String, dynamic>?);
+    _startedAt = MediaProgressUtil.parseFuzzyDate(entry?['startedAt']);
+    _completedAt = MediaProgressUtil.parseFuzzyDate(entry?['completedAt']);
+    if (_isNewEntry && _status == 'CURRENT' && _startedAt == null) {
+      _startedAt = MediaProgressUtil.todayFuzzyDate();
+    }
     _notesController = TextEditingController(text: entry?['notes'] as String? ?? '');
-  }
-
-  Map<String, int>? _parseFuzzyDate(Map<String, dynamic>? raw) {
-    if (raw == null) return null;
-    final y = raw['year'] as int?;
-    final m = raw['month'] as int?;
-    final d = raw['day'] as int?;
-    if (y == null) return null;
-    return {
-      'year': y,
-      'month': ?m,
-      'day': ?d,
-    };
   }
 
   @override
@@ -84,9 +84,63 @@ class _MediaEditorBottomSheetState extends ConsumerState<MediaEditorBottomSheet>
   }
 
   String _formatStatusLabel(String status) {
-    if (widget.mediaType == 'ANIME' && status == 'CURRENT') return 'Watching';
-    if (widget.mediaType == 'MANGA' && status == 'CURRENT') return 'Reading';
+    if (status == 'CURRENT') return widget.mediaType == 'ANIME' ? 'Watching' : 'Reading';
+    if (status == 'REPEATING') return widget.mediaType == 'ANIME' ? 'Rewatching' : 'Rereading';
     return status[0] + status.substring(1).toLowerCase();
+  }
+
+  void _applyStatusTransition(String nextStatus) {
+    final res = MediaProgressUtil.resolveStatusChange(
+      previousStatus: _status,
+      nextStatus: nextStatus,
+      currentProgress: _progress,
+      currentVolumes: _progressVolumes,
+      currentRepeat: _repeat,
+      maxCount: widget.maxCount,
+      maxVolumes: widget.maxVolumes,
+      startedAt: _startedAt,
+      completedAt: _completedAt,
+      isManga: widget.mediaType == 'MANGA',
+      hasIncrementedRepeatThisSession: _repeatIncrementedThisSession,
+      isNewEntry: _isNewEntry,
+    );
+    _status = res.status;
+    _progress = res.progress;
+    _progressVolumes = res.progressVolumes;
+    _repeat = res.repeat;
+    _startedAt = res.startedAt;
+    _completedAt = res.completedAt;
+    if (_startedAt != null) _clearStartedAt = false;
+    if (_completedAt != null) _clearCompletedAt = false;
+    if (res.repeatIncremented) {
+      _repeatIncrementedThisSession = true;
+    }
+  }
+
+  void _applyProgressChange(int nextProgress) {
+    _progress = nextProgress;
+    if (widget.maxCount != null && _progress >= widget.maxCount!) {
+      _applyStatusTransition('COMPLETED');
+    } else if (_progress > 0 &&
+        (_status == 'PLANNING' || _status == 'PAUSED' || _status == 'DROPPED')) {
+      _applyStatusTransition('CURRENT');
+    } else if (_status == 'COMPLETED' &&
+        widget.maxCount != null &&
+        _progress < widget.maxCount!) {
+      _applyStatusTransition('CURRENT');
+    } else if (_progress > 0 && _startedAt == null && !_clearStartedAt) {
+      _startedAt = MediaProgressUtil.todayFuzzyDate();
+    }
+  }
+
+  void _applyVolumeChange(int nextVolumes) {
+    _progressVolumes = nextVolumes;
+    if (_progressVolumes > 0 &&
+        (_status == 'PLANNING' || _status == 'PAUSED' || _status == 'DROPPED')) {
+      _applyStatusTransition('CURRENT');
+    } else if (_progressVolumes > 0 && _startedAt == null && !_clearStartedAt) {
+      _startedAt = MediaProgressUtil.todayFuzzyDate();
+    }
   }
 
   double _maxScoreForFormat(String format) {
@@ -146,15 +200,76 @@ class _MediaEditorBottomSheetState extends ConsumerState<MediaEditorBottomSheet>
         final mapped = {'year': picked.year, 'month': picked.month, 'day': picked.day};
         if (isStart) {
           _startedAt = mapped;
+          _clearStartedAt = false;
         } else {
           _completedAt = mapped;
+          _clearCompletedAt = false;
         }
       });
     }
   }
 
+  Future<void> _showNumberInputDialog({
+    required String title,
+    required int currentValue,
+    int? maxValue,
+    required ValueChanged<int> onConfirm,
+  }) async {
+    final controller = TextEditingController(text: '$currentValue');
+    final result = await showDialog<int>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: context.appSurface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          'Set $title',
+          style: AppTypography.style(
+            fontSize: 15,
+            fontWeight: FontWeight.w800,
+            color: context.appTextPrimary,
+          ),
+        ),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          decoration: InputDecoration(
+            hintText: maxValue != null ? '0 – $maxValue' : 'Enter number',
+            suffixText: maxValue != null ? '/ $maxValue' : null,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text('Cancel', style: TextStyle(color: context.appTextSecondary)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final parsed = int.tryParse(controller.text.trim());
+              if (parsed != null) {
+                final clamped = maxValue != null ? parsed.clamp(0, maxValue) : parsed.clamp(0, 99999);
+                Navigator.of(dialogContext).pop(clamped);
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: context.appAccent,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Apply', style: TextStyle(fontWeight: FontWeight.w800)),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (result != null && mounted) {
+      onConfirm(result);
+    }
+  }
+
   Future<void> _saveEntry() async {
     setState(() => _isSaving = true);
+    final messenger = ScaffoldMessenger.maybeOf(context);
     try {
       final repo = ref.read(mediaListRepositoryProvider);
       await repo.saveMediaListEntry(
@@ -163,10 +278,13 @@ class _MediaEditorBottomSheetState extends ConsumerState<MediaEditorBottomSheet>
         status: _status,
         score: _score > 0 ? _score : 0.0,
         progress: _progress,
+        progressVolumes: widget.mediaType == 'MANGA' ? _progressVolumes : null,
         repeat: _repeat,
         isPrivate: _isPrivate,
         startedAt: _startedAt,
         completedAt: _completedAt,
+        clearStartedAt: _clearStartedAt,
+        clearCompletedAt: _clearCompletedAt,
         notes: _notesController.text.trim(),
       );
 
@@ -178,6 +296,12 @@ class _MediaEditorBottomSheetState extends ConsumerState<MediaEditorBottomSheet>
 
       widget.onSaved();
       if (mounted) Navigator.of(context).pop();
+      messenger?.showSnackBar(
+        SnackBar(
+          content: Text('Saved to ${_formatStatusLabel(_status)}'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -217,6 +341,8 @@ class _MediaEditorBottomSheetState extends ConsumerState<MediaEditorBottomSheet>
     );
 
     if (confirmed == true) {
+      if (!mounted) return;
+      final messenger = ScaffoldMessenger.maybeOf(context);
       setState(() => _isSaving = true);
       try {
         final repo = ref.read(mediaListRepositoryProvider);
@@ -230,6 +356,12 @@ class _MediaEditorBottomSheetState extends ConsumerState<MediaEditorBottomSheet>
 
         widget.onSaved();
         if (mounted) Navigator.of(context).pop();
+        messenger?.showSnackBar(
+          const SnackBar(
+            content: Text('Removed from list'),
+            duration: Duration(seconds: 2),
+          ),
+        );
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -321,7 +453,9 @@ class _MediaEditorBottomSheetState extends ConsumerState<MediaEditorBottomSheet>
                   selectedColor: accent,
                   backgroundColor: context.appInputSurface,
                   labelStyle: AppTypography.style(
-                    color: isSelected ? Colors.white : context.appTextSecondary,
+                    color: isSelected
+                        ? (accent.computeLuminance() > 0.55 ? Colors.black : Colors.white)
+                        : context.appTextSecondary,
                     fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
                     fontSize: 12,
                   ),
@@ -329,15 +463,7 @@ class _MediaEditorBottomSheetState extends ConsumerState<MediaEditorBottomSheet>
                     if (val) {
                       HapticFeedback.selectionClick();
                       setState(() {
-                        _status = status;
-                        final now = DateTime.now();
-                        final today = {'year': now.year, 'month': now.month, 'day': now.day};
-                        if (status == 'CURRENT' && _startedAt == null) {
-                          _startedAt = today;
-                        } else if (status == 'COMPLETED') {
-                          _completedAt ??= today;
-                          if (widget.maxCount != null) _progress = widget.maxCount!;
-                        }
+                        _applyStatusTransition(status);
                       });
                     }
                   },
@@ -346,35 +472,82 @@ class _MediaEditorBottomSheetState extends ConsumerState<MediaEditorBottomSheet>
             ),
             const SizedBox(height: AppSpacing.p16),
 
-            // Progress & Rewatch Steppers
+            // Progress, Volumes (Manga) & Rewatch Steppers
             Row(
               children: [
                 Expanded(
                   child: _buildStepperCard(
                     title: widget.mediaType == 'ANIME' ? 'Episodes' : 'Chapters',
                     valueText: '$_progress / ${widget.maxCount ?? '?'}',
-                    onMinus: _progress > 0 ? () => setState(() => _progress--) : null,
-                    onPlus: () {
-                      setState(() {
-                        _progress++;
-                        if (widget.maxCount != null && _progress >= widget.maxCount!) {
-                          _status = 'COMPLETED';
-                        }
-                      });
-                    },
+                    onMinus: _progress > 0
+                        ? () => setState(() => _applyProgressChange(_progress - 1))
+                        : null,
+                    onPlus: (widget.maxCount != null && _progress >= widget.maxCount!)
+                        ? null
+                        : () => setState(() => _applyProgressChange(_progress + 1)),
+                    onTapValue: () => _showNumberInputDialog(
+                      title: widget.mediaType == 'ANIME' ? 'Episodes' : 'Chapters',
+                      currentValue: _progress,
+                      maxValue: widget.maxCount,
+                      onConfirm: (val) => setState(() => _applyProgressChange(val)),
+                    ),
+                    onMax: (widget.maxCount != null && _progress < widget.maxCount!)
+                        ? () => setState(() => _applyProgressChange(widget.maxCount!))
+                        : null,
                   ),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: _buildStepperCard(
-                    title: widget.mediaType == 'ANIME' ? 'Rewatches' : 'Rereads',
-                    valueText: '$_repeat',
-                    onMinus: _repeat > 0 ? () => setState(() => _repeat--) : null,
-                    onPlus: () => setState(() => _repeat++),
-                  ),
+                  child: widget.mediaType == 'MANGA'
+                      ? _buildStepperCard(
+                          title: 'Volumes',
+                          valueText: '$_progressVolumes / ${widget.maxVolumes ?? '?'}',
+                          onMinus: _progressVolumes > 0
+                              ? () => setState(() => _applyVolumeChange(_progressVolumes - 1))
+                              : null,
+                          onPlus: (widget.maxVolumes != null &&
+                                  _progressVolumes >= widget.maxVolumes!)
+                              ? null
+                              : () => setState(() => _applyVolumeChange(_progressVolumes + 1)),
+                          onTapValue: () => _showNumberInputDialog(
+                            title: 'Volumes',
+                            currentValue: _progressVolumes,
+                            maxValue: widget.maxVolumes,
+                            onConfirm: (val) => setState(() => _applyVolumeChange(val)),
+                          ),
+                          onMax: (widget.maxVolumes != null &&
+                                  _progressVolumes < widget.maxVolumes!)
+                              ? () => setState(() => _applyVolumeChange(widget.maxVolumes!))
+                              : null,
+                        )
+                      : _buildStepperCard(
+                          title: 'Rewatches',
+                          valueText: '$_repeat',
+                          onMinus: _repeat > 0 ? () => setState(() => _repeat--) : null,
+                          onPlus: () => setState(() => _repeat++),
+                          onTapValue: () => _showNumberInputDialog(
+                            title: 'Rewatches',
+                            currentValue: _repeat,
+                            onConfirm: (val) => setState(() => _repeat = val),
+                          ),
+                        ),
                 ),
               ],
             ),
+            if (widget.mediaType == 'MANGA') ...[
+              const SizedBox(height: 10),
+              _buildStepperCard(
+                title: 'Rereads',
+                valueText: '$_repeat',
+                onMinus: _repeat > 0 ? () => setState(() => _repeat--) : null,
+                onPlus: () => setState(() => _repeat++),
+                onTapValue: () => _showNumberInputDialog(
+                  title: 'Rereads',
+                  currentValue: _repeat,
+                  onConfirm: (val) => setState(() => _repeat = val),
+                ),
+              ),
+            ],
             const SizedBox(height: AppSpacing.p16),
 
             // Score Precision Editor (Slider + Stepper)
@@ -462,7 +635,12 @@ class _MediaEditorBottomSheetState extends ConsumerState<MediaEditorBottomSheet>
                     label: 'Start Date',
                     date: _startedAt,
                     onTap: () => _pickFuzzyDate(isStart: true),
-                    onClear: _startedAt != null ? () => setState(() => _startedAt = null) : null,
+                    onClear: _startedAt != null
+                        ? () => setState(() {
+                              _startedAt = null;
+                              _clearStartedAt = true;
+                            })
+                        : null,
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -471,7 +649,12 @@ class _MediaEditorBottomSheetState extends ConsumerState<MediaEditorBottomSheet>
                     label: 'Finish Date',
                     date: _completedAt,
                     onTap: () => _pickFuzzyDate(isStart: false),
-                    onClear: _completedAt != null ? () => setState(() => _completedAt = null) : null,
+                    onClear: _completedAt != null
+                        ? () => setState(() {
+                              _completedAt = null;
+                              _clearCompletedAt = true;
+                            })
+                        : null,
                   ),
                 ),
               ],
@@ -533,21 +716,24 @@ class _MediaEditorBottomSheetState extends ConsumerState<MediaEditorBottomSheet>
                 onPressed: _isSaving ? null : _saveEntry,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: accent,
-                  foregroundColor: Colors.white,
+                  foregroundColor: accent.computeLuminance() > 0.55 ? Colors.black : Colors.white,
                   shape: RoundedRectangleBorder(borderRadius: AppSpacing.borderRadius12),
                 ),
                 child: _isSaving
-                    ? const SizedBox(
+                    ? SizedBox(
                         width: 20,
                         height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: accent.computeLuminance() > 0.55 ? Colors.black : Colors.white,
+                        ),
                       )
                     : Text(
                         'Save Entry',
                         style: AppTypography.style(
                           fontWeight: FontWeight.w800,
                           fontSize: 15,
-                          color: Colors.white,
+                          color: accent.computeLuminance() > 0.55 ? Colors.black : Colors.white,
                         ),
                       ),
               ),
@@ -562,7 +748,9 @@ class _MediaEditorBottomSheetState extends ConsumerState<MediaEditorBottomSheet>
     required String title,
     required String valueText,
     VoidCallback? onMinus,
-    required VoidCallback onPlus,
+    VoidCallback? onPlus,
+    VoidCallback? onTapValue,
+    VoidCallback? onMax,
   }) {
     return Container(
       padding: const EdgeInsets.all(10),
@@ -574,27 +762,72 @@ class _MediaEditorBottomSheetState extends ConsumerState<MediaEditorBottomSheet>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style: AppTypography.style(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: context.appTextSecondary,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                title,
+                style: AppTypography.style(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: context.appTextSecondary,
+                ),
+              ),
+              if (onMax != null)
+                GestureDetector(
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    onMax();
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: context.appAccent.withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(5),
+                    ),
+                    child: Text(
+                      'Max',
+                      style: AppTypography.style(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        color: context.appAccent,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
           ),
           const SizedBox(height: 6),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Flexible(
-                child: Text(
-                  valueText,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTypography.style(
-                    fontSize: 14.5,
-                    fontWeight: FontWeight.w800,
-                    color: context.appTextPrimary,
+                child: InkWell(
+                  onTap: onTapValue,
+                  borderRadius: BorderRadius.circular(6),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            valueText,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTypography.style(
+                              fontSize: 14.5,
+                              fontWeight: FontWeight.w800,
+                              color: context.appTextPrimary,
+                              decoration: onTapValue != null
+                                  ? TextDecoration.underline
+                                  : null,
+                              decorationColor: context.appTextMuted,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -605,12 +838,12 @@ class _MediaEditorBottomSheetState extends ConsumerState<MediaEditorBottomSheet>
                   IconButton.filledTonal(
                     style: IconButton.styleFrom(
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      minimumSize: const Size(28, 28),
+                      minimumSize: const Size(34, 34),
                       padding: EdgeInsets.zero,
                     ),
-                    constraints: const BoxConstraints.tightFor(width: 28, height: 28),
+                    constraints: const BoxConstraints.tightFor(width: 34, height: 34),
                     padding: EdgeInsets.zero,
-                    iconSize: 15,
+                    iconSize: 17,
                     onPressed: onMinus,
                     icon: const Icon(Icons.remove_rounded),
                   ),
@@ -618,12 +851,12 @@ class _MediaEditorBottomSheetState extends ConsumerState<MediaEditorBottomSheet>
                   IconButton.filledTonal(
                     style: IconButton.styleFrom(
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      minimumSize: const Size(28, 28),
+                      minimumSize: const Size(34, 34),
                       padding: EdgeInsets.zero,
                     ),
-                    constraints: const BoxConstraints.tightFor(width: 28, height: 28),
+                    constraints: const BoxConstraints.tightFor(width: 34, height: 34),
                     padding: EdgeInsets.zero,
-                    iconSize: 15,
+                    iconSize: 17,
                     onPressed: onPlus,
                     icon: const Icon(Icons.add_rounded),
                   ),

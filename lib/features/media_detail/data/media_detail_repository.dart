@@ -36,7 +36,12 @@ class MediaDetailRepository {
         type
         format
         status
+        isAdult
         description(asHtml: false)
+        nextAiringEpisode {
+          episode
+          timeUntilAiring
+        }
         startDate {
           year
           month
@@ -100,6 +105,7 @@ class MediaDetailRepository {
             relationType
             node {
               id
+              isAdult
               title {
                 userPreferred
                 romaji
@@ -167,6 +173,7 @@ class MediaDetailRepository {
           nodes {
             mediaRecommendation {
               id
+              isAdult
               title {
                 userPreferred
               }

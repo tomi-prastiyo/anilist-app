@@ -6,6 +6,9 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/animations/app_motion.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
+import '../../../core/constants/yuyuyu_assets.dart';
+import '../../../core/settings/content_settings_provider.dart';
+import '../../../core/utils/media_progress_util.dart';
 import '../../../core/utils/text_util.dart';
 import '../../../shared/badges/format_chip.dart';
 import '../../../shared/badges/score_badge.dart';
@@ -16,6 +19,8 @@ import '../../../shared/state/favourite_sync_store.dart';
 import '../../../shared/widgets/favourite_icon_button.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../media_editor/presentation/media_editor_bottom_sheet.dart';
+import '../../media_list/data/media_list_repository.dart';
+import '../../media_list/presentation/media_list_controller.dart';
 import '../../profile/data/profile_repository.dart';
 import '../data/media_detail_repository.dart';
 import 'widgets/media_detail_tabs.dart';
@@ -55,6 +60,7 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
 
   // UI state
   bool _isSynopsisExpanded = false;
+  bool _isQuickUpdating = false;
   List<Map<String, dynamic>> _followingFriends = [];
 
   @override
@@ -98,7 +104,8 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
         // If anime, asynchronously load theme songs in background
         final type = data['type'] as String?;
         if (type == 'ANIME') {
-          _loadThemes(data['id'] as int, TextUtil.getPreferredTitle(data['title']));
+          final titleLang = ref.read(titleLanguageProvider);
+    _loadThemes(data['id'] as int, TextUtil.getPreferredTitle(data['title'], preference: titleLang));
         }
       }
     } catch (e) {
@@ -179,6 +186,7 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
     final type = _mediaData!['type'] as String? ?? 'ANIME';
     final episodes = _mediaData!['episodes'] as int?;
     final chapters = _mediaData!['chapters'] as int?;
+    final volumes = _mediaData!['volumes'] as int?;
     final currentEntry = _mediaData!['mediaListEntry'] as Map<String, dynamic>?;
 
     showModalBottomSheet(
@@ -189,15 +197,143 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
         mediaId: widget.mediaId,
         mediaType: type,
         maxCount: episodes ?? chapters,
+        maxVolumes: volumes,
         initialEntry: currentEntry,
         onSaved: _loadMedia,
       ),
     );
   }
 
-  String _formatEntryStatus(String? status) {
-    if (status == null) return '';
-    return status[0] + status.substring(1).toLowerCase();
+  Future<void> _quickIncrementProgress() async {
+    if (_isQuickUpdating || _mediaData == null) return;
+    final rawEntry = _mediaData!['mediaListEntry'] as Map<String, dynamic>?;
+    if (rawEntry == null) return;
+
+    final type = _mediaData!['type'] as String? ?? 'ANIME';
+    final isAnime = type == 'ANIME';
+    final maxCount = (isAnime ? _mediaData!['episodes'] : _mediaData!['chapters']) as int?;
+    final maxVolumes = _mediaData!['volumes'] as int?;
+    final currentProgress = rawEntry['progress'] as int? ?? 0;
+    final currentVolumes = rawEntry['progressVolumes'] as int? ?? 0;
+    final prevStatus = (rawEntry['status'] as String?)?.toUpperCase() ?? 'CURRENT';
+    if (!MediaProgressUtil.canIncrementProgress(
+      status: prevStatus,
+      progress: currentProgress,
+      media: _mediaData!,
+    )) {
+      return;
+    }
+
+    final prevRepeat = rawEntry['repeat'] as int? ?? 0;
+    final prevStartedAt = rawEntry['startedAt'];
+    final prevCompletedAt = rawEntry['completedAt'];
+
+    final res = MediaProgressUtil.resolveQuickIncrement(
+      currentStatus: prevStatus,
+      currentProgress: currentProgress,
+      currentVolumes: currentVolumes,
+      currentRepeat: prevRepeat,
+      maxCount: maxCount,
+      maxVolumes: maxVolumes,
+      existingStartedAt: prevStartedAt,
+      existingCompletedAt: prevCompletedAt,
+      isManga: !isAnime,
+    );
+
+    HapticFeedback.lightImpact();
+    setState(() {
+      _isQuickUpdating = true;
+      rawEntry['progress'] = res.progress;
+      rawEntry['status'] = res.status;
+      if (res.repeatChanged) {
+        rawEntry['repeat'] = res.repeat;
+      }
+      if (res.volumesChanged) {
+        rawEntry['progressVolumes'] = res.progressVolumes;
+      }
+      if (res.startedAtChanged && res.startedAt != null) {
+        rawEntry['startedAt'] = res.startedAt;
+      }
+      if (res.completedAtChanged && res.completedAt != null) {
+        rawEntry['completedAt'] = res.completedAt;
+      }
+    });
+
+    try {
+      await ref.read(mediaListRepositoryProvider).saveMediaListEntry(
+            id: rawEntry['id'] as int?,
+            mediaId: widget.mediaId,
+            progress: res.progress,
+            progressVolumes: res.volumesChanged ? res.progressVolumes : null,
+            status: res.statusChanged ? res.status : null,
+            repeat: res.repeatChanged ? res.repeat : null,
+            startedAt: res.startedAtChanged ? res.startedAt : null,
+            completedAt: res.completedAtChanged ? res.completedAt : null,
+          );
+      if (isAnime) {
+        ref.read(animeListControllerProvider.notifier).loadLists();
+      } else {
+        ref.read(mangaListControllerProvider.notifier).loadLists();
+      }
+      if (mounted) {
+        final unit = isAnime ? 'Ep' : 'Ch';
+        final completedSuffix = res.isCompleted && prevStatus != 'COMPLETED'
+            ? (res.repeatChanged
+                ? ' • Completed (+1 Repeat, Finish Date set)!'
+                : ' • Completed (Finish Date set)!')
+            : '';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('+1 $unit (${res.progress})$completedSuffix'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          rawEntry['progress'] = currentProgress;
+          rawEntry['progressVolumes'] = currentVolumes;
+          rawEntry['status'] = prevStatus;
+          rawEntry['repeat'] = prevRepeat;
+          rawEntry['startedAt'] = prevStartedAt;
+          rawEntry['completedAt'] = prevCompletedAt;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update progress: $e'),
+            backgroundColor: AppColors.statusDropped,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isQuickUpdating = false);
+    }
+  }
+
+  String _formatEntryStatus(String? status, String mediaType) {
+    if (status == null || status.isEmpty) return '';
+    switch (status.toUpperCase()) {
+      case 'CURRENT':
+        return mediaType == 'ANIME' ? 'Watching' : 'Reading';
+      case 'REPEATING':
+        return mediaType == 'ANIME' ? 'Rewatching' : 'Rereading';
+      default:
+        return status[0].toUpperCase() + status.substring(1).toLowerCase();
+    }
+  }
+
+  String _buildEntryButtonLabel(Map<String, dynamic> media, Map<String, dynamic> entry) {
+    final type = media['type'] as String? ?? 'ANIME';
+    final statusLabel = _formatEntryStatus(entry['status'] as String?, type);
+    final prog = entry['progress'] as int? ?? 0;
+    if (type == 'ANIME') {
+      final maxEp = media['episodes'] as int?;
+      return '$statusLabel • Ep $prog${maxEp != null ? ' / $maxEp' : ''}';
+    }
+    final maxCh = media['chapters'] as int?;
+    final vols = entry['progressVolumes'] as int? ?? 0;
+    return '$statusLabel • Ch $prog${maxCh != null ? ' / $maxCh' : ''}${vols > 0 ? ' • Vol $vols' : ''}';
   }
 
   Future<void> _launchExternalUrl(String url) async {
@@ -208,13 +344,34 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
     } catch (_) {}
   }
 
+  Color _statusButtonColor(BuildContext context, String? status) {
+    switch (status?.toUpperCase()) {
+      case 'CURRENT':
+        return context.isYuYuYu ? context.appAccent : AppColors.statusWatching;
+      case 'REPEATING':
+        return AppColors.statusRepeating;
+      case 'COMPLETED':
+        return AppColors.statusCompleted;
+      case 'PAUSED':
+        return AppColors.statusPaused;
+      case 'DROPPED':
+        return AppColors.statusDropped;
+      case 'PLANNING':
+        return AppColors.statusPlanning;
+      default:
+        return context.appAccent;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final titleLang = ref.watch(titleLanguageProvider);
+    final includeAdult = ref.watch(adultContentProvider);
     if (_isLoading) {
       return Scaffold(
         backgroundColor: context.appBackground,
-        body: const Center(
-          child: CircularProgressIndicator(color: AppColors.brandBlue),
+        body: Center(
+          child: CircularProgressIndicator(color: context.appAccent),
         ),
       );
     }
@@ -228,7 +385,7 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
     }
 
     final media = _mediaData!;
-    final title = TextUtil.getPreferredTitle(media['title']);
+    final title = TextUtil.getPreferredTitle(media['title'], preference: titleLang);
     final bannerUrl = media['bannerImage'] as String?;
     final coverUrl = media['coverImage']?['extraLarge'] ?? media['coverImage']?['large'];
     final format = media['format'] as String?;
@@ -247,6 +404,21 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
             expandedHeight: 295,
             pinned: true,
             backgroundColor: context.appSurface,
+            title: AnimatedOpacity(
+              opacity: innerBoxIsScrolled ? 1.0 : 0.0,
+              duration: const Duration(milliseconds: 180),
+              child: Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontFamily: 'Overpass',
+                  fontWeight: FontWeight.w800,
+                  fontSize: 16,
+                  color: context.appTextPrimary,
+                ),
+              ),
+            ),
             leading: IconButton(
               icon: Container(
                 padding: const EdgeInsets.all(7),
@@ -302,12 +474,23 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
                         Container(
                           decoration: BoxDecoration(
                             borderRadius: AppSpacing.borderRadius8,
+                            border: context.isYuYuYu
+                                ? Border.all(
+                                    color: YuYuYuAssets.shinjuGold.withValues(alpha: 0.45),
+                                    width: 1.2,
+                                  )
+                                : null,
                             boxShadow: [
                               BoxShadow(
                                 color: Colors.black.withValues(alpha: 0.5),
                                 blurRadius: 12,
                                 offset: const Offset(0, 4),
                               ),
+                              if (context.isYuYuYu)
+                                BoxShadow(
+                                  color: context.appAccent.withValues(alpha: 0.25),
+                                  blurRadius: 14,
+                                ),
                             ],
                           ),
                           child: AppNetworkImage(
@@ -373,27 +556,98 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.p16, vertical: 8),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: isAuthenticated ? _openEditor : null,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: entry != null ? AppColors.statusCompleted : context.appAccent,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: AppSpacing.borderRadius12),
+              child: Builder(
+                builder: (context) {
+                  final mediaType = media['type'] as String? ?? 'ANIME';
+                  final isAnime = mediaType == 'ANIME';
+                  final currentProg = entry?['progress'] as int? ?? 0;
+                  final canQuickIncrement = isAuthenticated &&
+                      entry != null &&
+                      MediaProgressUtil.canIncrementProgress(
+                        status: entry['status'] as String?,
+                        progress: currentProg,
+                        media: media,
+                      );
+
+                  return Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: isAuthenticated
+                              ? _openEditor
+                              : () => ref.read(authControllerProvider.notifier).logout(),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: entry != null
+                                ? _statusButtonColor(context, entry['status'] as String?)
+                                : context.appAccent,
+                            foregroundColor: (entry != null
+                                        ? _statusButtonColor(context, entry['status'] as String?)
+                                        : context.appAccent)
+                                    .computeLuminance() >
+                                0.55
+                                ? Colors.black
+                                : Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: AppSpacing.borderRadius12,
+                            ),
+                          ),
+                          icon: Icon(
+                            !isAuthenticated
+                                ? Icons.login_rounded
+                                : (entry != null ? Icons.edit_rounded : Icons.add_rounded),
+                            size: 18,
+                          ),
+                          label: Text(
+                            entry != null
+                                ? _buildEntryButtonLabel(media, entry)
+                                : (isAuthenticated ? 'Add to List' : 'Sign In to Track'),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                        ),
                       ),
-                      icon: Icon(entry != null ? Icons.edit_rounded : Icons.add_rounded, size: 18),
-                      label: Text(
-                        entry != null
-                            ? 'In List: ${_formatEntryStatus(entry['status'])} (${entry['progress'] ?? 0})'
-                            : (isAuthenticated ? 'Add to List' : 'Sign in to add to list'),
-                        style: const TextStyle(fontWeight: FontWeight.w700),
-                      ),
-                    ),
-                  ),
-                ],
+                      if (canQuickIncrement) ...[
+                        const SizedBox(width: 8),
+                        SizedBox(
+                          height: 46,
+                          child: FilledButton.tonal(
+                            onPressed: _isQuickUpdating ? null : _quickIncrementProgress,
+                            style: FilledButton.styleFrom(
+                              backgroundColor: context.appAccent.withValues(alpha: 0.16),
+                              foregroundColor: context.appAccent,
+                              padding: const EdgeInsets.symmetric(horizontal: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: AppSpacing.borderRadius12,
+                                side: BorderSide(
+                                  color: context.appAccent.withValues(alpha: 0.4),
+                                ),
+                              ),
+                            ),
+                            child: _isQuickUpdating
+                                ? SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: context.appAccent,
+                                    ),
+                                  )
+                                : Text(
+                                    isAnime ? '+1 Ep' : '+1 Ch',
+                                    style: const TextStyle(
+                                      fontFamily: 'Overpass',
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  );
+                },
               ),
             ),
           ),
@@ -422,25 +676,39 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
         body: TabBarView(
           controller: _tabController,
           children: [
-            _buildOverviewTab(media),
+            _buildOverviewTab(media, titleLang: titleLang, includeAdult: includeAdult),
             MediaCharactersTab(media: media),
             MediaStaffTab(media: media),
-            MediaRelationsTab(media: media),
+            MediaRelationsTab(
+              media: media,
+              titlePreference: titleLang,
+              includeAdult: includeAdult,
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildOverviewTab(Map<String, dynamic> media) {
+  Widget _buildOverviewTab(
+    Map<String, dynamic> media, {
+    required String titleLang,
+    required bool includeAdult,
+  }) {
     final rawDescription = TextUtil.stripHtml(media['description'] as String?);
     final isAnime = media['type'] == 'ANIME';
     final tags = (media['tags'] as List?)?.cast<Map<String, dynamic>>() ?? [];
     final rankings = (media['rankings'] as List?)?.cast<Map<String, dynamic>>() ?? [];
     final trailer = media['trailer'] as Map<String, dynamic>?;
     final externalLinks = (media['externalLinks'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-    final recNodes = (media['recommendations']?['nodes'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-    final title = TextUtil.getPreferredTitle(media['title']);
+    final rawRecNodes =
+        (media['recommendations']?['nodes'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+    final recNodes = includeAdult
+        ? rawRecNodes
+        : rawRecNodes
+            .where((n) => (n['mediaRecommendation'] as Map<String, dynamic>?)?['isAdult'] != true)
+            .toList();
+    final title = TextUtil.getPreferredTitle(media['title'], preference: titleLang);
     final titleObj = media['title'] as Map<String, dynamic>?;
     final romajiTitle = titleObj?['romaji'] as String?;
     final englishTitle = titleObj?['english'] as String?;
@@ -646,7 +914,7 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.open_in_new_rounded, size: 13, color: AppColors.brandBlue),
+                      Icon(Icons.open_in_new_rounded, size: 13, color: context.appAccent),
                       const SizedBox(width: 6),
                       Text(
                         site,
@@ -688,7 +956,10 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
                 final recMedia = recNodes[index]['mediaRecommendation'] as Map<String, dynamic>?;
                 if (recMedia == null) return const SizedBox.shrink();
                 final recId = recMedia['id'] as int?;
-                final recTitle = TextUtil.getPreferredTitle(recMedia['title']);
+                final recTitle = TextUtil.getPreferredTitle(
+                  recMedia['title'],
+                  preference: titleLang,
+                );
                 final recCover = (recMedia['coverImage']?['large'] ?? recMedia['coverImage']?['medium']) as String?;
                 final recScore = (recMedia['averageScore'] as num?)?.toDouble();
 

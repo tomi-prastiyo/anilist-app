@@ -12,14 +12,15 @@ class SeasonalRepository {
   SeasonalRepository(this._apiClient);
 
   static const String seasonalMediaQuery = r'''
-    query SeasonalQuery($page: Int, $season: MediaSeason, $seasonYear: Int) {
+    query SeasonalQuery($page: Int, $season: MediaSeason, $seasonYear: Int, $isAdult: Boolean) {
       Page(page: $page, perPage: 24) {
         pageInfo {
           currentPage
           hasNextPage
         }
-        media(season: $season, seasonYear: $seasonYear, type: ANIME, sort: [POPULARITY_DESC], isAdult: false) {
+        media(season: $season, seasonYear: $seasonYear, type: ANIME, sort: [POPULARITY_DESC], isAdult: $isAdult) {
           id
+          isAdult
           title {
             romaji
             english
@@ -48,14 +49,18 @@ class SeasonalRepository {
     required int page,
     required String season,
     required int year,
+    bool includeAdult = false,
   }) async {
+    final vars = <String, dynamic>{
+      'page': page,
+      'season': season,
+      'seasonYear': year,
+    };
+    if (!includeAdult) vars['isAdult'] = false;
+
     final response = await _apiClient.postGraphQL(
       query: seasonalMediaQuery,
-      variables: {
-        'page': page,
-        'season': season,
-        'seasonYear': year,
-      },
+      variables: vars,
     );
     return response['Page'] as Map<String, dynamic>? ?? {};
   }

@@ -7,11 +7,12 @@ import '../../../core/animations/app_motion.dart';
 import '../../../core/constants/api_constants.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/yuyuyu_assets.dart';
-import '../../../core/storage/local_storage_service.dart';
+import '../../../core/settings/content_settings_provider.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_provider.dart';
 import '../../../shared/image/app_avatar.dart';
 import '../../../shared/image/app_network_image.dart';
+import '../../../shared/widgets/mankai_cute_companion.dart';
 import '../../../shared/widgets/tactile_scale.dart';
 import '../../auth/presentation/auth_controller.dart';
 
@@ -24,6 +25,7 @@ class SettingsScreen extends ConsumerStatefulWidget {
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   String _cacheSizeText = 'Calculating...';
+  String _selectedHeroChapter = 'All';
 
   @override
   void initState() {
@@ -125,7 +127,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final auth = ref.watch(authControllerProvider);
     final themeMode = ref.watch(themeModeProvider);
     final activeHeroine = ref.watch(yuyuyuHeroineProvider);
-    final localStorage = ref.watch(localStorageServiceProvider);
+    final includeAdult = ref.watch(adultContentProvider);
+    final titleLanguage = ref.watch(titleLanguageProvider);
     final isAuthenticated = auth is Authenticated;
     final user = isAuthenticated ? auth.user : null;
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -168,7 +171,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         border: Border.all(
-                          color: AppColors.brandBlue.withValues(alpha: 0.4),
+                          color: context.appAccent.withValues(alpha: 0.45),
                           width: 2,
                         ),
                       ),
@@ -231,7 +234,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         children: [
                           Row(
                             children: [
-                              const Icon(Icons.public_rounded, size: 17, color: AppColors.brandBlue),
+                              Icon(Icons.public_rounded, size: 17, color: context.appAccent),
                               const SizedBox(width: 8),
                               const Text(
                                 'View Profile on AniList.co',
@@ -239,7 +242,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               ),
                             ],
                           ),
-                          const Icon(Icons.arrow_forward_ios_rounded, size: 13, color: AppColors.brandBlue),
+                          Icon(Icons.arrow_forward_ios_rounded, size: 13, color: context.appAccent),
                         ],
                       ),
                     ),
@@ -324,86 +327,182 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   duration: const Duration(milliseconds: 240),
                   curve: Curves.easeOutCubic,
                   child: themeMode == AppThemeMode.yuyuyu
-                      ? Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const SizedBox(height: 14),
-                            Text(
-                              'Hero Club Companion & Accent',
-                              style: TextStyle(
-                                fontFamily: 'Overpass',
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.w800,
-                                color: context.appTextPrimary,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            SizedBox(
-                              height: 92,
-                              child: ListView.separated(
-                                scrollDirection: Axis.horizontal,
-                                itemCount: YuYuYuAssets.heroines.length,
-                                separatorBuilder: (context, index) => const SizedBox(width: 8),
-                                itemBuilder: (context, index) {
-                                  final h = YuYuYuAssets.heroines[index];
-                                  final isChosen = h.id == activeHeroine.id;
-                                  return TactileScale(
-                                    onTap: () {
-                                      HapticFeedback.selectionClick();
-                                      ref.read(yuyuyuHeroineProvider.notifier).setHeroine(h);
-                                    },
-                                    child: AnimatedContainer(
-                                      duration: const Duration(milliseconds: 200),
-                                      width: 78,
-                                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-                                      decoration: BoxDecoration(
-                                        color: isChosen
-                                            ? h.accentColor.withValues(alpha: 0.16)
-                                            : context.appInputSurface,
-                                        borderRadius: BorderRadius.circular(12),
-                                        border: Border.all(
-                                          color: isChosen ? h.accentColor : context.appBorder,
-                                          width: isChosen ? 1.8 : 1,
-                                        ),
-                                      ),
-                                      child: Column(
-                                        mainAxisAlignment: MainAxisAlignment.center,
-                                        children: [
-                                          Container(
-                                            padding: const EdgeInsets.all(1.5),
-                                            decoration: BoxDecoration(
-                                              shape: BoxShape.circle,
-                                              border: Border.all(color: h.accentColor, width: 1.5),
-                                            ),
-                                            child: ClipOval(
-                                              child: AppNetworkImage(
-                                                imageUrl: h.imageUrl,
-                                                width: 44,
-                                                height: 44,
-                                                fit: BoxFit.cover,
-                                              ),
-                                            ),
-                                          ),
-                                          const SizedBox(height: 5),
-                                          Text(
-                                            h.name.split(' ').first,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: TextStyle(
-                                              fontFamily: 'Overpass',
-                                              fontSize: 10.5,
-                                              fontWeight: isChosen ? FontWeight.w900 : FontWeight.w700,
-                                              color: isChosen ? h.accentColor : context.appTextPrimary,
-                                            ),
-                                          ),
-                                        ],
+                      ? Builder(
+                          builder: (context) {
+                            final filteredHeroines =
+                                YuYuYuAssets.byChapter(_selectedHeroChapter);
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const SizedBox(height: 14),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      'Hero Club Companion & Accent',
+                                      style: TextStyle(
+                                        fontFamily: 'Overpass',
+                                        fontSize: 12.5,
+                                        fontWeight: FontWeight.w800,
+                                        color: context.appTextPrimary,
                                       ),
                                     ),
-                                  ).animateEntrance(index: index, horizontal: true);
-                                },
-                              ),
-                            ),
-                          ],
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 7,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: context.appAccent.withValues(alpha: 0.14),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Text(
+                                        '${YuYuYuAssets.heroines.length} Heroes',
+                                        style: TextStyle(
+                                          fontFamily: 'Overpass',
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w800,
+                                          color: context.appAccent,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                SizedBox(
+                                  height: 30,
+                                  child: ListView.separated(
+                                    scrollDirection: Axis.horizontal,
+                                    itemCount: YuYuYuAssets.chapterFilters.length,
+                                    separatorBuilder: (context, index) => const SizedBox(width: 6),
+                                    itemBuilder: (context, idx) {
+                                      final chapter = YuYuYuAssets.chapterFilters[idx];
+                                      final isSelected = _selectedHeroChapter == chapter;
+                                      final count = YuYuYuAssets.byChapter(chapter).length;
+                                      return ChoiceChip(
+                                        label: Text(
+                                          chapter == 'All' ? 'All ($count)' : chapter,
+                                          style: TextStyle(
+                                            fontFamily: 'Overpass',
+                                            fontSize: 10.5,
+                                            fontWeight: FontWeight.w700,
+                                            color: isSelected
+                                                ? (context.appAccent.computeLuminance() > 0.55
+                                                    ? Colors.black
+                                                    : Colors.white)
+                                                : context.appTextSecondary,
+                                          ),
+                                        ),
+                                        selected: isSelected,
+                                        selectedColor: context.appAccent,
+                                        backgroundColor: context.appInputSurface,
+                                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                        visualDensity: VisualDensity.compact,
+                                        padding: const EdgeInsets.symmetric(horizontal: 6),
+                                        side: BorderSide(
+                                          color: isSelected
+                                              ? context.appAccent
+                                              : context.appBorder,
+                                        ),
+                                        onSelected: (_) {
+                                          HapticFeedback.selectionClick();
+                                          setState(() => _selectedHeroChapter = chapter);
+                                        },
+                                      );
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                SizedBox(
+                                  height: 112,
+                                  child: ListView.separated(
+                                    scrollDirection: Axis.horizontal,
+                                    itemCount: filteredHeroines.length,
+                                    separatorBuilder: (context, index) => const SizedBox(width: 8),
+                                    itemBuilder: (context, index) {
+                                      final h = filteredHeroines[index];
+                                      final isChosen = h.id == activeHeroine.id;
+                                      return TactileScale(
+                                        onTap: () {
+                                          HapticFeedback.selectionClick();
+                                          ref.read(yuyuyuHeroineProvider.notifier).setHeroine(h);
+                                        },
+                                        child: AnimatedContainer(
+                                          duration: const Duration(milliseconds: 200),
+                                          width: 96,
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 5,
+                                            vertical: 6,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: isChosen
+                                                ? h.accentColor.withValues(alpha: 0.16)
+                                                : context.appInputSurface,
+                                            borderRadius: BorderRadius.circular(12),
+                                            border: Border.all(
+                                              color: isChosen ? h.accentColor : context.appBorder,
+                                              width: isChosen ? 1.8 : 1,
+                                            ),
+                                          ),
+                                          child: Column(
+                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            children: [
+                                              Container(
+                                                width: 46,
+                                                height: 46,
+                                                padding: const EdgeInsets.all(2),
+                                                decoration: BoxDecoration(
+                                                  shape: BoxShape.circle,
+                                                  color: h.accentColor.withValues(alpha: 0.14),
+                                                  border: Border.all(
+                                                    color: h.accentColor,
+                                                    width: 1.5,
+                                                  ),
+                                                ),
+                                                child: Image.asset(
+                                                  h.chibiAsset,
+                                                  fit: BoxFit.contain,
+                                                  filterQuality: FilterQuality.medium,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                h.shortName,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: TextStyle(
+                                                  fontFamily: 'Overpass',
+                                                  fontSize: 10.5,
+                                                  fontWeight: isChosen
+                                                      ? FontWeight.w900
+                                                      : FontWeight.w700,
+                                                  color: isChosen
+                                                      ? h.accentColor
+                                                      : context.appTextPrimary,
+                                                ),
+                                              ),
+                                              Text(
+                                                _selectedHeroChapter == 'All'
+                                                    ? '${h.chapterGroup} • ${h.flowerMotif}'
+                                                    : h.flowerMotif,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: TextStyle(
+                                                  fontFamily: 'Overpass',
+                                                  fontSize: 8.5,
+                                                  color: context.appTextMuted,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ).animateEntrance(index: index, horizontal: true);
+                                    },
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
                         )
                       : const SizedBox.shrink(),
                 ),
@@ -434,7 +533,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         border: Border.all(color: cardBorder),
                       ),
                       child: DropdownButton<String>(
-                        value: localStorage.titleLanguage,
+                        value: titleLanguage,
                         dropdownColor: isDark ? AppColors.darkSurface : Colors.white,
                         underline: const SizedBox.shrink(),
                         icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 18),
@@ -443,10 +542,140 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           DropdownMenuItem(value: 'ENGLISH', child: Text('English', style: TextStyle(fontSize: 12.5))),
                           DropdownMenuItem(value: 'NATIVE', child: Text('Native', style: TextStyle(fontSize: 12.5))),
                         ],
-                        onChanged: (val) {
-                          if (val != null) setState(() => localStorage.titleLanguage = val);
+                        onChanged: (val) async {
+                          if (val == null) return;
+                          HapticFeedback.selectionClick();
+                          final messenger = ScaffoldMessenger.of(context);
+                          final ok = await ref
+                              .read(titleLanguageProvider.notifier)
+                              .setTitleLanguage(val);
+                          if (!mounted || ok) return;
+                          messenger.showSnackBar(
+                            const SnackBar(
+                              content: Text('Failed to sync title language with AniList'),
+                              backgroundColor: AppColors.statusDropped,
+                            ),
+                          );
                         },
                       ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Divider(color: cardBorder, height: 1),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Flexible(
+                                child: Text(
+                                  'Show 18+ Content',
+                                  style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                decoration: BoxDecoration(
+                                  color: AppColors.statusDropped.withValues(alpha: 0.16),
+                                  borderRadius: BorderRadius.circular(5),
+                                  border: Border.all(
+                                    color: AppColors.statusDropped.withValues(alpha: 0.45),
+                                  ),
+                                ),
+                                child: const Text(
+                                  '18+',
+                                  style: TextStyle(
+                                    fontFamily: 'Overpass',
+                                    fontSize: 9.5,
+                                    fontWeight: FontWeight.w900,
+                                    color: AppColors.statusDropped,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            isAuthenticated
+                                ? 'Synced with AniList • Applies to Search, Seasonal & Airing'
+                                : 'Applies to Search, Seasonal & Airing schedules',
+                            style: TextStyle(fontSize: 11.5, color: textSecondary),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Switch.adaptive(
+                      key: const ValueKey('adult_content_switch'),
+                      value: includeAdult,
+                      activeTrackColor: AppColors.statusDropped,
+                      onChanged: (next) async {
+                        final messenger = ScaffoldMessenger.of(context);
+                        var proceed = true;
+                        if (next) {
+                          proceed = await showDialog<bool>(
+                                context: context,
+                                builder: (dialogCtx) => AlertDialog(
+                                  backgroundColor: dialogCtx.appSurface,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  title: const Text(
+                                    'Enable 18+ Content?',
+                                    style: TextStyle(fontWeight: FontWeight.w800),
+                                  ),
+                                  content: const Text(
+                                    'Adult-rated anime & manga will appear across Search, Seasonal Chart, and Airing schedules. Confirm you are 18 or older.',
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.of(dialogCtx).pop(false),
+                                      child: Text(
+                                        'Cancel',
+                                        style: TextStyle(color: dialogCtx.appTextSecondary),
+                                      ),
+                                    ),
+                                    ElevatedButton(
+                                      onPressed: () => Navigator.of(dialogCtx).pop(true),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: AppColors.statusDropped,
+                                        foregroundColor: Colors.white,
+                                      ),
+                                      child: const Text('Enable'),
+                                    ),
+                                  ],
+                                ),
+                              ) ??
+                              false;
+                        }
+                        if (!proceed || !mounted) return;
+                        HapticFeedback.selectionClick();
+                        final ok = await ref
+                            .read(adultContentProvider.notifier)
+                            .setAdultContent(next);
+                        if (!mounted) return;
+                        messenger
+                          ..clearSnackBars()
+                          ..showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                ok
+                                    ? (next
+                                        ? '18+ content enabled'
+                                        : '18+ content hidden')
+                                    : 'Failed to sync 18+ preference with AniList',
+                              ),
+                              backgroundColor: ok ? null : AppColors.statusDropped,
+                              duration: const Duration(seconds: 2),
+                            ),
+                          );
+                      },
                     ),
                   ],
                 ),
@@ -486,7 +715,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   onPressed: _clearCache,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: isDark ? AppColors.darkBackground : const Color(0xFFF1F5F9),
-                    foregroundColor: AppColors.brandBlue,
+                    foregroundColor: context.appAccent,
                     elevation: 0,
                     side: BorderSide(color: cardBorder),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -698,6 +927,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         width: 44,
                         height: 44,
                         fit: BoxFit.cover,
+                        alignment: const Alignment(0, -0.35),
                       ),
                     ),
                   ),
@@ -728,7 +958,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          'Sakura Twilight Theme',
+                          '${heroine.name} • ${heroine.chapterGroup}',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
@@ -741,6 +971,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ),
                   ),
                   const SizedBox(width: 8),
+                  MankaiFloatingMascot(
+                    assetPath: heroine.fairyAsset,
+                    accentColor: accent,
+                    size: 34,
+                    interactive: false,
+                    showGlow: false,
+                  ),
+                  const SizedBox(width: 6),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(

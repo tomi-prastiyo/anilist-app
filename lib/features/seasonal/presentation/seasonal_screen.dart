@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/animations/app_motion.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
+import '../../../core/settings/content_settings_provider.dart';
 import '../../../shared/cards/media_card.dart';
 import '../../../shared/feedback/empty_view.dart';
 import '../../../shared/feedback/shimmer_loading.dart';
@@ -85,6 +86,7 @@ class _SeasonalScreenState extends ConsumerState<SeasonalScreen> {
         page: _currentPage,
         season: _selectedSeason,
         year: _selectedYear,
+        includeAdult: ref.read(adultContentProvider),
       );
 
       final pageInfo = data['pageInfo'] as Map<String, dynamic>?;
@@ -115,6 +117,10 @@ class _SeasonalScreenState extends ConsumerState<SeasonalScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<bool>(adultContentProvider, (_, _) {
+      _loadSeasonalMedia(reset: true);
+    });
+    final titleLang = ref.watch(titleLanguageProvider);
     final animeLists = ref.watch(animeListControllerProvider).valueOrNull ?? const [];
     final inListMap = <int, String>{};
     for (final group in animeLists) {
@@ -274,6 +280,7 @@ class _SeasonalScreenState extends ConsumerState<SeasonalScreen> {
                                 media: media,
                                 mode: MediaCardMode.grid,
                                 accentColor: context.appAccent,
+                                titlePreference: titleLang,
                                 inListBadge: id != null ? inListMap[id] : null,
                                 onTap: () {
                                   if (id != null) {

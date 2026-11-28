@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/utils/media_progress_util.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../data/media_list_repository.dart';
 
@@ -47,26 +48,69 @@ class MediaListController extends StateNotifier<AsyncValue<List<Map<String, dyna
     required int entryId,
     required Map<String, dynamic> Function(Map<String, dynamic> entry) transform,
     required Future<void> Function() request,
+    String? moveToStatus,
   }) async {
     final previousState = state;
     if (state.hasValue) {
-      final updatedLists = state.value!.map((group) {
+      Map<String, dynamic>? movedEntry;
+      final updatedLists = <Map<String, dynamic>>[];
+
+      for (final group in state.value!) {
         final entries = (group['entries'] as List?)?.cast<Map<String, dynamic>>();
-        if (entries == null) return group;
+        if (entries == null) {
+          updatedLists.add(group);
+          continue;
+        }
 
+        final groupStatus = (group['status'] as String?)?.toUpperCase();
         var groupModified = false;
-        final updatedEntries = entries.map((entry) {
-          if (entry['id'] != entryId) return entry;
-          groupModified = true;
-          return transform(Map<String, dynamic>.from(entry));
-        }).toList();
+        final updatedEntries = <Map<String, dynamic>>[];
 
-        if (!groupModified) return group;
-        return {
-          ...group,
-          'entries': updatedEntries,
-        };
-      }).toList();
+        for (final entry in entries) {
+          if (entry['id'] != entryId) {
+            updatedEntries.add(entry);
+            continue;
+          }
+          groupModified = true;
+          final transformed = transform(Map<String, dynamic>.from(entry));
+          if (moveToStatus != null && groupStatus != moveToStatus.toUpperCase()) {
+            movedEntry = transformed;
+          } else {
+            updatedEntries.add(transformed);
+          }
+        }
+
+        if (groupModified) {
+          updatedLists.add({
+            ...group,
+            'entries': updatedEntries,
+          });
+        } else {
+          updatedLists.add(group);
+        }
+      }
+
+      if (movedEntry != null && moveToStatus != null) {
+        final targetUpper = moveToStatus.toUpperCase();
+        var targetIndex = updatedLists.indexWhere(
+          (g) => (g['status'] as String?)?.toUpperCase() == targetUpper,
+        );
+        if (targetIndex != -1) {
+          final targetGroup = updatedLists[targetIndex];
+          final existing = (targetGroup['entries'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+          updatedLists[targetIndex] = {
+            ...targetGroup,
+            'entries': [movedEntry, ...existing],
+          };
+        } else {
+          updatedLists.add({
+            'name': _defaultGroupName(targetUpper),
+            'isCustomList': false,
+            'status': targetUpper,
+            'entries': [movedEntry],
+          });
+        }
+      }
 
       state = AsyncValue.data(updatedLists);
     }
@@ -78,33 +122,105 @@ class MediaListController extends StateNotifier<AsyncValue<List<Map<String, dyna
     }
   }
 
-  /// Increments progress by 1 with instant optimistic UI update
+  String _defaultGroupName(String statusUpper) {
+    final isManga = _type == 'MANGA';
+    switch (statusUpper) {
+      case 'CURRENT':
+        return isManga ? 'Reading' : 'Watching';
+      case 'REPEATING':
+        return isManga ? 'Rereading' : 'Rewatching';
+      case 'COMPLETED':
+        return 'Completed';
+      case 'PLANNING':
+        return 'Planning';
+      case 'PAUSED':
+        return 'Paused';
+      case 'DROPPED':
+        return 'Dropped';
+      default:
+        return statusUpper;
+    }
+  }
+
+  Map<String, dynamic>? _findEntryById(int entryId) {
+    final lists = state.valueOrNull;
+    if (lists == null) return null;
+    for (final group in lists) {
+      final entries = (group['entries'] as List?)?.cast<Map<String, dynamic>>() ?? const [];
+      for (final entry in entries) {
+        if (entry['id'] == entryId) return entry;
+      }
+    }
+    return null;
+  }
+
+  /// Increments progress by 1 with instant optimistic UI update.
+  /// Handles start/finish date auto-fill, status promotion (`PLANNING -> CURRENT`),
+  /// manga volume completion sync, and `REPEATING -> COMPLETED` repeat bumps.
   Future<void> incrementProgress({
     required int entryId,
     required int mediaId,
     required int currentProgress,
     int? maxEpisodesOrChapters,
+    int? maxVolumes,
+    String? currentStatus,
+    int? currentRepeat,
   }) async {
-    final nextProgress = currentProgress + 1;
-    final isNowCompleted = maxEpisodesOrChapters != null && nextProgress >= maxEpisodesOrChapters;
-    final nextStatus = isNowCompleted ? 'COMPLETED' : null;
+    if (maxEpisodesOrChapters != null && currentProgress >= maxEpisodesOrChapters) return;
+
+    final existing = _findEntryById(entryId);
+    final prevStatus =
+        (currentStatus ?? existing?['status'] as String?)?.toUpperCase() ?? 'CURRENT';
+    final prevRepeat = currentRepeat ?? (existing?['repeat'] as int? ?? 0);
+    final prevVolumes = existing?['progressVolumes'] as int? ?? 0;
+    final resolvedMaxVolumes =
+        maxVolumes ?? (existing?['media'] as Map<String, dynamic>?)?['volumes'] as int?;
+
+    final res = MediaProgressUtil.resolveQuickIncrement(
+      currentStatus: prevStatus,
+      currentProgress: currentProgress,
+      currentVolumes: prevVolumes,
+      currentRepeat: prevRepeat,
+      maxCount: maxEpisodesOrChapters,
+      maxVolumes: resolvedMaxVolumes,
+      existingStartedAt: existing?['startedAt'],
+      existingCompletedAt: existing?['completedAt'],
+      isManga: _type == 'MANGA',
+    );
     final nowTimestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000;
 
     await _updateEntryOptimistically(
       entryId: entryId,
+      moveToStatus: res.statusChanged ? res.status : null,
       transform: (entry) {
-        entry['progress'] = nextProgress;
+        entry['progress'] = res.progress;
         entry['updatedAt'] = nowTimestamp;
-        if (nextStatus != null) {
-          entry['status'] = nextStatus;
+        if (res.statusChanged) {
+          entry['status'] = res.status;
+        }
+        if (res.repeatChanged) {
+          entry['repeat'] = res.repeat;
+        }
+        if (res.volumesChanged) {
+          entry['progressVolumes'] = res.progressVolumes;
+        }
+        if (res.startedAtChanged && res.startedAt != null) {
+          entry['startedAt'] = res.startedAt;
+        }
+        if (res.completedAtChanged && res.completedAt != null) {
+          entry['completedAt'] = res.completedAt;
         }
         return entry;
       },
       request: () => _repo.saveMediaListEntry(
         id: entryId,
         mediaId: mediaId,
-        progress: nextProgress,
-        status: nextStatus,
+        progress: res.progress,
+        progressVolumes: res.volumesChanged ? res.progressVolumes : null,
+        status: res.statusChanged ? res.status : null,
+        repeat: res.repeatChanged ? res.repeat : null,
+        startedAt: res.startedAtChanged ? res.startedAt : null,
+        completedAt: res.completedAtChanged ? res.completedAt : null,
       ),
     );
   }
@@ -116,23 +232,37 @@ class MediaListController extends StateNotifier<AsyncValue<List<Map<String, dyna
     required int currentVolumes,
     int? maxVolumes,
   }) async {
-    final nextVolumes = maxVolumes != null && currentVolumes >= maxVolumes
-        ? maxVolumes
-        : currentVolumes + 1;
-    if (nextVolumes == currentVolumes) return;
+    if (maxVolumes != null && currentVolumes >= maxVolumes) return;
+    final existing = _findEntryById(entryId);
+    final res = MediaProgressUtil.resolveQuickVolumeIncrement(
+      currentStatus: existing?['status'] as String?,
+      currentVolumes: currentVolumes,
+      maxVolumes: maxVolumes,
+      existingStartedAt: existing?['startedAt'],
+    );
+    if (res.progressVolumes == currentVolumes) return;
 
     final nowTimestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     await _updateEntryOptimistically(
       entryId: entryId,
+      moveToStatus: res.statusChanged ? res.status : null,
       transform: (entry) {
-        entry['progressVolumes'] = nextVolumes;
+        entry['progressVolumes'] = res.progressVolumes;
         entry['updatedAt'] = nowTimestamp;
+        if (res.statusChanged) {
+          entry['status'] = res.status;
+        }
+        if (res.startedAtChanged && res.startedAt != null) {
+          entry['startedAt'] = res.startedAt;
+        }
         return entry;
       },
       request: () => _repo.saveMediaListEntry(
         id: entryId,
         mediaId: mediaId,
-        progressVolumes: nextVolumes,
+        progressVolumes: res.progressVolumes,
+        status: res.statusChanged ? res.status : null,
+        startedAt: res.startedAtChanged ? res.startedAt : null,
       ),
     );
   }

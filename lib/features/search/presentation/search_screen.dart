@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/animations/app_motion.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
+import '../../../core/constants/yuyuyu_assets.dart';
+import '../../../core/settings/content_settings_provider.dart';
 import '../../../core/storage/local_storage_service.dart';
 import '../../../core/utils/text_util.dart';
 import '../../../shared/cards/media_card.dart';
@@ -58,10 +60,12 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
 
   SearchFilterData _filterData = SearchFilterData();
   final List<String> _tabs = ['Anime', 'Manga', 'Characters', 'Staff', 'Users'];
+  List<String> _recentSearches = [];
 
   @override
   void initState() {
     super.initState();
+    _recentSearches = ref.read(localStorageServiceProvider).getRecentSearches();
     _tabController = TabController(length: _tabs.length, vsync: this);
     _tabController.addListener(() {
       if (!_tabController.indexIsChanging && _selectedTabIndex != _tabController.index) {
@@ -96,20 +100,44 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
   }
 
   void _onSearchChanged(String query) {
+    setState(() {});
     _debounceTimer?.cancel();
-    _debounceTimer = Timer(const Duration(milliseconds: 300), () {
+    _debounceTimer = Timer(const Duration(milliseconds: 300), () async {
       if (_searchQuery != query) {
         setState(() => _searchQuery = query);
-        if (query.trim().isNotEmpty) {
-          ref.read(localStorageServiceProvider).addRecentSearch(query.trim());
+        final trimmed = query.trim();
+        if (trimmed.isNotEmpty) {
+          await ref.read(localStorageServiceProvider).addRecentSearch(trimmed);
+          if (mounted) {
+            setState(() {
+              _recentSearches = ref.read(localStorageServiceProvider).getRecentSearches();
+            });
+          }
         }
         _performSearch(reset: true);
       }
     });
   }
 
+  void _applyRecentSearch(String query) {
+    HapticFeedback.selectionClick();
+    _debounceTimer?.cancel();
+    _searchController.text = query;
+    _searchController.selection = TextSelection.collapsed(offset: query.length);
+    setState(() => _searchQuery = query);
+    _performSearch(reset: true);
+  }
+
+  void _updateFilters(SearchFilterData next) {
+    _searchCache.clear();
+    _hasNextPageCache.clear();
+    setState(() => _filterData = next);
+    _performSearch(reset: true);
+  }
+
   String _buildCacheKey(String tab, int page) {
-    return '$tab::${_searchQuery.trim()}::${_filterData.includedGenres.join(',')}:${_filterData.excludedGenres.join(',')}:${_filterData.formats.join(',')}:${_filterData.statuses.join(',')}:${_filterData.seasonYear}:${_filterData.sortBy}::$page';
+    final includeAdult = ref.read(adultContentProvider);
+    return '$tab::${_searchQuery.trim()}::${_filterData.includedGenres.join(',')}:${_filterData.excludedGenres.join(',')}:${_filterData.formats.join(',')}:${_filterData.statuses.join(',')}:${_filterData.seasonYear}:${_filterData.sortBy}::adult=$includeAdult::$page';
   }
 
   Future<void> _performSearch({bool reset = false}) async {
@@ -163,6 +191,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
           statusIn: _filterData.statuses.isEmpty ? null : _filterData.statuses,
           seasonYear: _filterData.seasonYear,
           sortBy: _filterData.sortBy,
+          includeAdult: ref.read(adultContentProvider),
         );
       } else if (activeTab == 'Characters') {
         pageData = await repo.searchCharacters(
@@ -232,12 +261,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
       backgroundColor: Colors.transparent,
       builder: (context) => SearchFilterBottomSheet(
         initialFilter: _filterData,
-        onApply: (newFilter) {
-          _searchCache.clear();
-          _hasNextPageCache.clear();
-          setState(() => _filterData = newFilter);
-          _performSearch(reset: true);
-        },
+        includeAdult: ref.read(adultContentProvider),
+        onApply: _updateFilters,
       ),
     );
   }
@@ -252,6 +277,21 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
   }
 
   Color _getTabAccentColor(int index) {
+    if (context.isYuYuYu) {
+      switch (index) {
+        case 0:
+          return context.appAccent; // Anime: Active Heroine
+        case 1:
+          return const Color(0xFFC084FC); // Manga: Twilight Orchid
+        case 2:
+          return YuYuYuAssets.shinjuGold; // Characters: Shinju Gold
+        case 3:
+          return const Color(0xFF4CC38A); // Staff: Emerald Leaf
+        case 4:
+        default:
+          return const Color(0xFFF472B6); // Users: Mankai Sakura
+      }
+    }
     switch (index) {
       case 0:
         return AppColors.brandBlue; // Anime: Cyan
@@ -269,6 +309,25 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
 
   @override
   Widget build(BuildContext context) {
+    final titleLang = ref.watch(titleLanguageProvider);
+    ref.listen<bool>(adultContentProvider, (_, next) {
+      if (!next && _filterData.genres.containsKey('Hentai')) {
+        final cleanedGenres = Map<String, GenreFilterState>.from(_filterData.genres)
+          ..remove('Hentai');
+        setState(() {
+          _filterData = SearchFilterData(
+            genres: cleanedGenres,
+            formats: _filterData.formats,
+            statuses: _filterData.statuses,
+            seasonYear: _filterData.seasonYear,
+            sortBy: _filterData.sortBy,
+          );
+        });
+      }
+      _searchCache.clear();
+      _hasNextPageCache.clear();
+      _performSearch(reset: true);
+    });
     final filterCount = _filterData.activeFilterCount;
     final isMediaTab = _selectedTabIndex == 0 || _selectedTabIndex == 1;
     final activeAccent = _getTabAccentColor(_selectedTabIndex);
@@ -304,37 +363,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
           ),
         ),
         actions: [
-          // 1. Airing Schedule
-          IconButton(
-            style: IconButton.styleFrom(
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              minimumSize: const Size(34, 34),
-              padding: EdgeInsets.zero,
-            ),
-            constraints: const BoxConstraints.tightFor(width: 34, height: 34),
-            padding: EdgeInsets.zero,
-            icon: const Icon(Icons.calendar_month_rounded, size: 20),
-            tooltip: 'Airing Schedule',
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (context) => const AiringScheduleScreen()),
-            ),
-          ),
-          // 2. Seasonal Chart
-          IconButton(
-            style: IconButton.styleFrom(
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              minimumSize: const Size(34, 34),
-              padding: EdgeInsets.zero,
-            ),
-            constraints: const BoxConstraints.tightFor(width: 34, height: 34),
-            padding: EdgeInsets.zero,
-            icon: const Icon(Icons.auto_awesome_rounded, size: 20),
-            tooltip: 'Seasonal Chart',
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (context) => const SeasonalScreen()),
-            ),
-          ),
-          // 3. Filter & Sort Modal with active badge
+          // 1. Filter & Sort Modal with active badge
           if (isMediaTab)
             Stack(
               alignment: Alignment.center,
@@ -342,10 +371,10 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
                 IconButton(
                   style: IconButton.styleFrom(
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    minimumSize: const Size(34, 34),
+                    minimumSize: const Size(40, 40),
                     padding: EdgeInsets.zero,
                   ),
-                  constraints: const BoxConstraints.tightFor(width: 34, height: 34),
+                  constraints: const BoxConstraints.tightFor(width: 40, height: 40),
                   padding: EdgeInsets.zero,
                   icon: const Icon(Icons.tune_rounded, size: 20),
                   tooltip: 'Filter & Sort',
@@ -353,8 +382,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
                 ),
                 if (filterCount > 0)
                   Positioned(
-                    top: 3,
-                    right: 3,
+                    top: 5,
+                    right: 5,
                     child: Container(
                       padding: const EdgeInsets.all(3.5),
                       decoration: BoxDecoration(
@@ -363,9 +392,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
                       ),
                       child: Text(
                         '$filterCount',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 8,
-                          color: Colors.white,
+                          color: activeAccent.computeLuminance() > 0.55 ? Colors.black : Colors.white,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -373,34 +402,34 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
                   ),
               ],
             ),
-          // 4. Random Pick from current search/discover results
+          // 2. Random Pick from current search/discover results
           if (isMediaTab && _results.isNotEmpty)
             IconButton(
               style: IconButton.styleFrom(
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                minimumSize: const Size(34, 34),
+                minimumSize: const Size(40, 40),
                 padding: EdgeInsets.zero,
               ),
-              constraints: const BoxConstraints.tightFor(width: 34, height: 34),
+              constraints: const BoxConstraints.tightFor(width: 40, height: 40),
               padding: EdgeInsets.zero,
               icon: const Icon(Icons.casino_rounded, size: 20),
               tooltip: 'Random Pick',
               onPressed: () => RandomPickSheet.show(
                 context,
                 mediaList: _results.whereType<Map<String, dynamic>>().toList(),
-                titlePreference: ref.read(localStorageServiceProvider).titleLanguage,
+                titlePreference: titleLang,
                 contextTitle: _selectedTabIndex == 0 ? 'Random Anime Pick' : 'Random Manga Pick',
               ),
             ),
-          // 5. Layout Mode Toggle (Grid vs Detailed List)
+          // 3. Layout Mode Toggle (Grid vs Detailed List)
           if (isMediaTab)
             IconButton(
               style: IconButton.styleFrom(
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                minimumSize: const Size(34, 34),
+                minimumSize: const Size(40, 40),
                 padding: EdgeInsets.zero,
               ),
-              constraints: const BoxConstraints.tightFor(width: 34, height: 34),
+              constraints: const BoxConstraints.tightFor(width: 40, height: 40),
               padding: EdgeInsets.zero,
               icon: Icon(
                 _layoutMode == MediaCardMode.grid
@@ -423,7 +452,11 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
               decoration: BoxDecoration(
                 color: context.appInputSurface,
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: context.appBorder),
+                border: Border.all(
+                  color: context.isYuYuYu
+                      ? YuYuYuAssets.shinjuGold.withValues(alpha: 0.30)
+                      : context.appBorder,
+                ),
               ),
               child: TextField(
                 controller: _searchController,
@@ -500,7 +533,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
                         fontSize: 12,
                         fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
                         color: isSelected
-                            ? Colors.white
+                            ? (tabColor.computeLuminance() > 0.55 ? Colors.black : Colors.white)
                             : context.appTextSecondary,
                       ),
                     ),
@@ -510,11 +543,315 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
             ),
           ),
 
-          // 3. Results Section (Directly into clean Grid or List, NO cluttered ribbons!)
+          // 3. Quick Explore & Recent Searches (when search query is empty)
+          if (_searchQuery.trim().isEmpty) _buildQuickExploreAndRecent(activeAccent),
+
+          // 4. Removable Active Filter Chips
+          if (isMediaTab && filterCount > 0) _buildActiveFiltersStrip(activeAccent),
+
+          // 5. Results Section (Directly into clean Grid or List)
           Expanded(
             child: _buildResultsView(isMediaTab, activeAccent, inListMap),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildQuickExploreAndRecent(Color activeAccent) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 4, bottom: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            height: 32,
+            child: ListView(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.p16),
+              scrollDirection: Axis.horizontal,
+              children: [
+                _buildExploreChip(
+                  icon: Icons.auto_awesome_rounded,
+                  label: 'Seasonal Chart',
+                  color: context.isYuYuYu ? YuYuYuAssets.shinjuGold : AppColors.brandBlue,
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const SeasonalScreen()),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                _buildExploreChip(
+                  icon: Icons.calendar_month_rounded,
+                  label: 'Airing Schedule',
+                  color: context.appAccent,
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const AiringScheduleScreen()),
+                  ),
+                ),
+                if (_recentSearches.isNotEmpty) ...[
+                  const SizedBox(width: 10),
+                  Center(
+                    child: Container(
+                      width: 1,
+                      height: 16,
+                      color: context.appBorder,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  ..._recentSearches.map(
+                    (term) => Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: InputChip(
+                        label: Text(
+                          term,
+                          style: TextStyle(
+                            fontFamily: 'Overpass',
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: context.appTextPrimary,
+                          ),
+                        ),
+                        avatar: Icon(Icons.history_rounded, size: 13, color: activeAccent),
+                        onPressed: () => _applyRecentSearch(term),
+                        onDeleted: () async {
+                          await ref.read(localStorageServiceProvider).removeRecentSearch(term);
+                          if (mounted) {
+                            setState(() {
+                              _recentSearches =
+                                  ref.read(localStorageServiceProvider).getRecentSearches();
+                            });
+                          }
+                        },
+                        deleteIconColor: context.appTextMuted,
+                        backgroundColor: context.appSurface,
+                        side: BorderSide(color: context.appBorder),
+                        visualDensity: VisualDensity.compact,
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                    ),
+                  ),
+                  TextButton(
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    onPressed: () async {
+                      await ref.read(localStorageServiceProvider).clearRecentSearches();
+                      if (mounted) setState(() => _recentSearches = []);
+                    },
+                    child: Text(
+                      'Clear',
+                      style: TextStyle(
+                        fontFamily: 'Overpass',
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: context.appTextMuted,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildExploreChip({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: context.appSurface,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: color.withValues(alpha: 0.35)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 13.5, color: color),
+              const SizedBox(width: 5),
+              Text(
+                label,
+                style: TextStyle(
+                  fontFamily: 'Overpass',
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  color: context.appTextPrimary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActiveFiltersStrip(Color activeAccent) {
+    final chips = <Widget>[];
+
+    for (final g in _filterData.includedGenres) {
+      chips.add(_buildRemovableFilterChip(
+        label: g,
+        color: activeAccent,
+        onRemove: () {
+          final updatedGenres = Map<String, GenreFilterState>.from(_filterData.genres)
+            ..remove(g);
+          _updateFilters(SearchFilterData(
+            genres: updatedGenres,
+            formats: _filterData.formats,
+            statuses: _filterData.statuses,
+            seasonYear: _filterData.seasonYear,
+            sortBy: _filterData.sortBy,
+          ));
+        },
+      ));
+    }
+
+    for (final g in _filterData.excludedGenres) {
+      chips.add(_buildRemovableFilterChip(
+        label: '-$g',
+        color: AppColors.statusDropped,
+        onRemove: () {
+          final updatedGenres = Map<String, GenreFilterState>.from(_filterData.genres)
+            ..remove(g);
+          _updateFilters(SearchFilterData(
+            genres: updatedGenres,
+            formats: _filterData.formats,
+            statuses: _filterData.statuses,
+            seasonYear: _filterData.seasonYear,
+            sortBy: _filterData.sortBy,
+          ));
+        },
+      ));
+    }
+
+    for (final f in _filterData.formats) {
+      chips.add(_buildRemovableFilterChip(
+        label: f.replaceAll('_', ' '),
+        color: activeAccent,
+        onRemove: () {
+          final updatedFormats = List<String>.from(_filterData.formats)..remove(f);
+          _updateFilters(SearchFilterData(
+            genres: _filterData.genres,
+            formats: updatedFormats,
+            statuses: _filterData.statuses,
+            seasonYear: _filterData.seasonYear,
+            sortBy: _filterData.sortBy,
+          ));
+        },
+      ));
+    }
+
+    for (final s in _filterData.statuses) {
+      chips.add(_buildRemovableFilterChip(
+        label: s.replaceAll('_', ' '),
+        color: activeAccent,
+        onRemove: () {
+          final updatedStatuses = List<String>.from(_filterData.statuses)..remove(s);
+          _updateFilters(SearchFilterData(
+            genres: _filterData.genres,
+            formats: _filterData.formats,
+            statuses: updatedStatuses,
+            seasonYear: _filterData.seasonYear,
+            sortBy: _filterData.sortBy,
+          ));
+        },
+      ));
+    }
+
+    if (_filterData.seasonYear != null) {
+      chips.add(_buildRemovableFilterChip(
+        label: '${_filterData.seasonYear}',
+        color: activeAccent,
+        onRemove: () => _updateFilters(SearchFilterData(
+          genres: _filterData.genres,
+          formats: _filterData.formats,
+          statuses: _filterData.statuses,
+          seasonYear: null,
+          sortBy: _filterData.sortBy,
+        )),
+      ));
+    }
+
+    if (_filterData.sortBy != 'POPULARITY_DESC') {
+      chips.add(_buildRemovableFilterChip(
+        label: 'Sort: ${_filterData.sortBy.replaceAll('_', ' ')}',
+        color: activeAccent,
+        onRemove: () => _updateFilters(SearchFilterData(
+          genres: _filterData.genres,
+          formats: _filterData.formats,
+          statuses: _filterData.statuses,
+          seasonYear: _filterData.seasonYear,
+          sortBy: 'POPULARITY_DESC',
+        )),
+      ));
+    }
+
+    chips.add(
+      TextButton(
+        style: TextButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          minimumSize: Size.zero,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
+        onPressed: () => _updateFilters(SearchFilterData()),
+        child: const Text(
+          'Reset',
+          style: TextStyle(
+            fontFamily: 'Overpass',
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+            color: AppColors.statusDropped,
+          ),
+        ),
+      ),
+    );
+
+    return SizedBox(
+      height: 34,
+      child: ListView(
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.p16, vertical: 2),
+        scrollDirection: Axis.horizontal,
+        children: chips,
+      ),
+    );
+  }
+
+  Widget _buildRemovableFilterChip({
+    required String label,
+    required Color color,
+    required VoidCallback onRemove,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: InputChip(
+        label: Text(
+          label,
+          style: TextStyle(
+            fontFamily: 'Overpass',
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            color: color,
+          ),
+        ),
+        onDeleted: onRemove,
+        deleteIconColor: color,
+        backgroundColor: color.withValues(alpha: 0.12),
+        side: BorderSide(color: color.withValues(alpha: 0.35)),
+        visualDensity: VisualDensity.compact,
+        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),
     );
   }
@@ -580,6 +917,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
                         media: item,
                         mode: MediaCardMode.grid,
                         accentColor: activeAccent,
+                        titlePreference: ref.watch(titleLanguageProvider),
                         inListBadge: id != null ? inListMap[id] : null,
                         onTap: () {
                           if (id != null) {
@@ -603,6 +941,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
                         media: item,
                         mode: MediaCardMode.list,
                         accentColor: activeAccent,
+                        titlePreference: ref.watch(titleLanguageProvider),
                         inListBadge: id != null ? inListMap[id] : null,
                         onTap: () {
                           if (id != null) {

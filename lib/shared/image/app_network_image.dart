@@ -8,6 +8,7 @@ class AppNetworkImage extends StatelessWidget {
   final double? width;
   final double? height;
   final BoxFit fit;
+  final Alignment alignment;
   final BorderRadius? borderRadius;
 
   const AppNetworkImage({
@@ -16,6 +17,7 @@ class AppNetworkImage extends StatelessWidget {
     this.width,
     this.height,
     this.fit = BoxFit.cover,
+    this.alignment = Alignment.center,
     this.borderRadius,
   });
 
@@ -36,10 +38,26 @@ class AppNetworkImage extends StatelessWidget {
     }
 
     final dpr = MediaQuery.devicePixelRatioOf(context);
-    final cacheW =
+    final rawW =
         (width != null && width!.isFinite) ? (width! * dpr).round().clamp(32, 1200) : null;
-    final cacheH =
+    final rawH =
         (height != null && height!.isFinite) ? (height! * dpr).round().clamp(32, 1200) : null;
+    // Pass at most ONE decode dimension so Flutter's ResizeImage preserves
+    // the image's natural aspect ratio before BoxFit crops it cleanly.
+    final int? cacheW;
+    final int? cacheH;
+    if (rawW != null && rawH != null) {
+      if (rawW >= rawH) {
+        cacheW = rawW;
+        cacheH = null;
+      } else {
+        cacheW = null;
+        cacheH = rawH;
+      }
+    } else {
+      cacheW = rawW;
+      cacheH = rawH;
+    }
 
     return ClipRRect(
       borderRadius: effectiveRadius,
@@ -48,6 +66,7 @@ class AppNetworkImage extends StatelessWidget {
         width: width,
         height: height,
         fit: fit,
+        alignment: alignment,
         memCacheWidth: cacheW,
         memCacheHeight: cacheH,
         fadeInDuration: const Duration(milliseconds: 150),

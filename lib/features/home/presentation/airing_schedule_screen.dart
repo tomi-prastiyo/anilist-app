@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../../core/animations/app_motion.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
+import '../../../core/settings/content_settings_provider.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/utils/date_util.dart';
 import '../../../core/utils/text_util.dart';
@@ -11,6 +12,7 @@ import '../../../shared/feedback/empty_view.dart';
 import '../../../shared/feedback/shimmer_loading.dart';
 import '../../../shared/image/app_network_image.dart';
 import '../../../shared/widgets/tactile_scale.dart';
+import '../../auth/presentation/auth_controller.dart';
 import '../../media_detail/presentation/media_detail_screen.dart';
 import '../../media_list/presentation/media_list_controller.dart';
 import '../data/home_repository.dart';
@@ -34,6 +36,7 @@ class _AiringScheduleScreenState extends ConsumerState<AiringScheduleScreen> {
   @override
   void initState() {
     super.initState();
+    _onlyMyList = ref.read(authControllerProvider) is Authenticated;
     final now = DateTime.now();
     _days = List.generate(7, (index) => DateTime(now.year, now.month, now.day).add(Duration(days: index)));
     _loadScheduleForDay(0);
@@ -61,9 +64,11 @@ class _AiringScheduleScreenState extends ConsumerState<AiringScheduleScreen> {
     final targetDate = _days[dayIndex];
     final startOfDay = DateTime(targetDate.year, targetDate.month, targetDate.day).millisecondsSinceEpoch ~/ 1000;
     final endOfDay = DateTime(targetDate.year, targetDate.month, targetDate.day, 23, 59, 59).millisecondsSinceEpoch ~/ 1000;
-    final myIds = _onlyMyList ? _collectMyMediaIds() : null;
+    final isAuthenticated = ref.read(authControllerProvider) is Authenticated;
+    final filterByMyList = isAuthenticated && _onlyMyList;
+    final myIds = filterByMyList ? _collectMyMediaIds() : null;
 
-    if (_onlyMyList && (myIds == null || myIds.isEmpty)) {
+    if (filterByMyList && (myIds == null || myIds.isEmpty)) {
       if (mounted) {
         setState(() {
           _schedules = [];
@@ -79,6 +84,7 @@ class _AiringScheduleScreenState extends ConsumerState<AiringScheduleScreen> {
         airingAtGreater: startOfDay,
         airingAtLesser: endOfDay,
         mediaIds: myIds,
+        includeAdult: ref.read(adultContentProvider),
       );
       if (mounted) {
         setState(() {
@@ -101,8 +107,14 @@ class _AiringScheduleScreenState extends ConsumerState<AiringScheduleScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<bool>(adultContentProvider, (_, _) {
+      _loadScheduleForDay(_selectedDayIndex);
+    });
     final selectedDate = _days[_selectedDayIndex];
+    final titleLang = ref.watch(titleLanguageProvider);
     final accent = context.appAccent;
+    final isAuthenticated = ref.watch(authControllerProvider) is Authenticated;
+    final filterByMyList = isAuthenticated && _onlyMyList;
     final animeLists = ref.watch(animeListControllerProvider).valueOrNull ?? const [];
     final myMediaIds = <int>{};
     for (final group in animeLists) {
@@ -113,7 +125,7 @@ class _AiringScheduleScreenState extends ConsumerState<AiringScheduleScreen> {
       }
     }
 
-    final visibleSchedules = (_onlyMyList
+    final visibleSchedules = (filterByMyList
             ? _schedules.where((s) {
                 final mid = s['media']?['id'] as int?;
                 return mid != null && myMediaIds.contains(mid);
@@ -133,30 +145,32 @@ class _AiringScheduleScreenState extends ConsumerState<AiringScheduleScreen> {
             color: context.appTextPrimary,
           ),
         ),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: FilterChip(
-              selected: _onlyMyList,
-              onSelected: (v) {
-                setState(() => _onlyMyList = v);
-                _loadScheduleForDay(_selectedDayIndex);
-              },
-              selectedColor: accent.withValues(alpha: 0.2),
-              checkmarkColor: accent,
-              visualDensity: VisualDensity.compact,
-              label: Text(
-                'My List',
-                style: AppTypography.style(
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w800,
-                  color: _onlyMyList ? accent : context.appTextSecondary,
+        actions: isAuthenticated
+            ? [
+                Padding(
+                  padding: const EdgeInsets.only(right: 12),
+                  child: FilterChip(
+                    selected: _onlyMyList,
+                    onSelected: (v) {
+                      setState(() => _onlyMyList = v);
+                      _loadScheduleForDay(_selectedDayIndex);
+                    },
+                    selectedColor: accent.withValues(alpha: 0.2),
+                    checkmarkColor: accent,
+                    visualDensity: VisualDensity.compact,
+                    label: Text(
+                      'My List',
+                      style: AppTypography.style(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w800,
+                        color: _onlyMyList ? accent : context.appTextSecondary,
+                      ),
+                    ),
+                    side: BorderSide(color: _onlyMyList ? accent : context.appBorder),
+                  ),
                 ),
-              ),
-              side: BorderSide(color: _onlyMyList ? accent : context.appBorder),
-            ),
-          ),
-        ],
+              ]
+            : null,
       ),
       body: Column(
         children: [
@@ -284,7 +298,7 @@ class _AiringScheduleScreenState extends ConsumerState<AiringScheduleScreen> {
                         itemBuilder: (context, index) {
                           final schedule = visibleSchedules[index];
                           final media = schedule['media'] as Map<String, dynamic>?;
-                          final title = TextUtil.getPreferredTitle(media?['title']);
+                          final title = TextUtil.getPreferredTitle(media?['title'], preference: titleLang);
                           final banner = media?['bannerImage'] as String?;
                           final cover = (media?['coverImage']?['extraLarge'] ??
                               media?['coverImage']?['large'] ??
