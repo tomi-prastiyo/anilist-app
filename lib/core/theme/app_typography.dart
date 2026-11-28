@@ -12,7 +12,7 @@ class AppTypography {
     'sans-serif',
   ];
 
-  static String? get fontFamily => GoogleFonts.overpass().fontFamily;
+  static final String? fontFamily = GoogleFonts.overpass().fontFamily;
 
   static TextStyle style({
     double fontSize = 13,

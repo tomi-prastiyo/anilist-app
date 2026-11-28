@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/constants/yuyuyu_assets.dart';
 
 /// Calm, non-bouncing progress bar for both known-total and ongoing (`?`) media.
 class MediaProgressBar extends StatelessWidget {
@@ -19,6 +20,7 @@ class MediaProgressBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool hasTotal = total != null && total! > 0;
+    final bool isYuYuYu = context.isYuYuYu;
     final double ratio;
     if (hasTotal) {
       ratio = (progress / total!).clamp(0.0, 1.0);
@@ -42,8 +44,26 @@ class MediaProgressBar extends StatelessWidget {
               child: Container(
                 height: height,
                 decoration: BoxDecoration(
-                  color: hasTotal ? color : color.withValues(alpha: 0.65),
+                  color: isYuYuYu && hasTotal
+                      ? null
+                      : (hasTotal ? color : color.withValues(alpha: 0.65)),
+                  gradient: isYuYuYu && hasTotal
+                      ? LinearGradient(
+                          colors: [
+                            color,
+                            Color.lerp(color, YuYuYuAssets.shinjuGold, 0.42)!,
+                          ],
+                        )
+                      : null,
                   borderRadius: BorderRadius.circular(4),
+                  boxShadow: isYuYuYu && hasTotal
+                      ? [
+                          BoxShadow(
+                            color: color.withValues(alpha: 0.35),
+                            blurRadius: 5,
+                          ),
+                        ]
+                      : null,
                 ),
               ),
             ),

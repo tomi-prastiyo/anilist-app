@@ -6,6 +6,9 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/animations/app_motion.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
+import '../../../core/constants/yuyuyu_assets.dart';
+import '../../../core/settings/content_settings_provider.dart';
+import '../../../core/utils/media_progress_util.dart';
 import '../../../core/utils/text_util.dart';
 import '../../../shared/badges/format_chip.dart';
 import '../../../shared/badges/score_badge.dart';
@@ -14,16 +17,16 @@ import '../../../shared/feedback/error_view.dart';
 import '../../../shared/image/app_network_image.dart';
 import '../../../shared/state/favourite_sync_store.dart';
 import '../../../shared/widgets/favourite_icon_button.dart';
-import '../../../shared/widgets/in_app_video_dialog.dart';
-import '../../../shared/widgets/tactile_scale.dart';
 import '../../auth/presentation/auth_controller.dart';
-import '../../character_staff/presentation/staff_detail_screen.dart';
 import '../../media_editor/presentation/media_editor_bottom_sheet.dart';
+import '../../media_list/data/media_list_repository.dart';
+import '../../media_list/presentation/media_list_controller.dart';
 import '../../profile/data/profile_repository.dart';
 import '../data/media_detail_repository.dart';
-import 'widgets/character_dual_card.dart';
+import 'widgets/media_detail_tabs.dart';
 import 'widgets/media_info_grid.dart';
 import 'widgets/media_mutual_friends_card.dart';
+import 'widgets/media_overview_sections.dart';
 import 'widgets/media_theme_songs_card.dart';
 
 class MediaDetailScreen extends ConsumerStatefulWidget {
@@ -57,7 +60,7 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
 
   // UI state
   bool _isSynopsisExpanded = false;
-  String _characterFilter = 'ALL'; // 'ALL', 'MAIN', 'SUPPORTING'
+  bool _isQuickUpdating = false;
   List<Map<String, dynamic>> _followingFriends = [];
 
   @override
@@ -101,7 +104,8 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
         // If anime, asynchronously load theme songs in background
         final type = data['type'] as String?;
         if (type == 'ANIME') {
-          _loadThemes(data['id'] as int, TextUtil.getPreferredTitle(data['title']));
+          final titleLang = ref.read(titleLanguageProvider);
+    _loadThemes(data['id'] as int, TextUtil.getPreferredTitle(data['title'], preference: titleLang));
         }
       }
     } catch (e) {
@@ -182,6 +186,7 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
     final type = _mediaData!['type'] as String? ?? 'ANIME';
     final episodes = _mediaData!['episodes'] as int?;
     final chapters = _mediaData!['chapters'] as int?;
+    final volumes = _mediaData!['volumes'] as int?;
     final currentEntry = _mediaData!['mediaListEntry'] as Map<String, dynamic>?;
 
     showModalBottomSheet(
@@ -192,15 +197,143 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
         mediaId: widget.mediaId,
         mediaType: type,
         maxCount: episodes ?? chapters,
+        maxVolumes: volumes,
         initialEntry: currentEntry,
         onSaved: _loadMedia,
       ),
     );
   }
 
-  String _formatEntryStatus(String? status) {
-    if (status == null) return '';
-    return status[0] + status.substring(1).toLowerCase();
+  Future<void> _quickIncrementProgress() async {
+    if (_isQuickUpdating || _mediaData == null) return;
+    final rawEntry = _mediaData!['mediaListEntry'] as Map<String, dynamic>?;
+    if (rawEntry == null) return;
+
+    final type = _mediaData!['type'] as String? ?? 'ANIME';
+    final isAnime = type == 'ANIME';
+    final maxCount = (isAnime ? _mediaData!['episodes'] : _mediaData!['chapters']) as int?;
+    final maxVolumes = _mediaData!['volumes'] as int?;
+    final currentProgress = rawEntry['progress'] as int? ?? 0;
+    final currentVolumes = rawEntry['progressVolumes'] as int? ?? 0;
+    final prevStatus = (rawEntry['status'] as String?)?.toUpperCase() ?? 'CURRENT';
+    if (!MediaProgressUtil.canIncrementProgress(
+      status: prevStatus,
+      progress: currentProgress,
+      media: _mediaData!,
+    )) {
+      return;
+    }
+
+    final prevRepeat = rawEntry['repeat'] as int? ?? 0;
+    final prevStartedAt = rawEntry['startedAt'];
+    final prevCompletedAt = rawEntry['completedAt'];
+
+    final res = MediaProgressUtil.resolveQuickIncrement(
+      currentStatus: prevStatus,
+      currentProgress: currentProgress,
+      currentVolumes: currentVolumes,
+      currentRepeat: prevRepeat,
+      maxCount: maxCount,
+      maxVolumes: maxVolumes,
+      existingStartedAt: prevStartedAt,
+      existingCompletedAt: prevCompletedAt,
+      isManga: !isAnime,
+    );
+
+    HapticFeedback.lightImpact();
+    setState(() {
+      _isQuickUpdating = true;
+      rawEntry['progress'] = res.progress;
+      rawEntry['status'] = res.status;
+      if (res.repeatChanged) {
+        rawEntry['repeat'] = res.repeat;
+      }
+      if (res.volumesChanged) {
+        rawEntry['progressVolumes'] = res.progressVolumes;
+      }
+      if (res.startedAtChanged && res.startedAt != null) {
+        rawEntry['startedAt'] = res.startedAt;
+      }
+      if (res.completedAtChanged && res.completedAt != null) {
+        rawEntry['completedAt'] = res.completedAt;
+      }
+    });
+
+    try {
+      await ref.read(mediaListRepositoryProvider).saveMediaListEntry(
+            id: rawEntry['id'] as int?,
+            mediaId: widget.mediaId,
+            progress: res.progress,
+            progressVolumes: res.volumesChanged ? res.progressVolumes : null,
+            status: res.statusChanged ? res.status : null,
+            repeat: res.repeatChanged ? res.repeat : null,
+            startedAt: res.startedAtChanged ? res.startedAt : null,
+            completedAt: res.completedAtChanged ? res.completedAt : null,
+          );
+      if (isAnime) {
+        ref.read(animeListControllerProvider.notifier).loadLists();
+      } else {
+        ref.read(mangaListControllerProvider.notifier).loadLists();
+      }
+      if (mounted) {
+        final unit = isAnime ? 'Ep' : 'Ch';
+        final completedSuffix = res.isCompleted && prevStatus != 'COMPLETED'
+            ? (res.repeatChanged
+                ? ' • Completed (+1 Repeat, Finish Date set)!'
+                : ' • Completed (Finish Date set)!')
+            : '';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('+1 $unit (${res.progress})$completedSuffix'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          rawEntry['progress'] = currentProgress;
+          rawEntry['progressVolumes'] = currentVolumes;
+          rawEntry['status'] = prevStatus;
+          rawEntry['repeat'] = prevRepeat;
+          rawEntry['startedAt'] = prevStartedAt;
+          rawEntry['completedAt'] = prevCompletedAt;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update progress: $e'),
+            backgroundColor: AppColors.statusDropped,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isQuickUpdating = false);
+    }
+  }
+
+  String _formatEntryStatus(String? status, String mediaType) {
+    if (status == null || status.isEmpty) return '';
+    switch (status.toUpperCase()) {
+      case 'CURRENT':
+        return mediaType == 'ANIME' ? 'Watching' : 'Reading';
+      case 'REPEATING':
+        return mediaType == 'ANIME' ? 'Rewatching' : 'Rereading';
+      default:
+        return status[0].toUpperCase() + status.substring(1).toLowerCase();
+    }
+  }
+
+  String _buildEntryButtonLabel(Map<String, dynamic> media, Map<String, dynamic> entry) {
+    final type = media['type'] as String? ?? 'ANIME';
+    final statusLabel = _formatEntryStatus(entry['status'] as String?, type);
+    final prog = entry['progress'] as int? ?? 0;
+    if (type == 'ANIME') {
+      final maxEp = media['episodes'] as int?;
+      return '$statusLabel • Ep $prog${maxEp != null ? ' / $maxEp' : ''}';
+    }
+    final maxCh = media['chapters'] as int?;
+    final vols = entry['progressVolumes'] as int? ?? 0;
+    return '$statusLabel • Ch $prog${maxCh != null ? ' / $maxCh' : ''}${vols > 0 ? ' • Vol $vols' : ''}';
   }
 
   Future<void> _launchExternalUrl(String url) async {
@@ -211,13 +344,34 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
     } catch (_) {}
   }
 
+  Color _statusButtonColor(BuildContext context, String? status) {
+    switch (status?.toUpperCase()) {
+      case 'CURRENT':
+        return context.isYuYuYu ? context.appAccent : AppColors.statusWatching;
+      case 'REPEATING':
+        return AppColors.statusRepeating;
+      case 'COMPLETED':
+        return AppColors.statusCompleted;
+      case 'PAUSED':
+        return AppColors.statusPaused;
+      case 'DROPPED':
+        return AppColors.statusDropped;
+      case 'PLANNING':
+        return AppColors.statusPlanning;
+      default:
+        return context.appAccent;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final titleLang = ref.watch(titleLanguageProvider);
+    final includeAdult = ref.watch(adultContentProvider);
     if (_isLoading) {
       return Scaffold(
         backgroundColor: context.appBackground,
-        body: const Center(
-          child: CircularProgressIndicator(color: AppColors.brandBlue),
+        body: Center(
+          child: CircularProgressIndicator(color: context.appAccent),
         ),
       );
     }
@@ -231,7 +385,7 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
     }
 
     final media = _mediaData!;
-    final title = TextUtil.getPreferredTitle(media['title']);
+    final title = TextUtil.getPreferredTitle(media['title'], preference: titleLang);
     final bannerUrl = media['bannerImage'] as String?;
     final coverUrl = media['coverImage']?['extraLarge'] ?? media['coverImage']?['large'];
     final format = media['format'] as String?;
@@ -250,6 +404,21 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
             expandedHeight: 295,
             pinned: true,
             backgroundColor: context.appSurface,
+            title: AnimatedOpacity(
+              opacity: innerBoxIsScrolled ? 1.0 : 0.0,
+              duration: const Duration(milliseconds: 180),
+              child: Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontFamily: 'Overpass',
+                  fontWeight: FontWeight.w800,
+                  fontSize: 16,
+                  color: context.appTextPrimary,
+                ),
+              ),
+            ),
             leading: IconButton(
               icon: Container(
                 padding: const EdgeInsets.all(7),
@@ -305,12 +474,23 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
                         Container(
                           decoration: BoxDecoration(
                             borderRadius: AppSpacing.borderRadius8,
+                            border: context.isYuYuYu
+                                ? Border.all(
+                                    color: YuYuYuAssets.shinjuGold.withValues(alpha: 0.45),
+                                    width: 1.2,
+                                  )
+                                : null,
                             boxShadow: [
                               BoxShadow(
                                 color: Colors.black.withValues(alpha: 0.5),
                                 blurRadius: 12,
                                 offset: const Offset(0, 4),
                               ),
+                              if (context.isYuYuYu)
+                                BoxShadow(
+                                  color: context.appAccent.withValues(alpha: 0.25),
+                                  blurRadius: 14,
+                                ),
                             ],
                           ),
                           child: AppNetworkImage(
@@ -376,27 +556,98 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.p16, vertical: 8),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: isAuthenticated ? _openEditor : null,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: entry != null ? AppColors.statusCompleted : context.appAccent,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: AppSpacing.borderRadius12),
+              child: Builder(
+                builder: (context) {
+                  final mediaType = media['type'] as String? ?? 'ANIME';
+                  final isAnime = mediaType == 'ANIME';
+                  final currentProg = entry?['progress'] as int? ?? 0;
+                  final canQuickIncrement = isAuthenticated &&
+                      entry != null &&
+                      MediaProgressUtil.canIncrementProgress(
+                        status: entry['status'] as String?,
+                        progress: currentProg,
+                        media: media,
+                      );
+
+                  return Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: isAuthenticated
+                              ? _openEditor
+                              : () => ref.read(authControllerProvider.notifier).logout(),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: entry != null
+                                ? _statusButtonColor(context, entry['status'] as String?)
+                                : context.appAccent,
+                            foregroundColor: (entry != null
+                                        ? _statusButtonColor(context, entry['status'] as String?)
+                                        : context.appAccent)
+                                    .computeLuminance() >
+                                0.55
+                                ? Colors.black
+                                : Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: AppSpacing.borderRadius12,
+                            ),
+                          ),
+                          icon: Icon(
+                            !isAuthenticated
+                                ? Icons.login_rounded
+                                : (entry != null ? Icons.edit_rounded : Icons.add_rounded),
+                            size: 18,
+                          ),
+                          label: Text(
+                            entry != null
+                                ? _buildEntryButtonLabel(media, entry)
+                                : (isAuthenticated ? 'Add to List' : 'Sign In to Track'),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                        ),
                       ),
-                      icon: Icon(entry != null ? Icons.edit_rounded : Icons.add_rounded, size: 18),
-                      label: Text(
-                        entry != null
-                            ? 'In List: ${_formatEntryStatus(entry['status'])} (${entry['progress'] ?? 0})'
-                            : (isAuthenticated ? 'Add to List' : 'Sign in to add to list'),
-                        style: const TextStyle(fontWeight: FontWeight.w700),
-                      ),
-                    ),
-                  ),
-                ],
+                      if (canQuickIncrement) ...[
+                        const SizedBox(width: 8),
+                        SizedBox(
+                          height: 46,
+                          child: FilledButton.tonal(
+                            onPressed: _isQuickUpdating ? null : _quickIncrementProgress,
+                            style: FilledButton.styleFrom(
+                              backgroundColor: context.appAccent.withValues(alpha: 0.16),
+                              foregroundColor: context.appAccent,
+                              padding: const EdgeInsets.symmetric(horizontal: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: AppSpacing.borderRadius12,
+                                side: BorderSide(
+                                  color: context.appAccent.withValues(alpha: 0.4),
+                                ),
+                              ),
+                            ),
+                            child: _isQuickUpdating
+                                ? SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: context.appAccent,
+                                    ),
+                                  )
+                                : Text(
+                                    isAnime ? '+1 Ep' : '+1 Ch',
+                                    style: const TextStyle(
+                                      fontFamily: 'Overpass',
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  );
+                },
               ),
             ),
           ),
@@ -425,25 +676,39 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
         body: TabBarView(
           controller: _tabController,
           children: [
-            _buildOverviewTab(media),
-            _buildCharactersTab(media),
-            _buildStaffTab(media),
-            _buildRelationsTab(media),
+            _buildOverviewTab(media, titleLang: titleLang, includeAdult: includeAdult),
+            MediaCharactersTab(media: media),
+            MediaStaffTab(media: media),
+            MediaRelationsTab(
+              media: media,
+              titlePreference: titleLang,
+              includeAdult: includeAdult,
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildOverviewTab(Map<String, dynamic> media) {
+  Widget _buildOverviewTab(
+    Map<String, dynamic> media, {
+    required String titleLang,
+    required bool includeAdult,
+  }) {
     final rawDescription = TextUtil.stripHtml(media['description'] as String?);
     final isAnime = media['type'] == 'ANIME';
     final tags = (media['tags'] as List?)?.cast<Map<String, dynamic>>() ?? [];
     final rankings = (media['rankings'] as List?)?.cast<Map<String, dynamic>>() ?? [];
     final trailer = media['trailer'] as Map<String, dynamic>?;
     final externalLinks = (media['externalLinks'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-    final recNodes = (media['recommendations']?['nodes'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-    final title = TextUtil.getPreferredTitle(media['title']);
+    final rawRecNodes =
+        (media['recommendations']?['nodes'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+    final recNodes = includeAdult
+        ? rawRecNodes
+        : rawRecNodes
+            .where((n) => (n['mediaRecommendation'] as Map<String, dynamic>?)?['isAdult'] != true)
+            .toList();
+    final title = TextUtil.getPreferredTitle(media['title'], preference: titleLang);
     final titleObj = media['title'] as Map<String, dynamic>?;
     final romajiTitle = titleObj?['romaji'] as String?;
     final englishTitle = titleObj?['english'] as String?;
@@ -523,7 +788,7 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
 
         // Official Rankings Highlights
         if (rankings.isNotEmpty) ...[
-          _buildRankingsStrip(rankings),
+          MediaRankingsStrip(rankings: rankings),
           const SizedBox(height: 18),
         ],
 
@@ -531,12 +796,12 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
         if (trailer != null &&
             (trailer['site'] as String?)?.toLowerCase() == 'youtube' &&
             (trailer['id'] as String?)?.isNotEmpty == true) ...[
-          _buildTrailerCard(trailer),
+          MediaTrailerCard(trailer: trailer),
           const SizedBox(height: 18),
         ],
 
         // Alternative Titles Section (All Versions: Romaji, English, Native, Synonyms)
-        _buildTitlesCard(
+        MediaTitlesCard(
           romaji: romajiTitle,
           english: englishTitle,
           native: nativeTitle,
@@ -649,7 +914,7 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.open_in_new_rounded, size: 13, color: AppColors.brandBlue),
+                      Icon(Icons.open_in_new_rounded, size: 13, color: context.appAccent),
                       const SizedBox(width: 6),
                       Text(
                         site,
@@ -691,7 +956,10 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
                 final recMedia = recNodes[index]['mediaRecommendation'] as Map<String, dynamic>?;
                 if (recMedia == null) return const SizedBox.shrink();
                 final recId = recMedia['id'] as int?;
-                final recTitle = TextUtil.getPreferredTitle(recMedia['title']);
+                final recTitle = TextUtil.getPreferredTitle(
+                  recMedia['title'],
+                  preference: titleLang,
+                );
                 final recCover = (recMedia['coverImage']?['large'] ?? recMedia['coverImage']?['medium']) as String?;
                 final recScore = (recMedia['averageScore'] as num?)?.toDouble();
 
@@ -761,588 +1029,6 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen>
           const SizedBox(height: 16),
         ],
       ],
-    );
-  }
-
-  Widget _buildCharactersTab(Map<String, dynamic> media) {
-    final edges = (media['characters']?['edges'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-    if (edges.isEmpty) {
-      return Center(
-        child: Text(
-          'No character information available.',
-          style: TextStyle(fontFamily: 'Overpass', color: context.appTextSecondary),
-        ),
-      );
-    }
-
-    final mainCount = edges.where((e) => (e['role'] as String? ?? '').toUpperCase() == 'MAIN').length;
-    final supportCount = edges.length - mainCount;
-
-    final filteredEdges = edges.where((e) {
-      if (_characterFilter == 'ALL') return true;
-      final role = (e['role'] as String? ?? '').toUpperCase();
-      return role == _characterFilter;
-    }).toList();
-
-    return Column(
-      children: [
-        // Filter Pills
-        Padding(
-          padding: const EdgeInsets.only(left: 16, right: 16, top: 12, bottom: 6),
-          child: Row(
-            children: [
-              _charFilterPill('All (${edges.length})', 'ALL'),
-              const SizedBox(width: 8),
-              _charFilterPill('Main ($mainCount)', 'MAIN'),
-              const SizedBox(width: 8),
-              _charFilterPill('Supporting ($supportCount)', 'SUPPORTING'),
-            ],
-          ),
-        ),
-
-        // Characters list
-        Expanded(
-          child: ListView.separated(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            itemCount: filteredEdges.length,
-            separatorBuilder: (context, index) => const SizedBox(height: 8),
-            itemBuilder: (context, index) {
-              final edge = filteredEdges[index];
-              final char = edge['node'] as Map<String, dynamic>? ?? {};
-              final role = edge['role'] as String? ?? 'SUPPORTING';
-              final vaList = (edge['voiceActors'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-              final va = vaList.isNotEmpty ? vaList.first : null;
-
-              return CharacterDualCard(
-                character: char,
-                role: role,
-                voiceActor: va,
-              ).animateEntrance(index: index);
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _charFilterPill(String title, String filterKey) {
-    final isSelected = _characterFilter == filterKey;
-    return GestureDetector(
-      onTap: () => setState(() => _characterFilter = filterKey),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: isSelected ? AppColors.brandBlue.withValues(alpha: 0.2) : context.appCard,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isSelected ? AppColors.brandBlue : context.appBorder,
-          ),
-        ),
-        child: Text(
-          title,
-          style: TextStyle(
-            fontFamily: 'Overpass',
-            fontSize: 11.5,
-            fontWeight: FontWeight.w700,
-            color: isSelected ? AppColors.brandBlue : context.appTextSecondary,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStaffTab(Map<String, dynamic> media) {
-    final staffEdges = (media['staff']?['edges'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-    if (staffEdges.isEmpty) {
-      return Center(
-        child: Text(
-          'No staff information available.',
-          style: TextStyle(fontFamily: 'Overpass', color: context.appTextSecondary),
-        ),
-      );
-    }
-
-    return ListView.separated(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      itemCount: staffEdges.length,
-      separatorBuilder: (context, index) => const SizedBox(height: 8),
-      itemBuilder: (context, index) {
-        final edge = staffEdges[index];
-        final staff = edge['node'] as Map<String, dynamic>?;
-        final role = edge['role'] as String? ?? 'Staff';
-        final name = staff?['name']?['userPreferred'] ?? staff?['name']?['full'] ?? 'Unknown';
-        final image = (staff?['image']?['large'] ?? staff?['image']?['medium']) as String?;
-        final staffId = staff?['id'] as int?;
-
-        return InkWell(
-          onTap: staffId != null
-              ? () {
-                  Navigator.of(context).push(
-                    AppPageRoute(
-                      page: StaffDetailScreen(staffId: staffId),
-                    ),
-                  );
-                }
-              : null,
-          borderRadius: AppSpacing.borderRadius12,
-          child: Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: context.appCard,
-              borderRadius: AppSpacing.borderRadius12,
-              border: Border.all(color: context.appBorder),
-              boxShadow: [
-                BoxShadow(
-                  color: context.isDark ? Colors.black.withValues(alpha: 0.15) : Colors.black.withValues(alpha: 0.04),
-                  blurRadius: 4,
-                  offset: const Offset(0, 1),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                AppNetworkImage(
-                  imageUrl: image,
-                  width: 52,
-                  height: 68,
-                  borderRadius: AppSpacing.borderRadius8,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        name,
-                        style: TextStyle(
-                          fontFamily: 'Overpass',
-                          fontWeight: FontWeight.w700,
-                          fontSize: 13.5,
-                          color: context.appTextPrimary,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: context.appAccent.withValues(alpha: 0.14),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          role,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontFamily: 'Overpass',
-                            color: context.appAccent,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Icon(Icons.chevron_right_rounded, size: 18, color: context.appTextMuted),
-              ],
-            ),
-          ),
-        ).animateEntrance(index: index);
-      },
-    );
-  }
-
-  Widget _buildRelationsTab(Map<String, dynamic> media) {
-    final relations = (media['relations']?['edges'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-    if (relations.isEmpty) {
-      return Center(
-        child: Text(
-          'No relations found.',
-          style: TextStyle(fontFamily: 'Overpass', color: context.appTextSecondary),
-        ),
-      );
-    }
-
-    return ListView.separated(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      itemCount: relations.length,
-      separatorBuilder: (context, index) => const SizedBox(height: 10),
-      itemBuilder: (context, index) {
-        final rel = relations[index];
-        final relType = rel['relationType'] as String? ?? '';
-        final relNode = rel['node'] as Map<String, dynamic>?;
-        final relTitle = TextUtil.getPreferredTitle(relNode?['title']);
-        final relCover = (relNode?['coverImage']?['large'] ?? relNode?['coverImage']?['medium']) as String?;
-        final relFormat = relNode?['format'] as String?;
-        final relStatus = relNode?['status'] as String?;
-
-        return InkWell(
-          onTap: () {
-            final relId = relNode?['id'] as int?;
-            if (relId != null) {
-              Navigator.of(context).push(
-                AppPageRoute(
-                  page: MediaDetailScreen(mediaId: relId),
-                ),
-              );
-            }
-          },
-          borderRadius: AppSpacing.borderRadius12,
-          child: Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: context.appCard,
-              borderRadius: AppSpacing.borderRadius12,
-              border: Border.all(color: context.appBorder),
-              boxShadow: [
-                BoxShadow(
-                  color: context.isDark ? Colors.black.withValues(alpha: 0.15) : Colors.black.withValues(alpha: 0.04),
-                  blurRadius: 4,
-                  offset: const Offset(0, 1),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                AppNetworkImage(
-                  imageUrl: relCover,
-                  width: 56,
-                  height: 80,
-                  borderRadius: AppSpacing.borderRadius8,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: context.appAccent.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          relType.replaceAll('_', ' '),
-                          style: TextStyle(
-                            fontFamily: 'Overpass',
-                            color: context.appAccent,
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        relTitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontFamily: 'Overpass',
-                          fontWeight: FontWeight.w700,
-                          fontSize: 13.5,
-                          color: context.appTextPrimary,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          if (relFormat != null) FormatChip(format: relFormat),
-                          if (relFormat != null && relStatus != null) const SizedBox(width: 6),
-                          if (relStatus != null) StatusChip(status: relStatus),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                Icon(Icons.chevron_right_rounded, size: 20, color: context.appTextMuted),
-              ],
-            ),
-          ),
-        ).animateEntrance(index: index);
-      },
-    );
-  }
-
-  Widget _buildRankingsStrip(List<Map<String, dynamic>> rankings) {
-    final topRanks = rankings.take(4).toList();
-    if (topRanks.isEmpty) return const SizedBox.shrink();
-
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: topRanks.map((r) {
-        final rank = r['rank'] as int? ?? 0;
-        final contextLabel = (r['context'] as String? ?? 'Ranked').trim();
-        final year = r['year'] as int?;
-        final isRated = r['type'] == 'RATED';
-        final badgeColor = isRated ? const Color(0xFFFBBF24) : context.appAccent;
-
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          decoration: BoxDecoration(
-            color: context.appCard,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: badgeColor.withValues(alpha: 0.35)),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                isRated ? Icons.emoji_events_rounded : Icons.favorite_rounded,
-                size: 14,
-                color: badgeColor,
-              ),
-              const SizedBox(width: 6),
-              Text(
-                '#$rank $contextLabel${year != null ? ' $year' : ''}',
-                style: TextStyle(
-                  fontFamily: 'Overpass',
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w700,
-                  color: context.appTextPrimary,
-                ),
-              ),
-            ],
-          ),
-        );
-      }).toList(),
-    );
-  }
-
-  Widget _buildTrailerCard(Map<String, dynamic> trailer) {
-    final id = trailer['id'] as String;
-    final thumbnail = (trailer['thumbnail'] as String?)?.isNotEmpty == true
-        ? trailer['thumbnail'] as String
-        : 'https://img.youtube.com/vi/$id/hqdefault.jpg';
-    final ytUrl = 'https://www.youtube.com/watch?v=$id';
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Official Trailer',
-          style: TextStyle(
-            fontFamily: 'Overpass',
-            fontSize: 16,
-            fontWeight: FontWeight.w800,
-            color: context.appTextPrimary,
-          ),
-        ),
-        const SizedBox(height: 10),
-        TactileScale(
-          onTap: () => InAppVideoDialog.show(
-            context,
-            url: ytUrl,
-            isYoutube: true,
-            accentColor: context.appAccent,
-            title: 'Official Trailer',
-          ),
-          child: Container(
-            decoration: BoxDecoration(
-              color: context.appCard,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: context.appBorder),
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: AspectRatio(
-              aspectRatio: 16 / 9,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  AppNetworkImage(imageUrl: thumbnail, borderRadius: BorderRadius.zero),
-                  Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.black.withValues(alpha: 0.15),
-                          Colors.black.withValues(alpha: 0.65),
-                        ],
-                      ),
-                    ),
-                  ),
-                  Center(
-                    child: Container(
-                      width: 54,
-                      height: 54,
-                      decoration: BoxDecoration(
-                        color: context.appAccent,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: context.appAccent.withValues(alpha: 0.5),
-                            blurRadius: 16,
-                          ),
-                        ],
-                      ),
-                      child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 32),
-                    ),
-                  ),
-                  Positioned(
-                    left: 12,
-                    bottom: 10,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.72),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.smart_display_rounded, color: Color(0xFFFF0000), size: 14),
-                          SizedBox(width: 5),
-                          Text(
-                            'Watch Trailer',
-                            style: TextStyle(
-                              fontFamily: 'Overpass',
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.w800,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTitlesCard({
-    String? romaji,
-    String? english,
-    String? native,
-    List<String> synonyms = const [],
-  }) {
-    final hasTitles = (romaji != null && romaji.isNotEmpty) ||
-        (english != null && english.isNotEmpty) ||
-        (native != null && native.isNotEmpty) ||
-        synonyms.isNotEmpty;
-    if (!hasTitles) return const SizedBox.shrink();
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 18),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: context.appCard,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: context.appBorder),
-        boxShadow: [
-          BoxShadow(
-            color: context.isDark ? Colors.black.withValues(alpha: 0.2) : Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: AppColors.brandBlue.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(Icons.translate_rounded, size: 16, color: AppColors.brandBlue),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'Alternative Titles',
-                style: TextStyle(
-                  fontFamily: 'Overpass',
-                  fontSize: 15,
-                  fontWeight: FontWeight.w800,
-                  color: context.appTextPrimary,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          if (romaji != null && romaji.isNotEmpty)
-            _buildTitleRow('Romaji', romaji),
-          if (english != null && english.isNotEmpty)
-            _buildTitleRow('English', english),
-          if (native != null && native.isNotEmpty)
-            _buildTitleRow('Native', native),
-          if (synonyms.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Text(
-              'Synonyms',
-              style: TextStyle(
-                fontFamily: 'Overpass',
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: context.appTextSecondary,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: synonyms.map((syn) => Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: context.appSurface,
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: context.appBorder),
-                ),
-                child: Text(
-                  syn,
-                  style: TextStyle(
-                    fontFamily: 'Overpass',
-                    fontSize: 11.5,
-                    color: context.appTextPrimary,
-                  ),
-                ),
-              )).toList(),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTitleRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 70,
-            child: Text(
-              label,
-              style: TextStyle(
-                fontFamily: 'Overpass',
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: context.appTextSecondary,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: TextStyle(
-                fontFamily: 'Overpass',
-                fontSize: 12.5,
-                fontWeight: FontWeight.w600,
-                color: context.appTextPrimary,
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

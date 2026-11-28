@@ -66,6 +66,7 @@ class ActivityRepository {
             media {
               id
               type
+              isAdult
               title {
                 userPreferred
                 romaji
@@ -247,6 +248,7 @@ class ActivityRepository {
     required int page,
     int? userId,
     bool? isFollowing,
+    bool includeAdult = false,
   }) async {
     final variables = <String, dynamic>{
       'page': page,
@@ -261,7 +263,18 @@ class ActivityRepository {
       query: activityListQuery,
       variables: variables,
     );
-    return response['Page'] as Map<String, dynamic>? ?? {};
+    final pageData = response['Page'] as Map<String, dynamic>? ?? {};
+    if (includeAdult) return pageData;
+
+    final rawList = (pageData['activities'] as List?)?.cast<Map<String, dynamic>>();
+    if (rawList == null) return pageData;
+    final filtered = rawList
+        .where((a) => (a['media'] as Map<String, dynamic>?)?['isAdult'] != true)
+        .toList();
+    return {
+      ...pageData,
+      'activities': filtered,
+    };
   }
 
   Future<Map<String, dynamic>?> toggleLike(int activityId) async {

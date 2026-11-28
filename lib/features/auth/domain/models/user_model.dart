@@ -10,6 +10,7 @@ class UserModel extends Equatable {
   final String scoreFormat;
   final String? profileColor;
   final int unreadNotificationCount;
+  final bool displayAdultContent;
 
   const UserModel({
     required this.id,
@@ -21,7 +22,23 @@ class UserModel extends Equatable {
     this.scoreFormat = 'POINT_100',
     this.profileColor,
     this.unreadNotificationCount = 0,
+    this.displayAdultContent = false,
   });
+
+  UserModel copyWith({bool? displayAdultContent, String? titleLanguage}) {
+    return UserModel(
+      id: id,
+      name: name,
+      about: about,
+      avatarUrl: avatarUrl,
+      bannerUrl: bannerUrl,
+      titleLanguage: titleLanguage ?? this.titleLanguage,
+      scoreFormat: scoreFormat,
+      profileColor: profileColor,
+      unreadNotificationCount: unreadNotificationCount,
+      displayAdultContent: displayAdultContent ?? this.displayAdultContent,
+    );
+  }
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
     final options = json['options'] as Map<String, dynamic>?;
@@ -38,6 +55,7 @@ class UserModel extends Equatable {
       scoreFormat: mediaListOptions?['scoreFormat'] as String? ?? 'POINT_100',
       profileColor: options?['profileColor'] as String?,
       unreadNotificationCount: json['unreadNotificationCount'] as int? ?? 0,
+      displayAdultContent: options?['displayAdultContent'] as bool? ?? false,
     );
   }
 
@@ -52,5 +70,6 @@ class UserModel extends Equatable {
         scoreFormat,
         profileColor,
         unreadNotificationCount,
+        displayAdultContent,
       ];
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/constants/yuyuyu_assets.dart';
 import '../../home/presentation/home_screen.dart';
 import '../../media_list/presentation/media_list_screen.dart';
 import '../../profile/presentation/profile_screen.dart';
@@ -15,6 +16,7 @@ class MainShellScreen extends StatefulWidget {
 
 class _MainShellScreenState extends State<MainShellScreen> {
   int _currentIndex = 0;
+  final Set<int> _activatedTabs = {0};
 
   final List<Widget> _screens = const [
     HomeScreen(),
@@ -28,12 +30,11 @@ class _MainShellScreenState extends State<MainShellScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: context.appBackground,
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 200),
-        switchInCurve: Curves.easeOutCubic,
-        child: KeyedSubtree(
-          key: ValueKey(_currentIndex),
-          child: _screens[_currentIndex],
+      body: IndexedStack(
+        index: _currentIndex,
+        children: List.generate(
+          _screens.length,
+          (i) => _activatedTabs.contains(i) ? _screens[i] : const SizedBox.shrink(),
         ),
       ),
       bottomNavigationBar: Container(
@@ -43,7 +44,7 @@ class _MainShellScreenState extends State<MainShellScreen> {
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
             child: Container(
-              height: 56,
+              height: 60,
               decoration: BoxDecoration(
                 color: context.isYuYuYu ? null : (context.isDark ? null : Colors.white),
                 gradient: context.isDark
@@ -51,9 +52,9 @@ class _MainShellScreenState extends State<MainShellScreen> {
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
                         colors: context.isYuYuYu
-                            ? [
-                                context.appCard,
-                                context.appSurface,
+                            ? const [
+                                Color(0xFF26183D),
+                                Color(0xFF170F26),
                               ]
                             : const [
                                 Color(0xFF172334),
@@ -63,7 +64,10 @@ class _MainShellScreenState extends State<MainShellScreen> {
                     : null,
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(
-                  color: context.isDark ? context.appBorder : AppColors.lightBorder,
+                  color: context.isYuYuYu
+                      ? YuYuYuAssets.shinjuGold.withValues(alpha: 0.32)
+                      : (context.isDark ? context.appBorder : AppColors.lightBorder),
+                  width: context.isYuYuYu ? 1.1 : 1.0,
                 ),
                 boxShadow: [
                   BoxShadow(
@@ -72,8 +76,8 @@ class _MainShellScreenState extends State<MainShellScreen> {
                     offset: const Offset(0, 6),
                   ),
                   BoxShadow(
-                    color: context.appAccent.withValues(alpha: 0.08),
-                    blurRadius: 12,
+                    color: context.appAccent.withValues(alpha: context.isYuYuYu ? 0.16 : 0.08),
+                    blurRadius: context.isYuYuYu ? 14 : 12,
                     offset: const Offset(0, 0),
                   ),
                 ],
@@ -109,7 +113,10 @@ class _MainShellScreenState extends State<MainShellScreen> {
           onTap: () {
             if (_currentIndex != index) {
               HapticFeedback.lightImpact();
-              setState(() => _currentIndex = index);
+              setState(() {
+                _currentIndex = index;
+                _activatedTabs.add(index);
+              });
             }
           },
           child: Column(
@@ -120,12 +127,15 @@ class _MainShellScreenState extends State<MainShellScreen> {
                 curve: Curves.easeOutCubic,
                 padding: EdgeInsets.symmetric(
                   horizontal: isSelected ? 12 : 8,
-                  vertical: 3,
+                  vertical: 2.5,
                 ),
                 decoration: isSelected
                     ? BoxDecoration(
                         color: activeColor.withValues(alpha: 0.16),
                         borderRadius: BorderRadius.circular(12),
+                        border: context.isYuYuYu
+                            ? Border.all(color: activeColor.withValues(alpha: 0.40), width: 1)
+                            : null,
                       )
                     : null,
                 child: AnimatedScale(
@@ -146,11 +156,23 @@ class _MainShellScreenState extends State<MainShellScreen> {
                 maxLines: 1,
                 style: TextStyle(
                   fontFamily: 'Overpass',
-                  fontSize: 9.5,
+                  fontSize: 10.5,
                   fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
                   color: isSelected ? activeColor : context.appTextMuted,
                 ),
               ),
+              if (context.isYuYuYu) ...[
+                const SizedBox(height: 1.5),
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 220),
+                  width: isSelected ? 4 : 0,
+                  height: 3.5,
+                  decoration: BoxDecoration(
+                    color: isSelected ? YuYuYuAssets.shinjuGold : Colors.transparent,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ],
             ],
           ),
         ),

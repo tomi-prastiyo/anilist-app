@@ -1,76 +1,40 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/animations/app_motion.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_spacing.dart';
+import '../../../../core/constants/yuyuyu_assets.dart';
+import '../../../../core/settings/content_settings_provider.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/utils/date_util.dart';
 import '../../../../core/utils/text_util.dart';
 import '../../../../shared/image/app_network_image.dart';
+import '../../../../shared/widgets/mankai_motifs.dart';
 import '../../../../shared/widgets/tactile_scale.dart';
 import '../../../media_detail/presentation/media_detail_screen.dart';
 import '../airing_schedule_screen.dart';
 
 /// Visual-first Airing shelf with poster-dominant tall cards & crisp gradient overlays.
-class AiringShelf extends StatelessWidget {
+class AiringShelf extends ConsumerWidget {
   final List<Map<String, dynamic>> schedules;
 
   const AiringShelf({super.key, required this.schedules});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     if (schedules.isEmpty) return const SizedBox.shrink();
+    final titleLang = ref.watch(titleLanguageProvider);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.p16),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 7,
-                    height: 7,
-                    decoration: const BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: AppColors.statusBehind,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'AIRING TODAY & SOON',
-                    style: TextStyle(
-                      fontFamily: 'Overpass',
-                      color: context.appTextPrimary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.6,
-                    ),
-                  ),
-                ],
-              ),
-              InkWell(
-                onTap: () => Navigator.of(context).push(
-                  AppPageRoute(page: const AiringScheduleScreen()),
-                ),
-                borderRadius: BorderRadius.circular(4),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                  child: Text(
-                    'Schedule →',
-                    style: TextStyle(
-                      fontFamily: 'Overpass',
-                      color: context.appAccent,
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ),
-            ],
+        MankaiSectionHeader(
+          title: 'AIRING TODAY & SOON',
+          dotColor: AppColors.statusBehind,
+          actionLabel: 'Schedule →',
+          onAction: () => Navigator.of(context).push(
+            AppPageRoute(page: const AiringScheduleScreen()),
           ),
         ),
         const SizedBox(height: 10),
@@ -85,7 +49,7 @@ class AiringShelf extends StatelessWidget {
               final schedule = schedules[index];
               final media = schedule['media'] as Map<String, dynamic>?;
               final mediaId = media?['id'] as int?;
-              final title = TextUtil.getPreferredTitle(media?['title']);
+              final title = TextUtil.getPreferredTitle(media?['title'], preference: titleLang);
               final cover = (media?['coverImage']?['extraLarge'] ??
                   media?['coverImage']?['large'] ??
                   media?['coverImage']?['medium']) as String?;
@@ -112,7 +76,11 @@ class AiringShelf extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: context.appSurface,
                     borderRadius: BorderRadius.circular(13),
-                    border: Border.all(color: context.appBorder),
+                    border: Border.all(
+                      color: context.isYuYuYu
+                          ? Color.lerp(context.appBorder, YuYuYuAssets.shinjuGold, 0.30)!
+                          : context.appBorder,
+                    ),
                     boxShadow: [
                       BoxShadow(
                         color: Colors.black.withValues(alpha: context.isDark ? 0.25 : 0.08),

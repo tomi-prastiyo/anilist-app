@@ -22,7 +22,8 @@ class SearchRepository {
       $genreNotIn: [String],
       $formatIn: [MediaFormat],
       $statusIn: [MediaStatus],
-      $seasonYear: Int
+      $seasonYear: Int,
+      $isAdult: Boolean
     ) {
       Page(page: $page, perPage: $perPage) {
         pageInfo {
@@ -38,9 +39,10 @@ class SearchRepository {
           format_in: $formatIn,
           status_in: $statusIn,
           seasonYear: $seasonYear,
-          isAdult: false
+          isAdult: $isAdult
         ) {
           id
+          isAdult
           title {
             romaji
             english
@@ -146,6 +148,7 @@ class SearchRepository {
     List<String>? statusIn,
     int? seasonYear,
     String? sortBy,
+    bool includeAdult = false,
   }) async {
     final Map<String, dynamic> vars = {
       'page': page,
@@ -153,6 +156,7 @@ class SearchRepository {
       'type': type,
       'sort': [sortBy ?? ((search != null && search.isNotEmpty) ? 'SEARCH_MATCH' : 'POPULARITY_DESC')],
     };
+    if (!includeAdult) vars['isAdult'] = false;
     if (search != null && search.isNotEmpty) vars['search'] = search;
     if (genreIn != null && genreIn.isNotEmpty) vars['genreIn'] = genreIn;
     if (genreNotIn != null && genreNotIn.isNotEmpty) vars['genreNotIn'] = genreNotIn;

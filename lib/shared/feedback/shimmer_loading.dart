@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_spacing.dart';
+import '../../core/constants/yuyuyu_assets.dart';
 
 class ShimmerMediaGrid extends StatelessWidget {
   final int count;
@@ -10,9 +11,21 @@ class ShimmerMediaGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isYuYuYu = context.isYuYuYu;
+    final base = isYuYuYu
+        ? YuYuYuAssets.twilightCard
+        : (isDark ? AppColors.shimmerBase : const Color(0xFFE5E7EB));
+    final highlight = isYuYuYu
+        ? YuYuYuAssets.twilightBorder
+        : (isDark ? AppColors.shimmerHighlight : const Color(0xFFF3F4F6));
+    final cardColor = isYuYuYu
+        ? YuYuYuAssets.twilightSurface
+        : (isDark ? AppColors.darkCard : AppColors.lightCard);
+
     return Shimmer.fromColors(
-      baseColor: AppColors.shimmerBase,
-      highlightColor: AppColors.shimmerHighlight,
+      baseColor: base,
+      highlightColor: highlight,
       child: GridView.builder(
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
@@ -31,7 +44,7 @@ class ShimmerMediaGrid extends StatelessWidget {
               Expanded(
                 child: Container(
                   decoration: BoxDecoration(
-                    color: AppColors.darkCard,
+                    color: cardColor,
                     borderRadius: AppSpacing.borderRadius8,
                   ),
                 ),
@@ -41,7 +54,7 @@ class ShimmerMediaGrid extends StatelessWidget {
                 height: 12,
                 width: double.infinity,
                 decoration: BoxDecoration(
-                  color: AppColors.darkCard,
+                  color: cardColor,
                   borderRadius: AppSpacing.borderRadius4,
                 ),
               ),
@@ -50,7 +63,7 @@ class ShimmerMediaGrid extends StatelessWidget {
                 height: 10,
                 width: 50,
                 decoration: BoxDecoration(
-                  color: AppColors.darkCard,
+                  color: cardColor,
                   borderRadius: AppSpacing.borderRadius4,
                 ),
               ),
@@ -77,10 +90,16 @@ class ShimmerHorizontalRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final base = isDark ? AppColors.shimmerBase : const Color(0xFFE5E7EB);
-    final highlight =
-        isDark ? AppColors.shimmerHighlight : const Color(0xFFF3F4F6);
-    final cardColor = isDark ? AppColors.darkCard : AppColors.lightCard;
+    final isYuYuYu = context.isYuYuYu;
+    final base = isYuYuYu
+        ? YuYuYuAssets.twilightCard
+        : (isDark ? AppColors.shimmerBase : const Color(0xFFE5E7EB));
+    final highlight = isYuYuYu
+        ? YuYuYuAssets.twilightBorder
+        : (isDark ? AppColors.shimmerHighlight : const Color(0xFFF3F4F6));
+    final cardColor = isYuYuYu
+        ? YuYuYuAssets.twilightSurface
+        : (isDark ? AppColors.darkCard : AppColors.lightCard);
 
     return SizedBox(
       height: height,

@@ -157,6 +157,8 @@ class MediaListRepository {
     bool? isPrivate,
     Map<String, int>? startedAt,
     Map<String, int>? completedAt,
+    bool clearStartedAt = false,
+    bool clearCompletedAt = false,
   }) async {
     final Map<String, dynamic> vars = {'mediaId': mediaId};
     if (id != null) vars['id'] = id;
@@ -167,8 +169,16 @@ class MediaListRepository {
     if (repeat != null) vars['repeat'] = repeat;
     if (notes != null) vars['notes'] = notes;
     if (isPrivate != null) vars['isPrivate'] = isPrivate;
-    if (startedAt != null) vars['startedAt'] = startedAt;
-    if (completedAt != null) vars['completedAt'] = completedAt;
+    if (clearStartedAt) {
+      vars['startedAt'] = {'year': null, 'month': null, 'day': null};
+    } else if (startedAt != null) {
+      vars['startedAt'] = startedAt;
+    }
+    if (clearCompletedAt) {
+      vars['completedAt'] = {'year': null, 'month': null, 'day': null};
+    } else if (completedAt != null) {
+      vars['completedAt'] = completedAt;
+    }
 
     final response = await _apiClient.postGraphQL(
       query: saveMediaListEntryMutation,

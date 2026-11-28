@@ -1,5 +1,4 @@
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../constants/api_constants.dart';
 import '../storage/secure_storage_service.dart';
@@ -28,7 +27,7 @@ class ApiClient {
     );
 
     _dio.interceptors.addAll([
-      RateLimitInterceptor(),
+      RateLimitInterceptor(_dio),
       InterceptorsWrapper(
         onRequest: (options, handler) async {
           final token = await _secureStorage.getAccessToken();
@@ -60,11 +59,6 @@ class ApiClient {
         '',
         data: requestBody,
       );
-
-      final opLine = query.trim().split('\n').first.trim();
-      if (opLine.contains('Toggle') || opLine.contains('CharacterQuery') || opLine.contains('StaffQuery')) {
-        debugPrint('[GQL] $opLine vars=$variables -> ${response.data}');
-      }
 
       final data = response.data;
       if (data is Map<String, dynamic>) {

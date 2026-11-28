@@ -104,7 +104,7 @@ class _CharacterDetailScreenState extends ConsumerState<CharacterDetailScreen> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator(color: AppColors.brandBlue)));
+      return Scaffold(body: Center(child: CircularProgressIndicator(color: context.appAccent)));
     }
     if (_error != null) {
       return Scaffold(appBar: AppBar(), body: ErrorView(message: _error!, onRetry: _load));

@@ -10,8 +10,9 @@ class _SakuraPetal {
   final double swayPhase;
   final double rotationSpeed;
   final double alpha;
+  final Path path;
 
-  const _SakuraPetal({
+  _SakuraPetal({
     required this.xFraction,
     required this.yOffset,
     required this.size,
@@ -20,7 +21,17 @@ class _SakuraPetal {
     required this.swayPhase,
     required this.rotationSpeed,
     required this.alpha,
-  });
+  }) : path = _buildPetalPath(size);
+
+  static Path _buildPetalPath(double size) {
+    return Path()
+      ..moveTo(0, -size)
+      ..quadraticBezierTo(size * 0.85, -size * 0.2, size * 0.45, size * 0.75)
+      ..lineTo(0, size * 0.42)
+      ..lineTo(-size * 0.45, size * 0.75)
+      ..quadraticBezierTo(-size * 0.85, -size * 0.2, 0, -size)
+      ..close();
+  }
 }
 
 /// Lightweight 60fps drifting sakura petals overlay for the YuYuYu theme.
@@ -73,38 +84,35 @@ class _SakuraPetalsOverlayState extends State<SakuraPetalsOverlay>
   @override
   Widget build(BuildContext context) {
     return IgnorePointer(
-      child: AnimatedBuilder(
-        animation: _controller,
-        builder: (context, _) {
-          return CustomPaint(
-            painter: _SakuraPainter(
-              progress: _controller.value,
-              petals: _petals,
-              baseColor: widget.petalColor,
-            ),
-            size: Size.infinite,
-          );
-        },
+      child: RepaintBoundary(
+        child: CustomPaint(
+          painter: _SakuraPainter(
+            animation: _controller,
+            petals: _petals,
+            baseColor: widget.petalColor,
+          ),
+          size: Size.infinite,
+        ),
       ),
     );
   }
 }
 
 class _SakuraPainter extends CustomPainter {
-  final double progress;
+  final Animation<double> animation;
   final List<_SakuraPetal> petals;
   final Color baseColor;
+  final Paint _paint = Paint()..style = PaintingStyle.fill;
 
   _SakuraPainter({
-    required this.progress,
+    required this.animation,
     required this.petals,
     required this.baseColor,
-  });
+  }) : super(repaint: animation);
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()..style = PaintingStyle.fill;
-
+    final progress = animation.value;
     for (final p in petals) {
       final t = (progress * p.speed + p.yOffset) % 1.0;
       final y = t * (size.height + 40) - 20;
@@ -112,26 +120,17 @@ class _SakuraPainter extends CustomPainter {
       final x = p.xFraction * size.width + sway;
       final angle = progress * math.pi * 2 * p.rotationSpeed + p.swayPhase;
 
-      paint.color = baseColor.withValues(alpha: p.alpha);
+      _paint.color = baseColor.withValues(alpha: p.alpha);
 
       canvas.save();
       canvas.translate(x, y);
       canvas.rotate(angle);
-
-      // Notched sakura petal silhouette
-      final path = Path()
-        ..moveTo(0, -p.size)
-        ..quadraticBezierTo(p.size * 0.85, -p.size * 0.2, p.size * 0.45, p.size * 0.75)
-        ..lineTo(0, p.size * 0.42)
-        ..lineTo(-p.size * 0.45, p.size * 0.75)
-        ..quadraticBezierTo(-p.size * 0.85, -p.size * 0.2, 0, -p.size)
-        ..close();
-
-      canvas.drawPath(path, paint);
+      canvas.drawPath(p.path, _paint);
       canvas.restore();
     }
   }
 
   @override
-  bool shouldRepaint(_SakuraPainter oldDelegate) => oldDelegate.progress != progress;
+  bool shouldRepaint(_SakuraPainter oldDelegate) =>
+      oldDelegate.baseColor != baseColor || oldDelegate.petals != petals;
 }

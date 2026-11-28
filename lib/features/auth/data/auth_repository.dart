@@ -32,6 +32,7 @@ class AuthRepository {
         options {
           titleLanguage
           profileColor
+          displayAdultContent
         }
         mediaListOptions {
           scoreFormat
@@ -53,8 +54,51 @@ class AuthRepository {
     _localStorage.setInt(LocalStorageService.keyViewerId, user.id);
     _localStorage.titleLanguage = user.titleLanguage;
     _localStorage.scoreFormat = user.scoreFormat;
+    _localStorage.displayAdultContent = user.displayAdultContent;
 
     return user;
+  }
+
+  static const String updateAdultContentMutation = r'''
+    mutation UpdateAdultContent($displayAdultContent: Boolean) {
+      UpdateUser(displayAdultContent: $displayAdultContent) {
+        id
+        options {
+          displayAdultContent
+        }
+      }
+    }
+  ''';
+
+  Future<bool> updateDisplayAdultContent(bool enabled) async {
+    final data = await _apiClient.postGraphQL(
+      query: updateAdultContentMutation,
+      variables: {'displayAdultContent': enabled},
+    );
+    final updated = data['UpdateUser']?['options']?['displayAdultContent'] as bool? ?? enabled;
+    _localStorage.displayAdultContent = updated;
+    return updated;
+  }
+
+  static const String updateTitleLanguageMutation = r'''
+    mutation UpdateTitleLanguage($titleLanguage: UserTitleLanguage) {
+      UpdateUser(titleLanguage: $titleLanguage) {
+        id
+        options {
+          titleLanguage
+        }
+      }
+    }
+  ''';
+
+  Future<String> updateTitleLanguage(String language) async {
+    final data = await _apiClient.postGraphQL(
+      query: updateTitleLanguageMutation,
+      variables: {'titleLanguage': language},
+    );
+    final updated = data['UpdateUser']?['options']?['titleLanguage'] as String? ?? language;
+    _localStorage.titleLanguage = updated;
+    return updated;
   }
 
   Future<void> saveToken(String token) async {

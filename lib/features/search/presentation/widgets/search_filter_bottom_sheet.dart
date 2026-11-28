@@ -45,11 +45,13 @@ class SearchFilterData {
 class SearchFilterBottomSheet extends StatefulWidget {
   final SearchFilterData initialFilter;
   final Function(SearchFilterData filter) onApply;
+  final bool includeAdult;
 
   const SearchFilterBottomSheet({
     super.key,
     required this.initialFilter,
     required this.onApply,
+    this.includeAdult = false,
   });
 
   @override
@@ -63,7 +65,7 @@ class _SearchFilterBottomSheetState extends State<SearchFilterBottomSheet> {
   int? _seasonYear;
   late String _sortBy;
 
-  final List<String> _allGenres = [
+  static const List<String> _baseGenres = [
     'Action',
     'Adventure',
     'Comedy',
@@ -83,6 +85,9 @@ class _SearchFilterBottomSheetState extends State<SearchFilterBottomSheet> {
     'Supernatural',
     'Thriller',
   ];
+
+  List<String> get _allGenres =>
+      widget.includeAdult ? [..._baseGenres, 'Hentai'] : _baseGenres;
 
   final List<String> _allFormats = ['TV', 'MOVIE', 'OVA', 'ONA', 'SPECIAL', 'MANGA'];
   final List<String> _allStatuses = ['RELEASING', 'FINISHED', 'NOT_YET_RELEASED', 'CANCELLED'];
@@ -209,15 +214,16 @@ class _SearchFilterBottomSheetState extends State<SearchFilterBottomSheet> {
                   runSpacing: 6,
                   children: _allGenres.map((genre) {
                     final state = _genres[genre] ?? GenreFilterState.neutral;
+                    final accent = context.appAccent;
                     Color bgColor = context.appCard;
                     Color borderColor = context.appBorder;
                     Color textColor = context.appTextSecondary;
                     IconData? icon;
 
                     if (state == GenreFilterState.included) {
-                      bgColor = AppColors.statusCompleted.withValues(alpha: 0.2);
-                      borderColor = AppColors.statusCompleted;
-                      textColor = AppColors.statusCompleted;
+                      bgColor = accent.withValues(alpha: 0.2);
+                      borderColor = accent;
+                      textColor = accent;
                       icon = Icons.check_rounded;
                     } else if (state == GenreFilterState.excluded) {
                       bgColor = AppColors.statusDropped.withValues(alpha: 0.2);
@@ -260,13 +266,15 @@ class _SearchFilterBottomSheetState extends State<SearchFilterBottomSheet> {
                   runSpacing: 8,
                   children: _allFormats.map((format) {
                     final isSelected = _formats.contains(format);
+                    final accent = context.appAccent;
+                    final fg = accent.computeLuminance() > 0.55 ? Colors.black : Colors.white;
                     return FilterChip(
                       label: Text(format.replaceAll('_', ' ')),
                       selected: isSelected,
-                      selectedColor: AppColors.brandBlue,
-                      checkmarkColor: Colors.white,
+                      selectedColor: accent,
+                      checkmarkColor: fg,
                       labelStyle: TextStyle(
-                        color: isSelected ? Colors.white : context.appTextSecondary,
+                        color: isSelected ? fg : context.appTextSecondary,
                         fontSize: 12,
                       ),
                       onSelected: (val) {
@@ -291,13 +299,15 @@ class _SearchFilterBottomSheetState extends State<SearchFilterBottomSheet> {
                   runSpacing: 8,
                   children: _allStatuses.map((status) {
                     final isSelected = _statuses.contains(status);
+                    final accent = context.appAccent;
+                    final fg = accent.computeLuminance() > 0.55 ? Colors.black : Colors.white;
                     return FilterChip(
                       label: Text(status.replaceAll('_', ' ')),
                       selected: isSelected,
-                      selectedColor: AppColors.brandBlue,
-                      checkmarkColor: Colors.white,
+                      selectedColor: accent,
+                      checkmarkColor: fg,
                       labelStyle: TextStyle(
-                        color: isSelected ? Colors.white : context.appTextSecondary,
+                        color: isSelected ? fg : context.appTextSecondary,
                         fontSize: 12,
                       ),
                       onSelected: (val) {
@@ -335,8 +345,10 @@ class _SearchFilterBottomSheetState extends State<SearchFilterBottomSheet> {
                 Navigator.of(context).pop();
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.brandBlue,
-                foregroundColor: Colors.white,
+                backgroundColor: context.appAccent,
+                foregroundColor: context.appAccent.computeLuminance() > 0.55
+                    ? Colors.black
+                    : Colors.white,
                 shape: RoundedRectangleBorder(borderRadius: AppSpacing.borderRadius12),
               ),
               child: const Text('Apply Filters', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),

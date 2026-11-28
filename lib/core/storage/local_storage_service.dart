@@ -25,6 +25,7 @@ class LocalStorageService {
   static const String keyReadNotificationIds = 'key_read_notification_ids';
   static const String keyForcedUnreadNotificationIds = 'key_forced_unread_notification_ids';
   static const String keyLastNotificationIds = 'key_last_notification_ids';
+  static const String keyDisplayAdultContent = 'key_display_adult_content';
 
   String? getString(String key) => _prefs.getString(key);
   Future<bool> setString(String key, String value) => _prefs.setString(key, value);
@@ -92,4 +93,7 @@ class LocalStorageService {
 
   String get scoreFormat => getString(keyScoreFormat) ?? 'POINT_100';
   set scoreFormat(String val) => setString(keyScoreFormat, val);
+
+  bool get displayAdultContent => getBool(keyDisplayAdultContent, defaultValue: false);
+  set displayAdultContent(bool val) => setBool(keyDisplayAdultContent, val);
 }
