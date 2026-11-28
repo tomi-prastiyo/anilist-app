@@ -748,7 +748,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             child: Column(
               children: [
                 for (final entry in [
-                  ('App Version', '1.0.0 (Mankai)', textSecondary, FontWeight.w400, null),
+                  ('App Version', '1.1.0 (Mankai)', textSecondary, FontWeight.w400, null),
                   ('API Backend', 'AniList GraphQL v2', textSecondary, FontWeight.w400, null),
                   (
                     'Data Source',
